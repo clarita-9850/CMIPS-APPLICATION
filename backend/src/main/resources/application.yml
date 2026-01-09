@@ -24,7 +24,9 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://keycloak:8080/realms/cmips}
+          # Use JWK Set URI instead of issuer-uri to bypass issuer validation
+          # This allows tokens issued by either localhost:8080 or keycloak:8080
+          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:http://keycloak:8080/realms/cmips/protocol/openid-connect/certs}
 
   # Kafka Configuration (Spring Boot auto-config)
   kafka:
@@ -48,10 +50,10 @@ spring:
 keycloak:
   realm: ${KEYCLOAK_REALM:cmips}
   auth-server-url: ${KEYCLOAK_AUTH_SERVER_URL:http://keycloak:8080/}
-  # Use cmips-frontend for admin operations (service account with roles assigned)
-  resource: ${KEYCLOAK_CLIENT_ID:cmips-frontend}
+  # Use cmips-backend for authorization services (has resources and permissions configured)
+  resource: ${KEYCLOAK_CLIENT_ID:cmips-backend}
   credentials:
-    secret: ${KEYCLOAK_CLIENT_SECRET:UnpJullDQX23tenZ4IsTuGkY8QzBlcFd}
+    secret: ${KEYCLOAK_CLIENT_SECRET:X6282J5tQzu2tzqLcglKmjhwfidB0vh9}
   policy-enforcer-config:
     enforcement-mode: ENFORCING  # Changed to ENFORCING for strict authorization
     user-managed-access: {}

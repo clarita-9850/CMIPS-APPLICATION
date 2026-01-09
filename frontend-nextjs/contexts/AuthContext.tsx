@@ -31,7 +31,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
 
+    console.log('🔐 [AuthContext] Initializing auth state...');
+    console.log('🔐 [AuthContext] storedToken exists:', !!storedToken);
+    console.log('🔐 [AuthContext] storedUser exists:', !!storedUser);
+    console.log('🔐 [AuthContext] storedUser value:', storedUser);
+
+    if (storedToken) {
+      console.log('🔐 [AuthContext] Token valid:', isTokenValid(storedToken));
+      try {
+        const decoded = JSON.parse(atob(storedToken.split('.')[1]));
+        console.log('🔐 [AuthContext] Token exp:', decoded.exp);
+        console.log('🔐 [AuthContext] Current time:', Math.floor(Date.now() / 1000));
+        console.log('🔐 [AuthContext] Time until expiry:', decoded.exp - Math.floor(Date.now() / 1000), 'seconds');
+      } catch (e) {
+        console.error('🔐 [AuthContext] Error decoding token:', e);
+      }
+    }
+
     if (storedToken && storedUser && storedUser !== 'undefined' && storedUser !== 'null' && isTokenValid(storedToken)) {
+      console.log('🔐 [AuthContext] ✅ Valid auth found, setting user');
       setToken(storedToken);
       const parsedUser = JSON.parse(storedUser);
       
@@ -98,12 +116,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       }
       
+      console.log('🔐 [AuthContext] User set to:', parsedUser);
       setUser(parsedUser);
     } else {
+      console.log('🔐 [AuthContext] ❌ Invalid or missing auth, clearing localStorage');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem('refreshToken');
     }
+    console.log('🔐 [AuthContext] Setting loading to false');
     setLoading(false);
   }, []);
 

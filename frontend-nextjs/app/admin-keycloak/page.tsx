@@ -1,11 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import dynamic from 'next/dynamic';
 
-function AdminKeycloakPageComponent() {
+export default function AdminKeycloakPageComponent() {
   const { user, loading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (authLoading) return;
@@ -16,7 +20,7 @@ function AdminKeycloakPageComponent() {
     console.log('Admin Keycloak page loaded');
   }, [user, authLoading]);
 
-  if (authLoading) {
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
@@ -41,6 +45,3 @@ function AdminKeycloakPageComponent() {
     </div>
   );
 }
-
-export default dynamic(() => Promise.resolve(AdminKeycloakPageComponent), { ssr: false });
-

@@ -3,9 +3,38 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
-import dynamic from 'next/dynamic';
 import AnalyticsTab from './components/AnalyticsTab';
 import BatchJobsTab from './components/BatchJobsTab';
+import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
+import { isFieldVisible } from '@/hooks/useFieldAuthorization';
+
+type Timesheet = {
+  id: number;
+  userId?: string;
+  employeeId?: string;
+  employeeName?: string;
+  department?: string;
+  location?: string;
+  payPeriodStart?: string;
+  payPeriodEnd?: string;
+  regularHours?: number;
+  overtimeHours?: number;
+  totalHours?: number;
+  status?: string;
+  comments?: string;
+  supervisorComments?: string;
+  approvedBy?: string;
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TimesheetResponse = {
+  content: Timesheet[];
+  totalElements: number;
+  numberOfElements: number;
+  allowedActions: string[];
+};
 
 type Task = {
   id: number;
@@ -53,27 +82,19 @@ type UserQueueData = {
 
 type ViewType = 'myWorkspace' | 'workQueues' | 'queueTasks' | 'queueSubscriptions';
 
-function SupervisorDashboardComponent() {
+export default function SupervisorDashboard() {
   const { user, logout, loading: authLoading, isAuthenticated } = useAuth();
-  
-  // Debug: Log user state on mount and changes
-  useEffect(() => {
-    console.log('=== SupervisorDashboard Component ===');
-    console.log('User state:', { 
-      user, 
-      authLoading, 
-      role: user?.role, 
-      roles: user?.roles,
-      hasUser: !!user,
-      userString: JSON.stringify(user, null, 2)
-    });
-  }, [user, authLoading]);
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  
+
   // Navigation state
-  const [activeTab, setActiveTab] = useState<'myWorkspace' | 'workQueues' | 'analytics' | 'batchJobs'>('myWorkspace');
+  const [activeTab, setActiveTab] = useState<'myWorkspace' | 'workQueues' | 'timesheets' | 'analytics' | 'batchJobs'>('myWorkspace');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Timesheets state
+  const [pendingTimesheets, setPendingTimesheets] = useState<Timesheet[]>([]);
+  const [timesheetAllowedActions, setTimesheetAllowedActions] = useState<string[]>([]);
   
   // Work Queues state
   const [queues, setQueues] = useState<QueueInfo[]>([]);
@@ -96,61 +117,46 @@ function SupervisorDashboardComponent() {
   const [selectedUserToAdd, setSelectedUserToAdd] = useState<string>('');
 
   useEffect(() => {
-    // Wait for auth to finish loading
-    if (authLoading) {
-      console.log('Auth still loading...');
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // Wait for mount and auth to finish loading
+    if (!mounted || authLoading) {
       return;
     }
-    
+
     // If no user after auth loads, redirect to login
     if (!user) {
-      console.log('No user after auth load, redirecting to login');
       window.location.href = '/login';
       return;
     }
-    
-    console.log('User check:', { 
-      user, 
-      role: user?.role, 
-      roles: user?.roles,
-      username: user?.username 
-    });
-    
+
     // Allow both ADMIN and SUPERVISOR roles
-    // Check both user.role and user.roles array
-    const isSupervisor = 
-      user?.role === 'SUPERVISOR' || 
+    const isSupervisor =
+      user?.role === 'SUPERVISOR' ||
       user?.roles?.includes('SUPERVISOR') ||
       user?.roles?.some((r: string) => r.toUpperCase() === 'SUPERVISOR');
-      
-    const isAdmin = 
-      user?.role === 'ADMIN' || 
+
+    const isAdmin =
+      user?.role === 'ADMIN' ||
       user?.roles?.includes('ADMIN') ||
       user?.roles?.some((r: string) => r.toUpperCase() === 'ADMIN');
-    
-    console.log('Role check:', { 
-      isSupervisor, 
-      isAdmin, 
-      hasUser: !!user,
-      userRole: user?.role,
-      userRoles: user?.roles
-    });
-    
+
     if (!isSupervisor && !isAdmin) {
-      console.log('User does not have SUPERVISOR or ADMIN role, redirecting to login');
-      console.log('User object:', JSON.stringify(user, null, 2));
       window.location.href = '/login';
       return;
     }
-    
-    console.log('User authorized, loading dashboard data');
+
     // Load dashboard data for both roles
     loadDashboardData();
-  }, [user, authLoading]);
+  }, [user, authLoading, mounted]);
 
   useEffect(() => {
     if (activeTab === 'myWorkspace') {
       loadMyWorkspaceData();
+    } else if (activeTab === 'timesheets') {
+      loadTimesheetsData();
     } else if (selectedQueue) {
       loadQueueTasks();
       loadQueueSubscriptions();
@@ -164,10 +170,10 @@ function SupervisorDashboardComponent() {
       const catalogRes = await apiClient.get('/work-queues/catalog');
       const catalog: QueueInfo[] = catalogRes.data || [];
       setQueues(catalog);
-      
+
       const usersRes = await apiClient.get('/work-queues/users');
       setAllUsers(usersRes.data || []);
-      
+
       if (activeTab === 'myWorkspace') {
         await loadMyWorkspaceData();
       }
@@ -176,6 +182,44 @@ function SupervisorDashboardComponent() {
       setError(err?.response?.data?.error || err.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTimesheetsData = async () => {
+    try {
+      const timesheetsResponse = await apiClient.get<TimesheetResponse>('/timesheets');
+      const responseData = timesheetsResponse.data;
+      // Show submitted timesheets pending review
+      const submitted = (responseData.content || []).filter(ts => ts.status === 'SUBMITTED');
+      setPendingTimesheets(submitted);
+      setTimesheetAllowedActions(responseData.allowedActions || []);
+    } catch (err: any) {
+      console.error('Error loading timesheets:', err);
+      setPendingTimesheets([]);
+      setTimesheetAllowedActions([]);
+    }
+  };
+
+  const handleApproveTimesheet = async (id: number) => {
+    try {
+      await apiClient.post(`/timesheets/${id}/approve`);
+      alert('Timesheet approved successfully!');
+      loadTimesheetsData();
+    } catch (err: any) {
+      console.error('Error approving timesheet:', err);
+      alert('Failed to approve timesheet: ' + (err?.response?.data?.error || err.message));
+    }
+  };
+
+  const handleRejectTimesheet = async (id: number) => {
+    const reason = prompt('Enter rejection reason (optional):');
+    try {
+      await apiClient.post(`/timesheets/${id}/reject`, { reason });
+      alert('Timesheet rejected.');
+      loadTimesheetsData();
+    } catch (err: any) {
+      console.error('Error rejecting timesheet:', err);
+      alert('Failed to reject timesheet: ' + (err?.response?.data?.error || err.message));
     }
   };
 
@@ -412,7 +456,7 @@ function SupervisorDashboardComponent() {
     }
   };
 
-  if (loading || authLoading || !user) {
+  if (!mounted || loading || authLoading || !user) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
         <div className="text-center card p-5">
@@ -426,88 +470,66 @@ function SupervisorDashboardComponent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header role="banner" style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 100 }}>
-        {/* Site Header */}
-        <div style={{ padding: '1rem 0', borderBottom: '1px solid #e5e7eb' }}>
-          <div className="container">
-            <div className="d-flex justify-content-between align-items-center">
-              <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-p2, #046b99)', margin: 0 }}>
-                  CMIPSII Case Management Information Payroll System II
-                </h1>
-                <p className="text-muted mb-0" style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>
-                  Supervisor Dashboard
-                </p>
-              </div>
-              {(user || isAuthenticated) && (
-                <div className="d-flex align-items-center" style={{ gap: '1rem' }}>
-                  <span className="text-muted" style={{ fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-                    Welcome, <strong style={{ color: '#333' }}>{user?.name || user?.username || user?.firstName || 'User'}</strong>
-                  </span>
-                  <button 
-                    type="button" 
-                    onClick={logout}
-                    className="btn btn-danger"
-                    style={{ 
-                      padding: '0.375rem 0.75rem',
-                      fontSize: '0.875rem',
-                      whiteSpace: 'nowrap',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.5rem'
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <div style={{ backgroundColor: 'white' }}>
-          <div className="container">
-            <div className="d-flex align-items-center" style={{ padding: '0.75rem 0', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => {
-                  setActiveTab('myWorkspace');
-                  setQueueView('myWorkspace' as ViewType);
-                }}
-                className={`btn btn-sm ${activeTab === 'myWorkspace' ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                My Workspace
-              </button>
-              <button
-                onClick={() => {
-                  setActiveTab('workQueues');
-                  setQueueView('workQueues' as ViewType);
-                }}
-                className={`btn btn-sm ${activeTab === 'workQueues' ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                Work Queues
-              </button>
-              <button
-                onClick={() => setActiveTab('analytics')}
-                className={`btn btn-sm ${activeTab === 'analytics' ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                Analytics
-              </button>
-              <button
-                onClick={() => setActiveTab('batchJobs')}
-                className={`btn btn-sm ${activeTab === 'batchJobs' ? 'btn-primary' : 'btn-secondary'}`}
-              >
-                Batch Jobs
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div>
+      {/* Dashboard Navigation Tabs */}
+      <div className="mb-4">
+        <ul className="nav nav-tabs" role="tablist">
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'myWorkspace' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('myWorkspace');
+                setQueueView('myWorkspace' as ViewType);
+              }}
+              type="button"
+            >
+              My Workspace
+            </button>
+          </li>
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'workQueues' ? 'active' : ''}`}
+              onClick={() => {
+                setActiveTab('workQueues');
+                setQueueView('workQueues' as ViewType);
+              }}
+              type="button"
+            >
+              Work Queues
+            </button>
+          </li>
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'timesheets' ? 'active' : ''}`}
+              onClick={() => setActiveTab('timesheets')}
+              type="button"
+            >
+              Timesheets
+            </button>
+          </li>
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'analytics' ? 'active' : ''}`}
+              onClick={() => setActiveTab('analytics')}
+              type="button"
+            >
+              Analytics
+            </button>
+          </li>
+          <li className="nav-item" role="presentation">
+            <button
+              className={`nav-link ${activeTab === 'batchJobs' ? 'active' : ''}`}
+              onClick={() => setActiveTab('batchJobs')}
+              type="button"
+            >
+              Batch Jobs
+            </button>
+          </li>
+        </ul>
+      </div>
 
       {/* Main Content */}
-      <main id="main-content" className="container" style={{ padding: '1.5rem 0' }}>
+      <div>
         <div>
           {activeTab === 'myWorkspace' && (
             <div>
@@ -972,6 +994,114 @@ function SupervisorDashboardComponent() {
             </>
           )}
 
+          {activeTab === 'timesheets' && (
+            <div>
+              {/* Header */}
+              <div className="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                  <h2 className="card-title mb-1">Timesheet Review</h2>
+                  <p className="text-muted">Review and approve submitted timesheets</p>
+                </div>
+                <div className="d-flex align-items-center gap-3">
+                  {timesheetAllowedActions.length > 0 && (
+                    <small className="text-muted">
+                      Actions: {timesheetAllowedActions.join(', ')}
+                    </small>
+                  )}
+                  <button
+                    onClick={loadTimesheetsData}
+                    className="btn btn-primary"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Pending Timesheets */}
+              <div className="card">
+                <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                  <h3 className="card-title mb-0" style={{ color: 'white' }}>📋 Pending Timesheets for Review</h3>
+                </div>
+                <div className="card-body">
+                  {pendingTimesheets.length === 0 ? (
+                    <p className="text-center text-muted py-4">No timesheets pending review</p>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-striped table-hover">
+                        <thead>
+                          <tr>
+                            {pendingTimesheets[0] && isFieldVisible(pendingTimesheets[0], 'employeeId') && (
+                              <th>Employee ID</th>
+                            )}
+                            {pendingTimesheets[0] && isFieldVisible(pendingTimesheets[0], 'employeeName') && (
+                              <th>Employee</th>
+                            )}
+                            {pendingTimesheets[0] && isFieldVisible(pendingTimesheets[0], 'department') && (
+                              <th>Department</th>
+                            )}
+                            <th>Pay Period</th>
+                            <th>Hours</th>
+                            <th>Status</th>
+                            {pendingTimesheets[0] && isFieldVisible(pendingTimesheets[0], 'submittedAt') && (
+                              <th>Submitted</th>
+                            )}
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pendingTimesheets.map((timesheet) => (
+                            <tr key={timesheet.id}>
+                              {isFieldVisible(pendingTimesheets[0], 'employeeId') && (
+                                <td>
+                                  <FieldAuthorizedValue data={timesheet} field="employeeId" />
+                                </td>
+                              )}
+                              {isFieldVisible(pendingTimesheets[0], 'employeeName') && (
+                                <td>
+                                  <FieldAuthorizedValue data={timesheet} field="employeeName" />
+                                </td>
+                              )}
+                              {isFieldVisible(pendingTimesheets[0], 'department') && (
+                                <td>
+                                  <FieldAuthorizedValue data={timesheet} field="department" />
+                                </td>
+                              )}
+                              <td>
+                                <FieldAuthorizedValue data={timesheet} field="payPeriodStart" type="date" />
+                                {' - '}
+                                <FieldAuthorizedValue data={timesheet} field="payPeriodEnd" type="date" />
+                              </td>
+                              <td className="fw-bold">
+                                <FieldAuthorizedValue data={timesheet} field="totalHours" type="number" />
+                              </td>
+                              <td>
+                                <FieldAuthorizedValue data={timesheet} field="status" type="badge" />
+                              </td>
+                              {isFieldVisible(pendingTimesheets[0], 'submittedAt') && (
+                                <td>
+                                  <FieldAuthorizedValue data={timesheet} field="submittedAt" type="date" />
+                                </td>
+                              )}
+                              <td>
+                                <ActionButtons
+                                  allowedActions={timesheetAllowedActions}
+                                  onView={() => alert(`View timesheet ${timesheet.id}`)}
+                                  onApprove={() => handleApproveTimesheet(timesheet.id)}
+                                  onReject={() => handleRejectTimesheet(timesheet.id)}
+                                  size="sm"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'analytics' && <AnalyticsTab />}
 
           {activeTab === 'batchJobs' && <BatchJobsTab />}
@@ -1050,9 +1180,7 @@ function SupervisorDashboardComponent() {
           </div>
         </div>
       )}
-      </main>
+      </div>
     </div>
   );
 }
-
-export default dynamic(() => Promise.resolve(SupervisorDashboardComponent), { ssr: false });

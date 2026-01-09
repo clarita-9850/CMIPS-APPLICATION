@@ -4,6 +4,9 @@ import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { CountyThemeProvider } from "@/contexts/CountyThemeContext";
 import { QueryClientProvider } from "./providers/QueryClientProvider";
+import I18nProvider from "./i18n-provider";
+import ConditionalHeader from "@/components/structure/ConditionalHeader";
+import ConditionalFooter from "@/components/structure/ConditionalFooter";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -37,11 +40,17 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <QueryClientProvider>
-          <AuthProvider>
-            <CountyThemeProvider>
-              {children}
-            </CountyThemeProvider>
-          </AuthProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <CountyThemeProvider>
+                <ConditionalHeader />
+                <main id="main-content" className="container" style={{ minHeight: 'calc(100vh - 300px)', padding: '2rem 0' }}>
+                  {children}
+                </main>
+                <ConditionalFooter />
+              </CountyThemeProvider>
+            </AuthProvider>
+          </I18nProvider>
         </QueryClientProvider>
         <Script src="/cagov/js/cagov.core.min.js" strategy="afterInteractive" />
       </body>

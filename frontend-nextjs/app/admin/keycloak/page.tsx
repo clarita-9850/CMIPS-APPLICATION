@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
-import dynamic from 'next/dynamic';
 import FieldMaskingTab from '@/app/supervisor/dashboard/components/FieldMaskingTab';
 
 const API_BASE_URL = '/admin/keycloak';
@@ -82,8 +81,13 @@ interface AdminFeature {
   };
 }
 
-function AdminKeycloakPageComponent() {
+export default function AdminKeycloakPageComponent() {
   const { user, loading: authLoading } = useAuth();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'policies' | 'permissions' | 'resources' | 'groups' | 'sharing' | 'fieldMasking'>('users');
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -742,7 +746,7 @@ function AdminKeycloakPageComponent() {
 
   // ============================== RENDER ==============================
 
-  if (authLoading) {
+  if (!mounted || authLoading) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
         <div className="text-center card p-5">
@@ -1881,5 +1885,3 @@ function AdminKeycloakPageComponent() {
     </div>
   );
 }
-
-export default dynamic(() => Promise.resolve(AdminKeycloakPageComponent), { ssr: false });

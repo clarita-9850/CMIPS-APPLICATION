@@ -264,11 +264,30 @@ public class JobQueueService {
                 job.setStatus("COMPLETED");
                 job.setCompletedAt(LocalDateTime.now());
                 jobRepository.save(job);
-                
+
                 System.out.println("✅ JobQueueService: Job result set - " + jobId + " -> " + resultPath);
             }
         } catch (Exception e) {
             System.err.println("❌ Error setting job result: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * Set job source (MANUAL or SCHEDULED)
+     */
+    public void setJobSource(String jobId, String source) {
+        try {
+            Optional<ReportJobEntity> jobOpt = jobRepository.findByJobId(jobId);
+            if (jobOpt.isPresent()) {
+                ReportJobEntity job = jobOpt.get();
+                job.setJobSource(source);
+                jobRepository.save(job);
+
+                System.out.println("✅ JobQueueService: Job source set - " + jobId + " -> " + source);
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error setting job source: " + e.getMessage());
             e.printStackTrace();
         }
     }

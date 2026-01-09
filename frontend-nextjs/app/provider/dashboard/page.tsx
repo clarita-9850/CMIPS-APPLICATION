@@ -3,9 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import NotificationCenter from '@/components/NotificationCenter';
 import apiClient from '@/lib/api';
+import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
+import { isFieldVisible } from '@/hooks/useFieldAuthorization';
 
 type Recipient = {
   id: number;
@@ -15,21 +16,56 @@ type Recipient = {
   caseNumber: string;
 };
 
-function ProviderDashboardComponent() {
-  const { user, logout, loading: authLoading } = useAuth();
+type Timesheet = {
+  id: number;
+  userId?: string;
+  employeeId?: string;
+  employeeName?: string;
+  department?: string;
+  location?: string;
+  payPeriodStart?: string;
+  payPeriodEnd?: string;
+  regularHours?: number;
+  overtimeHours?: number;
+  totalHours?: number;
+  status?: string;
+  comments?: string;
+  supervisorComments?: string;
+  approvedBy?: string;
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TimesheetResponse = {
+  content: Timesheet[];
+  totalElements: number;
+  numberOfElements: number;
+  allowedActions: string[];
+};
+
+export default function ProviderDashboard() {
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [pendingActions, setPendingActions] = useState<Array<{ type: string; message: string; priority: string }>>([]);
+  const [myTimesheets, setMyTimesheets] = useState<Timesheet[]>([]);
+  const [allowedActions, setAllowedActions] = useState<string[]>([]);
 
   useEffect(() => {
-    if (authLoading) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || authLoading) return;
     if (!user || (user.role !== 'PROVIDER' && !user.roles?.includes('PROVIDER'))) {
       window.location.href = '/login';
       return;
     }
     fetchDashboardData();
-  }, [user, authLoading]);
+  }, [user, authLoading, mounted]);
 
   const fetchDashboardData = async () => {
     try {
@@ -65,11 +101,32 @@ function ProviderDashboardComponent() {
           caseNumber: 'CASE-001',
         }]);
       }
-      
-      setPendingActions([
-        { type: 'timesheet', message: 'Submit timesheet for Sep 15-30 (Due: Oct 5)', priority: 'high' },
-        { type: 'review', message: 'Review rejected timesheet for Aug 2025', priority: 'medium' }
-      ]);
+
+      // Fetch my timesheets with field-level authorization
+      try {
+        const timesheetsResponse = await apiClient.get<TimesheetResponse>('/timesheets');
+        const responseData = timesheetsResponse.data;
+        setMyTimesheets(responseData.content || []);
+        setAllowedActions(responseData.allowedActions || []);
+
+        // Update pending actions based on timesheet status
+        const drafts = (responseData.content || []).filter(ts => ts.status === 'DRAFT');
+        const rejected = (responseData.content || []).filter(ts => ts.status === 'REJECTED');
+        const actions: Array<{ type: string; message: string; priority: string }> = [];
+
+        if (drafts.length > 0) {
+          actions.push({ type: 'timesheet', message: `${drafts.length} draft timesheet(s) ready to submit`, priority: 'high' });
+        }
+        if (rejected.length > 0) {
+          actions.push({ type: 'review', message: `${rejected.length} rejected timesheet(s) need revision`, priority: 'medium' });
+        }
+        setPendingActions(actions.length > 0 ? actions : []);
+      } catch (err) {
+        console.error('Error fetching timesheets:', err);
+        setMyTimesheets([]);
+        setAllowedActions([]);
+        setPendingActions([]);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -77,7 +134,7 @@ function ProviderDashboardComponent() {
     }
   };
 
-  if (loading || authLoading || !user) {
+  if (!mounted || loading || authLoading || !user) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
         <div className="text-center card p-5">
@@ -91,41 +148,14 @@ function ProviderDashboardComponent() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
-      {/* Header */}
-      <header role="banner" style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ padding: '1rem 0', borderBottom: '1px solid #e5e7eb' }}>
-          <div className="container">
-            <div className="d-flex justify-content-between align-items-center">
-              <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-p2, #046b99)', margin: 0 }}>
-                  CMIPSII Case Management Information Payroll System II
-                </h1>
-                <p className="text-muted mb-0" style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>
-                  Provider Dashboard
-                </p>
-              </div>
-              <div className="d-flex align-items-center gap-3">
-                <NotificationCenter userId={user?.username || ''} />
-                <span className="text-muted">
-                  Welcome, <strong>{user?.username || 'User'}</strong>
-                </span>
-                <button 
-                  type="button" 
-                  onClick={logout}
-                  className="btn btn-danger"
-                >
-                  <span className="ca-gov-icon-logout" aria-hidden="true"></span>
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div>
+      {/* Notification Center */}
+      <div className="mb-3 d-flex justify-content-end">
+        <NotificationCenter userId={user?.username || ''} />
+      </div>
 
       {/* Main Content */}
-      <main className="container" style={{ padding: '1.5rem 0' }}>
+      <div>
         {/* Quick Actions */}
         <div className="row mb-4">
           <div className="col-lg-3 col-md-6 mb-3">
@@ -222,14 +252,12 @@ function ProviderDashboardComponent() {
         </div>
 
         {/* Pending Actions */}
-        <div className="card">
-          <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-            <h2 className="card-title mb-0" style={{ color: 'white' }}>⏰ PENDING ACTIONS</h2>
-          </div>
-          <div className="card-body">
-            {pendingActions.length === 0 ? (
-              <p className="text-center text-muted py-4">No pending actions</p>
-            ) : (
+        {pendingActions.length > 0 && (
+          <div className="card mb-4">
+            <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+              <h2 className="card-title mb-0" style={{ color: 'white' }}>⏰ PENDING ACTIONS</h2>
+            </div>
+            <div className="card-body">
               <div>
                 {pendingActions.map((action, index) => (
                   <div
@@ -241,13 +269,103 @@ function ProviderDashboardComponent() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* My Timesheets */}
+        <div className="card">
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+            <h2 className="card-title mb-0" style={{ color: 'white' }}>📊 MY TIMESHEETS</h2>
+            {allowedActions.length > 0 && (
+              <small className="text-white-50">
+                Available actions: {allowedActions.join(', ')}
+              </small>
+            )}
+          </div>
+          <div className="card-body">
+            {myTimesheets.length === 0 ? (
+              <p className="text-center text-muted py-4">No timesheets found</p>
+            ) : (
+              <div className="table-responsive">
+                <table className="table table-striped table-hover">
+                  <thead>
+                    <tr>
+                      <th>Pay Period</th>
+                      <th>Hours</th>
+                      <th>Status</th>
+                      {myTimesheets[0] && isFieldVisible(myTimesheets[0], 'submittedAt') && (
+                        <th>Submitted</th>
+                      )}
+                      {myTimesheets[0] && isFieldVisible(myTimesheets[0], 'comments') && (
+                        <th>Comments</th>
+                      )}
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myTimesheets.slice(0, 10).map((timesheet) => (
+                      <tr key={timesheet.id}>
+                        <td>
+                          <FieldAuthorizedValue data={timesheet} field="payPeriodStart" type="date" />
+                          {' - '}
+                          <FieldAuthorizedValue data={timesheet} field="payPeriodEnd" type="date" />
+                        </td>
+                        <td className="fw-bold">
+                          <FieldAuthorizedValue data={timesheet} field="totalHours" type="number" />
+                        </td>
+                        <td>
+                          <FieldAuthorizedValue data={timesheet} field="status" type="badge" />
+                        </td>
+                        {isFieldVisible(myTimesheets[0], 'submittedAt') && (
+                          <td>
+                            <FieldAuthorizedValue data={timesheet} field="submittedAt" type="date" />
+                          </td>
+                        )}
+                        {isFieldVisible(myTimesheets[0], 'comments') && (
+                          <td>
+                            <FieldAuthorizedValue data={timesheet} field="comments" placeholder="" />
+                          </td>
+                        )}
+                        <td>
+                          <ActionButtons
+                            allowedActions={allowedActions}
+                            onView={() => router.push(`/provider/timesheet/${timesheet.id}`)}
+                            onEdit={timesheet.status === 'DRAFT' || timesheet.status === 'REJECTED' ? () => router.push(`/provider/timesheet/${timesheet.id}/edit`) : undefined}
+                            onSubmit={timesheet.status === 'DRAFT' ? () => handleSubmitTimesheet(timesheet.id) : undefined}
+                            size="sm"
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {myTimesheets.length > 10 && (
+                  <div className="text-center mt-3">
+                    <button
+                      onClick={() => router.push('/provider/timesheets')}
+                      className="btn btn-outline-primary"
+                    >
+                      View All Timesheets ({myTimesheets.length})
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
-}
 
-export default dynamic(() => Promise.resolve(ProviderDashboardComponent), { ssr: false });
+  async function handleSubmitTimesheet(id: number) {
+    try {
+      await apiClient.post(`/timesheets/${id}/submit`);
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error submitting timesheet:', err);
+      alert('Failed to submit timesheet');
+    }
+  }
+}
 

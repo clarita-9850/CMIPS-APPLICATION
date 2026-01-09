@@ -1,0 +1,77 @@
+{
+  "app": {
+    "title": "Sistema de Informes de Hojas de Tiempo",
+    "description": "Sistema de Informes de Hojas de Tiempo del Estado de California"
+  },
+  "header": {
+    "skipToContent": "Saltar al contenido principal",
+    "officialWebsite": "Sitio web oficial del",
+    "stateOfCalifornia": "Estado de California",
+    "departmentName": "Sistema de Informes de Hojas de Tiempo",
+    "navigation": {
+      "home": "Inicio",
+      "dashboard": "Panel de Control",
+      "batchJobs": "Trabajos por Lotes",
+      "analytics": "Análisis",
+      "fieldMasking": "Enmascaramiento de Campos"
+    }
+  },
+  "banner": {
+    "title": "Bienvenido al Sistema de Informes de Hojas de Tiempo",
+    "body": "Gestione y genere informes completos de hojas de tiempo con capacidades de análisis en tiempo real y procesamiento por lotes.",
+    "buttonText": "Comenzar"
+  },
+  "cards": {
+    "title1": "Informes en Tiempo Real",
+    "title2": "Procesamiento por Lotes",
+    "title3": "Panel de Análisis",
+    "body": "Genere informes instantáneamente o programe trabajos por lotes para grandes conjuntos de datos"
+  },
+  "progress": {
+    "getStarted": "Comienza ahora",
+    "description": "Comience a generar informes y gestionar sus datos de hojas de tiempo de manera eficiente.",
+    "steps": {
+      "step1": {
+        "title": "Paso 1",
+        "body": "Seleccione el tipo de informe y los filtros"
+      },
+      "step2": {
+        "title": "Paso 2",
+        "body": "Configure las reglas de enmascaramiento de campos"
+      },
+      "step3": {
+        "title": "Paso 3",
+        "body": "Genere y descargue el informe"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "Panel de Control",
+    "subtitle": "Resumen de sus datos e informes de hojas de tiempo",
+    "summary": {
+      "totalRecords": "Registros Totales",
+      "totalHours": "Horas Totales",
+      "pendingApprovals": "Aprobaciones Pendientes",
+      "avgApprovalTime": "Tiempo Promedio de Aprobación"
+    }
+  },
+  "batchJobs": {
+    "title": "Trabajos por Lotes",
+    "subtitle": "Gestione y monitoree trabajos de generación de informes por lotes",
+    "createJob": "Crear Nuevo Trabajo",
+    "status": {
+      "queued": "En Cola",
+      "processing": "Procesando",
+      "completed": "Completado",
+      "failed": "Fallido",
+      "cancelled": "Cancelado"
+    }
+  },
+  "footer": {
+    "copyright": "© 2024 Estado de California",
+    "accessibility": "Accesibilidad",
+    "privacy": "Política de Privacidad",
+    "terms": "Términos de Uso"
+  }
+}
+

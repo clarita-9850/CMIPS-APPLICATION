@@ -3,18 +3,37 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
 import NotificationCenter from '@/components/NotificationCenter';
 import apiClient from '@/lib/api';
+import { FieldAuthorizedValue, ActionButtons, ConditionalField } from '@/components/FieldAuthorizedValue';
+import { isFieldVisible } from '@/hooks/useFieldAuthorization';
 
 type Timesheet = {
   id: number;
-  employeeName: string;
-  payPeriodStart: string;
-  payPeriodEnd: string;
-  totalHours: number;
-  createdAt: string;
-  status: string;
+  userId?: string;
+  employeeId?: string;
+  employeeName?: string;
+  department?: string;
+  location?: string;
+  payPeriodStart?: string;
+  payPeriodEnd?: string;
+  regularHours?: number;
+  overtimeHours?: number;
+  totalHours?: number;
+  status?: string;
+  comments?: string;
+  supervisorComments?: string;
+  approvedBy?: string;
+  submittedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+type TimesheetResponse = {
+  content: Timesheet[];
+  totalElements: number;
+  numberOfElements: number;
+  allowedActions: string[];
 };
 
 type Provider = {
@@ -24,33 +43,43 @@ type Provider = {
   role: string;
 };
 
-function RecipientDashboardComponent() {
-  const { user, logout, loading: authLoading } = useAuth();
+export default function RecipientDashboard() {
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pendingTimesheets, setPendingTimesheets] = useState<Timesheet[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
+  const [allowedActions, setAllowedActions] = useState<string[]>([]);
 
   useEffect(() => {
-    if (authLoading) return;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted || authLoading) return;
     if (!user || (user.role !== 'RECIPIENT' && !user.roles?.includes('RECIPIENT'))) {
       window.location.href = '/login';
       return;
     }
     fetchDashboardData();
-  }, [user, authLoading]);
+  }, [user, authLoading, mounted]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      // Fetch pending timesheets
+      // Fetch pending timesheets with field-level authorization
       try {
-        const timesheetsResponse = await apiClient.get('/timesheets');
-        const timesheets = timesheetsResponse.data.content || timesheetsResponse.data || [];
+        const timesheetsResponse = await apiClient.get<TimesheetResponse>('/timesheets');
+        const responseData = timesheetsResponse.data;
+        const timesheets = responseData.content || [];
         setPendingTimesheets(timesheets.filter((ts: Timesheet) => ts.status === 'SUBMITTED'));
+        // Store allowed actions from the API response
+        setAllowedActions(responseData.allowedActions || []);
       } catch (err) {
         console.error('Error fetching timesheets:', err);
         setPendingTimesheets([]);
+        setAllowedActions([]);
       }
       
       // Fetch providers
@@ -84,7 +113,7 @@ function RecipientDashboardComponent() {
     }
   };
 
-  if (loading || authLoading || !user) {
+  if (!mounted || loading || authLoading || !user) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
         <div className="text-center card p-5">
@@ -98,41 +127,14 @@ function RecipientDashboardComponent() {
   }
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
-      {/* Header */}
-      <header role="banner" style={{ backgroundColor: 'white', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ padding: '1rem 0', borderBottom: '1px solid #e5e7eb' }}>
-          <div className="container">
-            <div className="d-flex justify-content-between align-items-center">
-              <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--color-p2, #046b99)', margin: 0 }}>
-                  CMIPSII Case Management Information Payroll System II
-                </h1>
-                <p className="text-muted mb-0" style={{ fontSize: '0.875rem', margin: '0.25rem 0 0 0' }}>
-                  Recipient Dashboard
-                </p>
-              </div>
-              <div className="d-flex align-items-center gap-3">
-                <NotificationCenter userId={user?.username || ''} />
-                <span className="text-muted">
-                  Welcome, <strong>{user?.username || 'User'}</strong>
-                </span>
-                <button 
-                  type="button" 
-                  onClick={logout}
-                  className="btn btn-danger"
-                >
-                  <span className="ca-gov-icon-logout" aria-hidden="true"></span>
-                  Logout
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div>
+      {/* Notification Center */}
+      <div className="mb-3 d-flex justify-content-end">
+        <NotificationCenter userId={user?.username || ''} />
+      </div>
 
       {/* Main Content */}
-      <main className="container" style={{ padding: '1.5rem 0' }}>
+      <div>
         {/* Quick Actions */}
         <div className="row mb-4">
           <div className="col-lg-3 col-md-6 mb-3">
@@ -191,8 +193,13 @@ function RecipientDashboardComponent() {
 
         {/* Timesheets Awaiting Approval */}
         <div className="card mb-4">
-          <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>🔔 TIMESHEETS AWAITING YOUR APPROVAL</h2>
+            {allowedActions.length > 0 && (
+              <small className="text-white-50">
+                Available actions: {allowedActions.join(', ')}
+              </small>
+            )}
           </div>
           <div className="card-body">
             {pendingTimesheets.length === 0 ? (
@@ -204,18 +211,26 @@ function RecipientDashboardComponent() {
                     <div className="d-flex justify-content-between align-items-center">
                       <div>
                         <h5 className="fw-semibold mb-1">
-                          {timesheet.employeeName} - {timesheet.payPeriodStart} to {timesheet.payPeriodEnd}
+                          <FieldAuthorizedValue data={timesheet} field="employeeName" /> -{' '}
+                          <FieldAuthorizedValue data={timesheet} field="payPeriodStart" type="date" /> to{' '}
+                          <FieldAuthorizedValue data={timesheet} field="payPeriodEnd" type="date" />
                         </h5>
                         <p className="text-muted small mb-0">
-                          Total Hours: {timesheet.totalHours} • Submitted: {new Date(timesheet.createdAt).toLocaleDateString()}
+                          Total Hours: <FieldAuthorizedValue data={timesheet} field="totalHours" type="number" />
+                          {isFieldVisible(timesheet, 'submittedAt') && (
+                            <> • Submitted: <FieldAuthorizedValue data={timesheet} field="submittedAt" type="date" /></>
+                          )}
+                          {isFieldVisible(timesheet, 'comments') && timesheet.comments && (
+                            <> • <FieldAuthorizedValue data={timesheet} field="comments" /></>
+                          )}
                         </p>
                       </div>
-                      <button
-                        onClick={() => router.push(`/recipient/timesheet/${timesheet.id}`)}
-                        className="btn btn-primary"
-                      >
-                        Review & Approve
-                      </button>
+                      <ActionButtons
+                        allowedActions={allowedActions}
+                        onView={() => router.push(`/recipient/timesheet/${timesheet.id}`)}
+                        onApprove={() => handleApproveTimesheet(timesheet.id)}
+                        onReject={() => handleRejectTimesheet(timesheet.id)}
+                      />
                     </div>
                   </div>
                 ))}
@@ -256,9 +271,29 @@ function RecipientDashboardComponent() {
             )}
           </div>
         </div>
-      </main>
+      </div>
     </div>
   );
-}
 
-export default dynamic(() => Promise.resolve(RecipientDashboardComponent), { ssr: false });
+  async function handleApproveTimesheet(id: number) {
+    try {
+      await apiClient.post(`/timesheets/${id}/approve`);
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error approving timesheet:', err);
+      alert('Failed to approve timesheet');
+    }
+  }
+
+  async function handleRejectTimesheet(id: number) {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    try {
+      await apiClient.post(`/timesheets/${id}/reject`, { reason });
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error rejecting timesheet:', err);
+      alert('Failed to reject timesheet');
+    }
+  }
+}

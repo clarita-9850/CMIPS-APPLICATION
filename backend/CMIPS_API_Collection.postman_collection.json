@@ -1,0 +1,2246 @@
+{
+	"info": {
+		"_postman_id": "cmips-api-collection-2025",
+		"name": "CMIPS API Collection",
+		"description": "Complete API collection for CMIPS (Case Management Information and Payroll System) - All endpoints organized by functionality",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "cmips-api"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const response = pm.response.json();",
+									"    if (response.access_token) {",
+									"        pm.environment.set(\"access_token\", response.access_token);",
+									"        pm.environment.set(\"refresh_token\", response.refresh_token || \"\");",
+									"        console.log(\"✅ Login successful - Token saved to environment\");",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"testuser\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticate user and receive JWT access token and refresh token"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"refresh_token\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/auth/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"refresh"
+							]
+						},
+						"description": "Refresh access token using refresh token"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for login and token management"
+		},
+		{
+			"name": "2. Timesheets",
+			"item": [
+				{
+					"name": "Get All Timesheets",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/timesheets?page=0&size=20",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Get paginated list of timesheets (role-based filtering applied)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Allowed Actions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/actions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"actions"
+							]
+						},
+						"description": "Get allowed actions for current user on timesheets"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Timesheet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"employeeId\": \"EMP001\",\n    \"employeeName\": \"John Doe\",\n    \"department\": \"IT Department\",\n    \"location\": \"CTA\",\n    \"payPeriodStart\": \"2025-01-01\",\n    \"payPeriodEnd\": \"2025-01-15\",\n    \"regularHours\": 80.0,\n    \"overtimeHours\": 10.0,\n    \"holidayHours\": 0.0,\n    \"sickHours\": 0.0,\n    \"vacationHours\": 0.0,\n    \"comments\": \"Regular timesheet submission\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/timesheets",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets"
+							]
+						},
+						"description": "Create a new timesheet (requires create permission)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Timesheet",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"regularHours\": 85.0,\n    \"overtimeHours\": 5.0,\n    \"comments\": \"Updated hours\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"1"
+							]
+						},
+						"description": "Update an existing timesheet (requires edit permission)"
+					},
+					"response": []
+				},
+				{
+					"name": "Submit Timesheet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/1/submit",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"1",
+								"submit"
+							]
+						},
+						"description": "Submit timesheet for approval (requires PROVIDER role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Timesheet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"supervisorComments\": \"Approved - All hours verified\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/1/approve",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"1",
+								"approve"
+							]
+						},
+						"description": "Approve a submitted timesheet (requires approve permission)"
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Timesheet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"supervisorComments\": \"Rejected - Hours mismatch detected\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/1/reject",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"1",
+								"reject"
+							]
+						},
+						"description": "Reject a submitted timesheet (requires reject permission)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Timesheet",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/timesheets/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"timesheets",
+								"1"
+							]
+						},
+						"description": "Delete a timesheet (requires delete permission)"
+					},
+					"response": []
+				}
+			],
+			"description": "Timesheet management endpoints with role-based access control"
+		},
+		{
+			"name": "3. Tasks",
+			"item": [
+				{
+					"name": "Get User Tasks",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks?username=testuser&includeSubscribedQueues=true",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks"
+							],
+							"query": [
+								{
+									"key": "username",
+									"value": "testuser"
+								},
+								{
+									"key": "includeSubscribedQueues",
+									"value": "true"
+								}
+							]
+						},
+						"description": "Get all tasks for a user, optionally including subscribed queue tasks"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task by ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"1"
+							]
+						},
+						"description": "Get a specific task by ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tasks by Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/status/testuser/OPEN",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"status",
+								"testuser",
+								"OPEN"
+							]
+						},
+						"description": "Get tasks for a user filtered by status (OPEN, IN_PROGRESS, CLOSED)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task Counts",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/count/testuser",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"count",
+								"testuser"
+							]
+						},
+						"description": "Get task counts (open, inProgress, closed) for a user"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Review Address Change\",\n    \"description\": \"Review address change request for recipient\",\n    \"assignee\": \"caseworker1\",\n    \"status\": \"OPEN\",\n    \"priority\": \"HIGH\",\n    \"queueName\": \"address-changes\",\n    \"dueDate\": \"2025-02-01T10:00:00\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks"
+							]
+						},
+						"description": "Create a new task"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Review Address Change - Updated\",\n    \"description\": \"Updated description\",\n    \"status\": \"IN_PROGRESS\",\n    \"priority\": \"MEDIUM\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"1"
+							]
+						},
+						"description": "Update an existing task"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Task Status",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"CLOSED\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/tasks/1/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"1",
+								"status"
+							]
+						},
+						"description": "Update only the status of a task"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"1"
+							]
+						},
+						"description": "Delete a task"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Tasks",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/queue/address-changes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"queue",
+								"address-changes"
+							]
+						},
+						"description": "Get all tasks from a specific queue"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Tasks by Role",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/queue/address-changes/role/CASE_WORKER",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"queue",
+								"address-changes",
+								"role",
+								"CASE_WORKER"
+							]
+						},
+						"description": "Get tasks from a queue filtered by role"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Available Queues",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/tasks/queues",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"tasks",
+								"queues"
+							]
+						},
+						"description": "Get all available queues with task counts"
+					},
+					"response": []
+				}
+			],
+			"description": "Task management endpoints"
+		},
+		{
+			"name": "4. Work Queues",
+			"item": [
+				{
+					"name": "Get Queue Catalog",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/catalog",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"catalog"
+							]
+						},
+						"description": "Get all predefined work queues"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Tasks",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/address-changes/tasks",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"address-changes",
+								"tasks"
+							]
+						},
+						"description": "Get tasks for a specific queue"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queues Summary",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/summary",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"summary"
+							]
+						},
+						"description": "Get summary of all queues with task counts"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"users"
+							]
+						},
+						"description": "Get all users (for supervisor to add to queues)"
+					},
+					"response": []
+				},
+				{
+					"name": "Subscribe User to Queue",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"caseworker1\",\n    \"workQueue\": \"address-changes\",\n    \"subscribedBy\": \"supervisor1\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/subscribe",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"subscribe"
+							]
+						},
+						"description": "Subscribe a user to a work queue"
+					},
+					"response": []
+				},
+				{
+					"name": "Unsubscribe User from Queue",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"caseworker1\",\n    \"workQueue\": \"address-changes\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/unsubscribe",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"unsubscribe"
+							]
+						},
+						"description": "Unsubscribe a user from a work queue"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Subscribers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/address-changes/subscribers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"address-changes",
+								"subscribers"
+							]
+						},
+						"description": "Get all subscribers for a specific queue"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Queue Subscription Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/work-queues/queue/address-changes/details",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"work-queues",
+								"queue",
+								"address-changes",
+								"details"
+							]
+						},
+						"description": "Get full subscription details for a queue"
+					},
+					"response": []
+				}
+			],
+			"description": "Work queue management endpoints"
+		},
+		{
+			"name": "5. Cases",
+			"item": [
+				{
+					"name": "Submit Address Change",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caseId\": \"CASE001\",\n    \"recipientId\": \"REC001\",\n    \"recipientName\": \"recipient1\",\n    \"providerId\": \"PROV001\",\n    \"newAddress\": {\n        \"line1\": \"123 New Street\",\n        \"city\": \"Los Angeles\",\n        \"state\": \"CA\",\n        \"zip\": \"90001\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/cases/address-change",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"cases",
+								"address-change"
+							]
+						},
+						"description": "Submit an address change request (creates Kafka event and notification)"
+					},
+					"response": []
+				}
+			],
+			"description": "Case management endpoints"
+		},
+		{
+			"name": "6. Notifications",
+			"item": [
+				{
+					"name": "Get User Notifications",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/notifications/user/testuser",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications",
+								"user",
+								"testuser"
+							]
+						},
+						"description": "Get all notifications for a user"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Unread Count",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/notifications/unread-count/testuser",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications",
+								"unread-count",
+								"testuser"
+							]
+						},
+						"description": "Get count of unread notifications for a user"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark Notification as Read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/notifications/1/read",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications",
+								"1",
+								"read"
+							]
+						},
+						"description": "Mark a notification as read"
+					},
+					"response": []
+				},
+				{
+					"name": "Mark All as Read",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/notifications/user/testuser/read-all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications",
+								"user",
+								"testuser",
+								"read-all"
+							]
+						},
+						"description": "Mark all notifications as read for a user"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Notification",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/notifications/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications",
+								"1"
+							]
+						},
+						"description": "Delete a notification"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Notification",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userId\": \"testuser\",\n    \"message\": \"New task assigned to you\",\n    \"notificationType\": \"INFO\",\n    \"actionLink\": \"/tasks/1\",\n    \"relatedEntityType\": \"TASK\",\n    \"readStatus\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/notifications",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"notifications"
+							]
+						},
+						"description": "Create a new notification"
+					},
+					"response": []
+				}
+			],
+			"description": "Notification management endpoints"
+		},
+		{
+			"name": "7. Analytics",
+			"item": [
+				{
+					"name": "Get Real-Time Metrics",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/analytics/realtime-metrics?county=CTA&status=SUBMITTED",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"analytics",
+								"realtime-metrics"
+							],
+							"query": [
+								{
+									"key": "county",
+									"value": "CTA"
+								},
+								{
+									"key": "status",
+									"value": "SUBMITTED"
+								}
+							]
+						},
+						"description": "Get real-time metrics for dashboard (supports filtering by districtId, county, status, priorityLevel, serviceType, startYear, endYear)"
+					},
+					"response": []
+				}
+			],
+			"description": "Analytics and reporting endpoints"
+		},
+		{
+			"name": "8. Business Intelligence",
+			"item": [
+				{
+					"name": "Generate BI Report",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"reportType\": \"DAILY_SUMMARY\",\n    \"dateRange\": {\n        \"startDate\": \"2025-01-01\",\n        \"endDate\": \"2025-01-31\"\n    },\n    \"filters\": {\n        \"county\": \"CTA\"\n    }\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/bi/reports/generate",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"reports",
+								"generate"
+							]
+						},
+						"description": "Generate a BI report (creates a job and returns job ID)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Job Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bi/jobs/12345/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"jobs",
+								"12345",
+								"status"
+							]
+						},
+						"description": "Get status of a report generation job"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Job Result",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bi/jobs/12345/result",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"jobs",
+								"12345",
+								"result"
+							]
+						},
+						"description": "Get result of a completed report generation job"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Report",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bi/reports/12345/download",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"reports",
+								"12345",
+								"download"
+							]
+						},
+						"description": "Download a generated report file"
+					},
+					"response": []
+				},
+				{
+					"name": "Cancel Job",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bi/jobs/12345/cancel",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"jobs",
+								"12345",
+								"cancel"
+							]
+						},
+						"description": "Cancel a running report generation job"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Jobs Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/bi/jobs/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"bi",
+								"jobs",
+								"status"
+							]
+						},
+						"description": "Get status of all jobs"
+					},
+					"response": []
+				}
+			],
+			"description": "Business Intelligence and report generation endpoints"
+		},
+		{
+			"name": "9. EVV (Electronic Visit Verification)",
+			"item": [
+				{
+					"name": "Check-In",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"recipientId\": \"REC001\",\n    \"serviceType\": \"Personal Care\",\n    \"latitude\": 34.0522,\n    \"longitude\": -118.2437\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/evv/check-in",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"evv",
+								"check-in"
+							]
+						},
+						"description": "EVV check-in for a service visit"
+					},
+					"response": []
+				},
+				{
+					"name": "Check-Out",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"latitude\": 34.0522,\n    \"longitude\": -118.2437\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/evv/check-out/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"evv",
+								"check-out",
+								"1"
+							]
+						},
+						"description": "EVV check-out for a service visit"
+					},
+					"response": []
+				},
+				{
+					"name": "Get EVV Records",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/evv/records?providerId=PROV001&recipientId=REC001",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"evv",
+								"records"
+							],
+							"query": [
+								{
+									"key": "providerId",
+									"value": "PROV001"
+								},
+								{
+									"key": "recipientId",
+									"value": "REC001"
+								}
+							]
+						},
+						"description": "Get EVV records filtered by provider and/or recipient"
+					},
+					"response": []
+				}
+			],
+			"description": "Electronic Visit Verification endpoints"
+		},
+		{
+			"name": "10. Provider-Recipient",
+			"item": [
+				{
+					"name": "Get My Recipients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/provider-recipient/my-recipients",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"provider-recipient",
+								"my-recipients"
+							]
+						},
+						"description": "Get provider's assigned recipients"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Providers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/provider-recipient/my-providers",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"provider-recipient",
+								"my-providers"
+							]
+						},
+						"description": "Get recipient's assigned providers"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Relationships",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/provider-recipient/all",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"provider-recipient",
+								"all"
+							]
+						},
+						"description": "Get all provider-recipient relationships (for case workers)"
+					},
+					"response": []
+				}
+			],
+			"description": "Provider-Recipient relationship management endpoints"
+		},
+		{
+			"name": "11. Field Masking",
+			"item": [
+				{
+					"name": "Get Field Masking Interface",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/field-masking/interface/CASE_WORKER",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"field-masking",
+								"interface",
+								"CASE_WORKER"
+							]
+						},
+						"description": "Get field masking interface for a specific role"
+					},
+					"response": []
+				},
+				{
+					"name": "Apply Field Masking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"userRole\": \"CASE_WORKER\",\n    \"reportType\": \"TIMESHEET_REPORT\",\n    \"data\": [\n        {\n            \"id\": 1,\n            \"employeeName\": \"John Doe\",\n            \"employeeId\": \"EMP001\",\n            \"regularHours\": 40.0\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/field-masking/apply",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"field-masking",
+								"apply"
+							]
+						},
+						"description": "Apply field masking to data based on role and report type"
+					},
+					"response": []
+				}
+			],
+			"description": "Field-level data masking endpoints"
+		},
+		{
+			"name": "12. Keycloak Admin",
+			"item": [
+				{
+					"name": "Create User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"newuser\",\n    \"email\": \"newuser@example.com\",\n    \"password\": \"SecurePassword123!\",\n    \"firstName\": \"New\",\n    \"lastName\": \"User\",\n    \"role\": \"CASE_WORKER\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users"
+							]
+						},
+						"description": "Create a new user in Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users"
+							]
+						},
+						"description": "Get all users from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users/user-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users",
+								"user-id-here"
+							]
+						},
+						"description": "Delete a user from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Role",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"CUSTOM_ROLE\",\n    \"description\": \"Custom role description\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"roles"
+							]
+						},
+						"description": "Create a new role in Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Roles",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"roles"
+							]
+						},
+						"description": "Get all roles from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Assign Role to User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"roleName\": \"CASE_WORKER\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users/user-id-here/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users",
+								"user-id-here",
+								"roles"
+							]
+						},
+						"description": "Assign a role to a user (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Roles",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users/user-id-here/roles",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users",
+								"user-id-here",
+								"roles"
+							]
+						},
+						"description": "Get all roles assigned to a user (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Group",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"CTA\",\n    \"parentGroupId\": null\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/groups",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"groups"
+							]
+						},
+						"description": "Create a location group in Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Groups",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/groups",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"groups"
+							]
+						},
+						"description": "Get all location groups from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Add User to Group",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users/user-id-here/groups/group-id-here",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users",
+								"user-id-here",
+								"groups",
+								"group-id-here"
+							]
+						},
+						"description": "Add a user to a location group (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Groups",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/users/user-id-here/groups",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"users",
+								"user-id-here",
+								"groups"
+							]
+						},
+						"description": "Get all location groups a user belongs to (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Policy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Provider Policy\",\n    \"type\": \"role\",\n    \"roleName\": \"PROVIDER\",\n    \"logic\": \"POSITIVE\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/policies",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"policies"
+							]
+						},
+						"description": "Create an authorization policy in Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Policies",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/policies",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"policies"
+							]
+						},
+						"description": "Get all authorization policies from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Permission",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Provider Create Timesheet\",\n    \"resourceId\": \"resource-id-here\",\n    \"scopeIds\": [\"scope-id-here\"],\n    \"policyIds\": [\"policy-id-here\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/permissions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"permissions"
+							]
+						},
+						"description": "Create an authorization permission in Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Permissions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/permissions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"permissions"
+							]
+						},
+						"description": "Get all authorization permissions from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Resources",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/resources",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"resources"
+							]
+						},
+						"description": "Get all authorization resources from Keycloak (requires ADMIN role)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Resource Attributes",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"recipient_read_fields\": \"id,employeeName,regularHours\",\n    \"provider_read_fields\": \"id,employeeId,regularHours\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/admin/keycloak/resources/resource-id-here/attributes",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"admin",
+								"keycloak",
+								"resources",
+								"resource-id-here",
+								"attributes"
+							]
+						},
+						"description": "Update resource attributes for field-level authorization (requires ADMIN role)"
+					},
+					"response": []
+				}
+			],
+			"description": "Keycloak administration endpoints (requires ADMIN role)"
+		},
+		{
+			"name": "13. Generic Resources",
+			"item": [
+				{
+					"name": "Create Resource",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"field1\": \"value1\",\n    \"field2\": \"value2\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/resources/timesheet",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"resources",
+								"timesheet"
+							]
+						},
+						"description": "Generic resource creation endpoint (authorization handled by Keycloak)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Resources",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/resources/timesheet",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"resources",
+								"timesheet"
+							]
+						},
+						"description": "Generic resource retrieval endpoint (authorization handled by Keycloak)"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Resource",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"field1\": \"updated_value1\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/resources/timesheet/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"resources",
+								"timesheet",
+								"1"
+							]
+						},
+						"description": "Generic resource update endpoint (authorization handled by Keycloak)"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Resource",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{access_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/resources/timesheet/1",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"resources",
+								"timesheet",
+								"1"
+							]
+						},
+						"description": "Generic resource deletion endpoint (authorization handled by Keycloak)"
+					},
+					"response": []
+				}
+			],
+			"description": "Generic resource endpoints with Keycloak-based authorization"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "access_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "refresh_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+
+
+
+
+
+
+
