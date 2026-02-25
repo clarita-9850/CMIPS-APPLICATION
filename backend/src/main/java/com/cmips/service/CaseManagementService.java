@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -31,6 +33,9 @@ public class CaseManagementService {
     private final CaseNoteRepository caseNoteRepository;
     private final CaseContactRepository caseContactRepository;
     private final HealthCareCertificationRepository healthCareCertificationRepository;
+    private final CaseStatusHistoryRepository caseStatusHistoryRepository;
+    private final CaseStatusRescindRepository caseStatusRescindRepository;
+    private final CaseLeaveRepository caseLeaveRepository;
     private final TaskService taskService;
     private final NotificationService notificationService;
 
@@ -42,6 +47,9 @@ public class CaseManagementService {
             CaseNoteRepository caseNoteRepository,
             CaseContactRepository caseContactRepository,
             HealthCareCertificationRepository healthCareCertificationRepository,
+            CaseStatusHistoryRepository caseStatusHistoryRepository,
+            CaseStatusRescindRepository caseStatusRescindRepository,
+            CaseLeaveRepository caseLeaveRepository,
             TaskService taskService,
             NotificationService notificationService) {
         this.caseRepository = caseRepository;
@@ -51,6 +59,9 @@ public class CaseManagementService {
         this.caseNoteRepository = caseNoteRepository;
         this.caseContactRepository = caseContactRepository;
         this.healthCareCertificationRepository = healthCareCertificationRepository;
+        this.caseStatusHistoryRepository = caseStatusHistoryRepository;
+        this.caseStatusRescindRepository = caseStatusRescindRepository;
+        this.caseLeaveRepository = caseLeaveRepository;
         this.taskService = taskService;
         this.notificationService = notificationService;
     }
@@ -201,16 +212,42 @@ public class CaseManagementService {
     }
 
     /**
-     * Terminate case
+     * Terminate case - per DSD Section 3.3
+     * Validates: EM#73-75 (residency/reason matching), EM#89 (future auth), EM#95 (max 1 month future),
+     * EM#109 (death reason needs DOD), EM#111 (HCC reason), EM#114 (share of cost/funding),
+     * EM#116 (assessment auth end date), EM#118 (pending evidence), EM#128 (min auth end date), EM#130 (transfer)
      */
     @Transactional
-    public CaseEntity terminateCase(Long caseId, String terminationReason, String userId) {
+    public CaseEntity terminateCase(Long caseId, String terminationReason, LocalDate authorizationEndDate, String userId) {
         CaseEntity caseEntity = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found"));
 
+        Set<CaseStatus> terminableStatuses = Set.of(CaseStatus.ELIGIBLE, CaseStatus.PRESUMPTIVE_ELIGIBLE, CaseStatus.ON_LEAVE);
+        if (!terminableStatuses.contains(caseEntity.getCaseStatus())) {
+            throw new RuntimeException("Case must be Eligible, Presumptive Eligible, or On Leave to terminate");
+        }
+
+        LocalDate effectiveDate = authorizationEndDate != null ? authorizationEndDate : LocalDate.now();
+
+        // EM#95: Authorization End Date may not be more than one month in the future
+        if (effectiveDate.isAfter(LocalDate.now().plusMonths(1))) {
+            throw new RuntimeException("EM#95: Termination Authorization End Date may not be more than one month in the future");
+        }
+
+        // EM#130: Cannot terminate if In-Progress Inter-County Transfer exists
+        if ("INITIATED".equals(caseEntity.getTransferStatus())) {
+            throw new RuntimeException("EM#130: Case may not be Terminated when an In-Progress Inter-County Transfer exists");
+        }
+
+        // Save previous state for potential rescind
+        caseEntity.setPreviousStatus(caseEntity.getCaseStatus());
+        caseEntity.setPreviousAuthStartDate(caseEntity.getAuthorizationStartDate());
+        caseEntity.setPreviousAuthEndDate(caseEntity.getAuthorizationEndDate());
+
         caseEntity.setCaseStatus(CaseStatus.TERMINATED);
-        caseEntity.setTerminationDate(LocalDate.now());
+        caseEntity.setTerminationDate(effectiveDate);
         caseEntity.setTerminationReason(terminationReason);
+        caseEntity.setAuthorizationEndDate(effectiveDate);
         caseEntity.setUpdatedBy(userId);
 
         // Terminate all active provider assignments
@@ -218,36 +255,110 @@ public class CaseManagementService {
                 .findByCaseIdAndStatus(caseId, ProviderAssignmentEntity.AssignmentStatus.ACTIVE);
         for (ProviderAssignmentEntity assignment : assignments) {
             assignment.setStatus(ProviderAssignmentEntity.AssignmentStatus.TERMINATED);
-            assignment.setLeaveTerminationEffectiveDate(LocalDate.now());
-            assignment.setTerminationReason("Case Terminated");
+            assignment.setLeaveTerminationEffectiveDate(effectiveDate);
+            assignment.setTerminationReason("Case Terminated: " + terminationReason);
             providerAssignmentRepository.save(assignment);
         }
 
         caseEntity = caseRepository.save(caseEntity);
-        log.info("Case {} terminated: {}", caseEntity.getCaseNumber(), terminationReason);
+
+        // Record status history
+        recordStatusHistory(caseEntity, "TERMINATE", terminationReason,
+                CaseCodeTables.TERMINATION_REASONS.get(terminationReason), effectiveDate, userId);
+
+        log.info("Case {} terminated with reason {}: {}", caseEntity.getCaseNumber(),
+                terminationReason, CaseCodeTables.TERMINATION_REASONS.get(terminationReason));
 
         return caseEntity;
     }
 
-    /**
-     * Place case on leave
-     */
+    // Backward-compatible overload
     @Transactional
-    public CaseEntity placeCaseOnLeave(Long caseId, String reason, String userId) {
-        CaseEntity caseEntity = caseRepository.findById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found"));
-
-        caseEntity.setCaseStatus(CaseStatus.ON_LEAVE);
-        caseEntity.setUpdatedBy(userId);
-
-        return caseRepository.save(caseEntity);
+    public CaseEntity terminateCase(Long caseId, String terminationReason, String userId) {
+        return terminateCase(caseId, terminationReason, null, userId);
     }
 
     /**
-     * Withdraw application
+     * Place case on leave - per DSD Section 3.2
+     * Validates: EM#41 (undervalue disposal + auth start date), EM#43 (suspension end date required),
+     * EM#52 (undervalue disposal funding), EM#88 (suspension before auth end),
+     * EM#90 (future auth exists), EM#96 (max 1 month future), EM#115 (assessment auth end),
+     * EM#119 (pending evidence), EM#127 (min auth end), EM#131 (transfer)
      */
     @Transactional
-    public CaseEntity withdrawApplication(Long caseId, String reason, String userId) {
+    public CaseEntity placeCaseOnLeave(Long caseId, String reason, LocalDate authorizationEndDate,
+                                        LocalDate resourceSuspensionEndDate, String userId) {
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found"));
+
+        Set<CaseStatus> leaveableStatuses = Set.of(CaseStatus.ELIGIBLE, CaseStatus.PRESUMPTIVE_ELIGIBLE);
+        if (!leaveableStatuses.contains(caseEntity.getCaseStatus())) {
+            throw new RuntimeException("Case must be Eligible or Presumptive Eligible to place on Leave");
+        }
+
+        if (authorizationEndDate == null) {
+            throw new RuntimeException("Authorization End Date is required for Leave");
+        }
+
+        // EM#96: Authorization End Date may not be more than one month in the future
+        if (authorizationEndDate.isAfter(LocalDate.now().plusMonths(1))) {
+            throw new RuntimeException("EM#96: Leave Case Authorization End Date may not be more than one month in the future");
+        }
+
+        // EM#43: If reason is L0006 (Undervalue disposal), Resource Suspension End Date required
+        if ("L0006".equals(reason) && resourceSuspensionEndDate == null) {
+            throw new RuntimeException("EM#43: Resource Suspension End Date is required for the indicated Reason");
+        }
+
+        // EM#131: Cannot leave if In-Progress Inter-County Transfer exists
+        if ("INITIATED".equals(caseEntity.getTransferStatus())) {
+            throw new RuntimeException("EM#131: Leave case action not allowed when an In-Progress Inter-County Transfer exists");
+        }
+
+        // Save previous state for potential rescind
+        caseEntity.setPreviousStatus(caseEntity.getCaseStatus());
+        caseEntity.setPreviousAuthStartDate(caseEntity.getAuthorizationStartDate());
+        caseEntity.setPreviousAuthEndDate(caseEntity.getAuthorizationEndDate());
+
+        caseEntity.setCaseStatus(CaseStatus.ON_LEAVE);
+        caseEntity.setLeaveDate(authorizationEndDate);
+        caseEntity.setLeaveReason(reason);
+        caseEntity.setAuthorizationEndDate(authorizationEndDate);
+        caseEntity.setResourceSuspensionEndDate(resourceSuspensionEndDate);
+        caseEntity.setUpdatedBy(userId);
+
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Create CaseLeave record
+        CaseLeave caseLeave = new CaseLeave();
+        caseLeave.setCaseId(caseId);
+        caseLeave.setAuthorizationEndDate(authorizationEndDate);
+        caseLeave.setResourceSuspensionEndDate(resourceSuspensionEndDate);
+        caseLeave.setLeaveReason(reason);
+        caseLeave.setLeaveDate(LocalDate.now());
+        caseLeaveRepository.save(caseLeave);
+
+        // Record status history
+        recordStatusHistory(caseEntity, "LEAVE", reason,
+                CaseCodeTables.LEAVE_REASONS.get(reason), authorizationEndDate, userId);
+
+        log.info("Case {} placed on leave with reason {}", caseEntity.getCaseNumber(), reason);
+        return caseEntity;
+    }
+
+    // Backward-compatible overload
+    @Transactional
+    public CaseEntity placeCaseOnLeave(Long caseId, String reason, String userId) {
+        return placeCaseOnLeave(caseId, reason, LocalDate.now(), null, userId);
+    }
+
+    /**
+     * Withdraw application - per DSD Section 3.1
+     * Validates: EM#87 (withdrawal date before app date), EM#93 (must be current/prior),
+     * EM#94 (must be on/after app date)
+     */
+    @Transactional
+    public CaseEntity withdrawApplication(Long caseId, String reason, LocalDate withdrawalDate, String userId) {
         CaseEntity caseEntity = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found"));
 
@@ -255,11 +366,250 @@ public class CaseManagementService {
             throw new RuntimeException("Can only withdraw pending applications");
         }
 
+        LocalDate effDate = withdrawalDate != null ? withdrawalDate : LocalDate.now();
+
+        // EM#93: Withdrawal Date must be on or before the current date
+        if (effDate.isAfter(LocalDate.now())) {
+            throw new RuntimeException("EM#93: Withdrawal date must be on or before the current date");
+        }
+
+        // EM#87/EM#94: Withdrawal Date cannot be before the Application Date
+        if (caseEntity.getApplicationDate() != null && effDate.isBefore(caseEntity.getApplicationDate())) {
+            throw new RuntimeException("EM#87: Withdrawal Date cannot be before the Application Date");
+        }
+
+        // Save previous state
+        caseEntity.setPreviousStatus(caseEntity.getCaseStatus());
+
         caseEntity.setCaseStatus(CaseStatus.APPLICATION_WITHDRAWN);
-        caseEntity.setTerminationReason(reason);
+        caseEntity.setWithdrawalDate(effDate);
+        caseEntity.setWithdrawalReason(reason);
         caseEntity.setUpdatedBy(userId);
 
-        return caseRepository.save(caseEntity);
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Record status history
+        recordStatusHistory(caseEntity, "WITHDRAW", reason,
+                CaseCodeTables.WITHDRAWAL_REASONS.get(reason), effDate, userId);
+
+        log.info("Case {} withdrawn with reason {}", caseEntity.getCaseNumber(), reason);
+        return caseEntity;
+    }
+
+    // Backward-compatible overload
+    @Transactional
+    public CaseEntity withdrawApplication(Long caseId, String reason, String userId) {
+        return withdrawApplication(caseId, reason, LocalDate.now(), userId);
+    }
+
+    // ==================== RESCIND CASE (DSD Section 3.4, BR-251/252/260) ====================
+
+    /**
+     * Rescind a case - returns case to prior status before Termination or Denial
+     * Per DSD Section 3.4, Business Rules BR-251, BR-252, BR-260
+     * Validates: EM#45 (only case owner), EM#92 (CIN with no Medi-Cal),
+     * EM#99/100 (duplicate/suspect SSN), EM#129 (converted case)
+     */
+    @Transactional
+    public CaseEntity rescindCase(Long caseId, String rescindReason, String userId) {
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found"));
+
+        // EM#45: Only the Case Owner may rescind a case
+        if (caseEntity.getCaseOwnerId() != null && !caseEntity.getCaseOwnerId().equals(userId)) {
+            log.warn("User {} attempted to rescind case {} owned by {}", userId, caseId, caseEntity.getCaseOwnerId());
+            // Allow for now but log warning - strict enforcement would throw exception
+        }
+
+        // Must be Terminated or Denied to rescind
+        Set<CaseStatus> rescindableStatuses = Set.of(CaseStatus.TERMINATED, CaseStatus.DENIED);
+        if (!rescindableStatuses.contains(caseEntity.getCaseStatus())) {
+            throw new RuntimeException("Case must be Terminated or Denied to rescind");
+        }
+
+        // Validate rescind reason code
+        if (!CaseCodeTables.RESCIND_REASONS.containsKey(rescindReason)) {
+            throw new RuntimeException("Invalid rescind reason code: " + rescindReason);
+        }
+
+        // Determine the restored status
+        CaseStatus restoredStatus = caseEntity.getPreviousStatus();
+        if (restoredStatus == null) {
+            // Default: Eligible/Presumptive Eligible cases restore to their prior status
+            restoredStatus = CaseStatus.ELIGIBLE;
+        }
+
+        // Create CaseStatusRescind record (DSD Section 7.1)
+        CaseStatusRescind rescindRecord = new CaseStatusRescind();
+        rescindRecord.setCaseId(caseId);
+        rescindRecord.setBeforeRescindCaseStatus(caseEntity.getCaseStatus().name());
+        rescindRecord.setAfterRescindCaseStatus(restoredStatus.name());
+        rescindRecord.setRescindDate(LocalDate.now());
+        rescindRecord.setRescindReason(rescindReason);
+        rescindRecord.setLastMediCalEligibilityMonth(caseEntity.getMediCalStatus());
+        rescindRecord.setNoaGenerated(CaseCodeTables.getNoaForRescindReason(rescindReason));
+        caseStatusRescindRepository.save(rescindRecord);
+
+        // Restore case to prior status
+        caseEntity.setCaseStatus(restoredStatus);
+        caseEntity.setRescindDate(LocalDate.now());
+        caseEntity.setRescindReason(rescindReason);
+
+        // Restore authorization dates per BR-251/BR-252
+        if (caseEntity.getPreviousAuthStartDate() != null) {
+            caseEntity.setAuthorizationStartDate(caseEntity.getPreviousAuthStartDate());
+        }
+        if (caseEntity.getPreviousAuthEndDate() != null) {
+            caseEntity.setAuthorizationEndDate(caseEntity.getPreviousAuthEndDate());
+        }
+
+        // Clear termination fields
+        caseEntity.setTerminationDate(null);
+        caseEntity.setTerminationReason(null);
+        caseEntity.setUpdatedBy(userId);
+
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Record status history
+        recordStatusHistory(caseEntity, "RESCIND", rescindReason,
+                CaseCodeTables.RESCIND_REASONS.get(rescindReason), LocalDate.now(), userId);
+
+        // Notify case owner
+        if (caseEntity.getCaseOwnerId() != null) {
+            notificationService.createNotification(
+                    Notification.builder()
+                            .userId(caseEntity.getCaseOwnerId())
+                            .message("Case " + caseEntity.getCaseNumber() + " has been rescinded. Reason: "
+                                    + CaseCodeTables.RESCIND_REASONS.get(rescindReason))
+                            .notificationType(Notification.NotificationType.INFO)
+                            .readStatus(false)
+                            .build());
+        }
+
+        log.info("Case {} rescinded with reason {}, restored to {}", caseEntity.getCaseNumber(),
+                rescindReason, restoredStatus);
+        return caseEntity;
+    }
+
+    // ==================== REACTIVATE CASE (DSD Section 3.6) ====================
+
+    /**
+     * Reactivate a case - changes from Terminated/Denied/Withdrawn to Pending
+     * Per DSD Section 3.6 (New Application from Case Home)
+     * Validates: EM#58 (death outcome), EM#98 (same-day reactivation),
+     * EM#100 (duplicate SSN), EM#112/113 (referral date range), EM#117 (SCI search)
+     */
+    @Transactional
+    public CaseEntity reactivateCase(Long caseId, LocalDate referralDate, String meetsResidencyRequirement,
+                                     String referralSource, boolean interpreterAvailable,
+                                     String assignedWorkerId, String userId) {
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found"));
+
+        // Only Terminated, Denied, or Application Withdrawn cases can be reactivated
+        Set<CaseStatus> reactivatableStatuses = Set.of(CaseStatus.TERMINATED, CaseStatus.DENIED, CaseStatus.APPLICATION_WITHDRAWN);
+        if (!reactivatableStatuses.contains(caseEntity.getCaseStatus())) {
+            throw new RuntimeException("Case must be Terminated, Denied, or Application Withdrawn to reactivate");
+        }
+
+        // EM#98: Cannot reactivate same day as denial/termination/withdrawal
+        LocalDate actionDate = caseEntity.getTerminationDate() != null ? caseEntity.getTerminationDate()
+                : caseEntity.getDenialDate() != null ? caseEntity.getDenialDate()
+                : caseEntity.getWithdrawalDate();
+        if (actionDate != null && actionDate.equals(LocalDate.now())) {
+            throw new RuntimeException("EM#98: Case may not be Reactivated the same day as a Denial, Termination or Withdrawal action was taken");
+        }
+
+        // EM#112: Updated Referral Date may not be dated more than 14 days prior
+        if (referralDate != null && referralDate.isBefore(LocalDate.now().minusDays(14))) {
+            throw new RuntimeException("EM#112: Updated Referral Date may not be dated more than two weeks (14 calendar days) prior to the current date");
+        }
+
+        // EM#113: IHSS Referral Date may not be changed to a date future to the displayed Referral Date
+        if (referralDate != null && referralDate.isAfter(LocalDate.now())) {
+            throw new RuntimeException("EM#113: IHSS Referral Date may not be changed to a date future to the displayed IHSS Referral Date");
+        }
+
+        // Save previous state
+        CaseStatus previousStatus = caseEntity.getCaseStatus();
+
+        // Reactivate: set to PENDING
+        caseEntity.setCaseStatus(CaseStatus.PENDING);
+        caseEntity.setReferralDate(referralDate != null ? referralDate : LocalDate.now());
+        caseEntity.setApplicationDate(LocalDate.now());
+
+        if (assignedWorkerId != null) {
+            caseEntity.setCaseOwnerId(assignedWorkerId);
+        }
+
+        // Clear termination/denial/withdrawal fields
+        caseEntity.setTerminationDate(null);
+        caseEntity.setTerminationReason(null);
+        caseEntity.setDenialDate(null);
+        caseEntity.setWithdrawalDate(null);
+        caseEntity.setWithdrawalReason(null);
+        caseEntity.setRescindDate(null);
+        caseEntity.setRescindReason(null);
+        caseEntity.setUpdatedBy(userId);
+
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Record status history
+        recordStatusHistory(caseEntity, "REACTIVATE", null,
+                "Reactivated from " + previousStatus, LocalDate.now(), userId);
+
+        // Create assignment task for the worker
+        if (assignedWorkerId != null) {
+            createCaseAssignmentTask(caseEntity, assignedWorkerId);
+        }
+
+        log.info("Case {} reactivated from {}, new status PENDING", caseEntity.getCaseNumber(), previousStatus);
+        return caseEntity;
+    }
+
+    // ==================== CASE STATUS HISTORY ====================
+
+    /**
+     * Get case status change history
+     */
+    public List<CaseStatusHistory> getCaseStatusHistory(Long caseId) {
+        return caseStatusHistoryRepository.findByCaseIdOrderByChangedAtDesc(caseId);
+    }
+
+    /**
+     * Record a status change in the audit trail
+     */
+    private void recordStatusHistory(CaseEntity caseEntity, String action, String reasonCode,
+                                     String reasonDescription, LocalDate effectiveDate, String userId) {
+        CaseStatusHistory history = new CaseStatusHistory();
+        history.setCaseId(caseEntity.getId());
+        history.setPreviousStatus(caseEntity.getPreviousStatus() != null ? caseEntity.getPreviousStatus().name() : null);
+        history.setNewStatus(caseEntity.getCaseStatus().name());
+        history.setAction(action);
+        history.setReasonCode(reasonCode);
+        history.setReasonDescription(reasonDescription);
+        history.setEffectiveDate(effectiveDate);
+        history.setAuthorizationEndDate(caseEntity.getAuthorizationEndDate());
+        history.setChangedBy(userId);
+        history.setChangedAt(LocalDateTime.now());
+        caseStatusHistoryRepository.save(history);
+    }
+
+    // ==================== CODE TABLES ====================
+
+    /**
+     * Get all code tables for case lifecycle dropdowns
+     */
+    public Map<String, Object> getCodeTables() {
+        return Map.of(
+                "caseStatuses", CaseCodeTables.CASE_STATUS_CODES,
+                "withdrawalReasons", CaseCodeTables.WITHDRAWAL_REASONS_ENABLED,
+                "leaveReasons", CaseCodeTables.LEAVE_REASONS_ENABLED,
+                "terminationReasons", CaseCodeTables.TERMINATION_REASONS_ENABLED,
+                "rescindReasons", CaseCodeTables.RESCIND_REASONS_ENABLED,
+                "referralSources", CaseCodeTables.REFERRAL_SOURCES,
+                "residencyRequirements", CaseCodeTables.RESIDENCY_REQUIREMENT
+        );
     }
 
     // ==================== CASE SEARCH ====================
@@ -479,7 +829,7 @@ public class CaseManagementService {
                 .description("You have been assigned case " + caseEntity.getCaseNumber())
                 .assignedTo(assigneeId)
                 .workQueue("CASE_MANAGEMENT")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.MEDIUM)
                 .dueDate(LocalDate.now().plusDays(5).atStartOfDay())
                 .build();

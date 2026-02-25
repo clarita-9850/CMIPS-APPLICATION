@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 700" font-family="Arial, sans-serif">
+  <defs>
+    <style>
+      .title { font-size: 20px; font-weight: bold; fill: #1e3a5f; }
+      .layer-title { font-size: 14px; font-weight: bold; fill: #0f172a; }
+      .box { stroke-width: 1.5; rx: 6; }
+      .layer1 { fill: #dbeafe; stroke: #2563eb; }
+      .layer2 { fill: #dcfce7; stroke: #16a34a; }
+      .layer3 { fill: #fef3c7; stroke: #d97706; }
+      .layer4 { fill: #f3e8ff; stroke: #7c3aed; }
+      .label { font-size: 11px; fill: #334155; }
+      .sublabel { font-size: 9px; fill: #64748b; }
+    </style>
+  </defs>
+
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" class="title">CMIPS Frontend Architecture (Next.js)</text>
+
+  <!-- Layer 1: Presentation -->
+  <rect x="20" y="55" width="760" height="180" class="box layer1"/>
+  <text x="40" y="78" class="layer-title">1. PRESENTATION LAYER</text>
+  
+  <text x="40" y="100" class="label">Pages (App Dir)</text>
+  <rect x="40" y="108" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="90" y="123" text-anchor="middle" class="sublabel">/cases</text>
+  <rect x="150" y="108" width="120" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="210" y="123" text-anchor="middle" class="sublabel">/provider/timesheets</text>
+  <rect x="280" y="108" width="110" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="335" y="123" text-anchor="middle" class="sublabel">/provider/payments</text>
+  <rect x="400" y="108" width="110" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="455" y="123" text-anchor="middle" class="sublabel">/tasks, /inbox</text>
+  <rect x="520" y="108" width="120" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="580" y="123" text-anchor="middle" class="sublabel">/analytics, /reports</text>
+
+  <text x="40" y="155" class="label">Components (Reusable)</text>
+  <rect x="40" y="163" width="90" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="85" y="178" text-anchor="middle" class="sublabel">Modal</text>
+  <rect x="140" y="163" width="70" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="175" y="178" text-anchor="middle" class="sublabel">Card</text>
+  <rect x="220" y="163" width="90" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="265" y="178" text-anchor="middle" class="sublabel">Breadcrumb</text>
+  <rect x="320" y="163" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="370" y="178" text-anchor="middle" class="sublabel">Header/Footer</text>
+  <rect x="430" y="163" width="120" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="490" y="178" text-anchor="middle" class="sublabel">NotificationCenter</text>
+
+  <text x="40" y="210" class="label">Layouts (Shared)</text>
+  <rect x="40" y="218" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="90" y="233" text-anchor="middle" class="sublabel">Root Layout</text>
+  <rect x="150" y="218" width="90" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="195" y="233" text-anchor="middle" class="sublabel">Admin Layout</text>
+
+  <!-- Layer 2: State Management -->
+  <rect x="20" y="255" width="760" height="140" class="box layer2"/>
+  <text x="40" y="278" class="layer-title">2. STATE MANAGEMENT</text>
+  
+  <text x="40" y="300" class="label">Context API</text>
+  <rect x="40" y="308" width="110" height="28" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="95" y="326" text-anchor="middle" class="sublabel">AuthContext</text>
+  <rect x="160" y="308" width="130" height="28" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="225" y="326" text-anchor="middle" class="sublabel">CountyThemeContext</text>
+
+  <text x="40" y="355" class="label">TanStack Query (Server State)</text>
+  <rect x="40" y="363" width="90" height="24" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="85" y="379" text-anchor="middle" class="sublabel">Cases</text>
+  <rect x="140" y="363" width="90" height="24" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="185" y="379" text-anchor="middle" class="sublabel">Batch Jobs</text>
+  <rect x="240" y="363" width="100" height="24" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="290" y="379" text-anchor="middle" class="sublabel">Field Masking</text>
+
+  <!-- Layer 3: API Layer -->
+  <rect x="20" y="415" width="760" height="140" class="box layer3"/>
+  <text x="40" y="438" class="layer-title">3. API LAYER</text>
+  
+  <text x="40" y="460" class="label">Axios Client (Base Config)</text>
+  <rect x="40" y="468" width="720" height="70" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="60" y="488" class="sublabel">• Base URL: http://localhost:8090/api</text>
+  <text x="60" y="505" class="sublabel">• JWT Token Interceptor (Authorization: Bearer)</text>
+  <text x="60" y="522" class="sublabel">• Error Handling (401 - redirect /login)</text>
+
+  <text x="40" y="550" class="label">API Services</text>
+  <rect x="40" y="558" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="90" y="573" text-anchor="middle" class="sublabel">case.service</text>
+  <rect x="150" y="558" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="200" y="573" text-anchor="middle" class="sublabel">auth.service</text>
+  <rect x="260" y="558" width="90" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="305" y="573" text-anchor="middle" class="sublabel">task.service</text>
+  <rect x="360" y="558" width="100" height="22" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="410" y="573" text-anchor="middle" class="sublabel">report.service</text>
+
+  <!-- Layer 4: Communication -->
+  <rect x="20" y="575" width="760" height="100" class="box layer4"/>
+  <text x="40" y="598" class="layer-title">4. COMMUNICATION &#38; API GATEWAY</text>
+  
+  <rect x="40" y="608" width="340" height="50" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="210" y="633" text-anchor="middle" class="label">HTTPS/REST + JWT</text>
+  
+  <rect x="400" y="608" width="360" height="50" fill="white" stroke="#94a3b8" rx="4"/>
+  <text x="580" y="633" text-anchor="middle" class="label">API GATEWAY (Port: 8090)</text>
+  
+  <line x1="380" y1="633" x2="400" y2="633" stroke="#64748b" stroke-width="1"/>
+  <polygon points="395,628 400,633 395,638" fill="#64748b"/>
+</svg>

@@ -1,0 +1,42 @@
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { UimPageLayout } from '../../../shared/components';
+import { UimSection }    from '../../../shared/components';
+import { UimField }      from '../../../shared/components';
+import { getDomainApi } from '../../../api/domainApi';
+
+const NAV_LINKS = [];
+
+export function OrganizationCreateOrgUnitCaseApprovalPage() {
+  const navigate = useNavigate();
+  const organizationApi = getDomainApi('organization');
+  return (
+    <UimPageLayout
+      pageId={"Organization_createOrgUnitCaseApproval"}
+      title={"Create Case Approval Check:"}
+      navLinks={NAV_LINKS}
+      hidePlaceholderBanner={true}
+    >
+      <UimSection title={"Details"}>
+        <div className="uim-form-grid">
+          <UimField label={"Percentage"} />
+          <UimField label={"Product"} />
+          <UimField label={"Estimated Cost"} />
+        </div>
+      </UimSection>
+      <UimSection title={"Comments"}>
+        <div className="uim-form-grid">
+          <UimField label={"Applies to all Products"} />
+          <UimField label={"Comments"} />
+        </div>
+      </UimSection>
+      <div className="uim-action-bar">
+        <button className="uim-btn uim-btn-primary" onClick={() => { organizationApi.create({}).then(() => { alert('Save successful'); navigate(-1); }).catch(err => alert('Save failed: ' + err.message)); }}>Save</button>
+        <button className="uim-btn uim-btn-primary" onClick={() => alert('Action: Save &amp; New')}>Save &amp; New</button>
+        <button className="uim-btn uim-btn-primary" onClick={() => navigate(-1)}>Cancel</button>
+      </div>
+    </UimPageLayout>
+  );
+}
+
+export default OrganizationCreateOrgUnitCaseApprovalPage;

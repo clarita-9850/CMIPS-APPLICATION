@@ -22,6 +22,12 @@
   --color-p2-lighter: #68a6c2;
   --color-p2-lightest: #9bc4d6;
   
+  /* CDSS accent / secondary */
+  --color-s1: #eef8fb;
+  --cdss-blue: #153554;
+  --cdss-blue-dark: #0d2a3a;
+  --cdss-blue-light: #1a4060;
+  
   --color-p3-dark: #293039;
   --color-p3-darker: #232930;
   --color-p3-darkest: #14171c;

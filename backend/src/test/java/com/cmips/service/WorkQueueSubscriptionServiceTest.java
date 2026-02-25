@@ -1,6 +1,8 @@
 package com.cmips.service;
 
+import com.cmips.entity.WorkQueue;
 import com.cmips.entity.WorkQueueSubscription;
+import com.cmips.repository.WorkQueueRepository;
 import com.cmips.repository.WorkQueueSubscriptionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -31,7 +33,7 @@ class WorkQueueSubscriptionServiceTest {
     private WorkQueueSubscriptionRepository subscriptionRepository;
 
     @Mock
-    private WorkQueueCatalogService catalogService;
+    private WorkQueueRepository workQueueRepository;
 
     @InjectMocks
     private WorkQueueSubscriptionService subscriptionService;
@@ -49,7 +51,10 @@ class WorkQueueSubscriptionServiceTest {
     @DisplayName("Should subscribe user to queue successfully")
     void testSubscribeUserToQueue_Success() {
         // Arrange
-        when(catalogService.isSupervisorOnly(TEST_QUEUE)).thenReturn(false);
+        WorkQueue queue = new WorkQueue();
+        queue.setName(TEST_QUEUE);
+        queue.setSupervisorOnly(false);
+        when(workQueueRepository.findByName(TEST_QUEUE)).thenReturn(Optional.of(queue));
         when(subscriptionRepository.findByUsernameAndWorkQueue(TEST_USERNAME, TEST_QUEUE))
                 .thenReturn(Optional.empty());
         when(subscriptionRepository.save(any(WorkQueueSubscription.class)))
@@ -63,7 +68,6 @@ class WorkQueueSubscriptionServiceTest {
         assertNotNull(result);
         assertEquals(TEST_USERNAME, result.getUsername());
         assertEquals(TEST_QUEUE, result.getWorkQueue());
-        verify(catalogService, times(1)).isSupervisorOnly(TEST_QUEUE);
         verify(subscriptionRepository, times(1)).save(any(WorkQueueSubscription.class));
     }
 
@@ -71,8 +75,11 @@ class WorkQueueSubscriptionServiceTest {
     @DisplayName("Should return existing subscription when already subscribed")
     void testSubscribeUserToQueue_AlreadySubscribed() {
         // Arrange
+        WorkQueue queue = new WorkQueue();
+        queue.setName(TEST_QUEUE);
+        queue.setSupervisorOnly(false);
         WorkQueueSubscription existing = createMockSubscription(1L);
-        when(catalogService.isSupervisorOnly(TEST_QUEUE)).thenReturn(false);
+        when(workQueueRepository.findByName(TEST_QUEUE)).thenReturn(Optional.of(queue));
         when(subscriptionRepository.findByUsernameAndWorkQueue(TEST_USERNAME, TEST_QUEUE))
                 .thenReturn(Optional.of(existing));
 
@@ -90,10 +97,13 @@ class WorkQueueSubscriptionServiceTest {
     @DisplayName("Should throw exception for supervisor-only queue")
     void testSubscribeUserToQueue_SupervisorOnly() {
         // Arrange
-        when(catalogService.isSupervisorOnly(TEST_QUEUE)).thenReturn(true);
+        WorkQueue queue = new WorkQueue();
+        queue.setName(TEST_QUEUE);
+        queue.setSupervisorOnly(true);
+        when(workQueueRepository.findByName(TEST_QUEUE)).thenReturn(Optional.of(queue));
 
         // Act & Assert
-        assertThrows(IllegalArgumentException.class, () -> 
+        assertThrows(IllegalArgumentException.class, () ->
                 subscriptionService.subscribeUserToQueue(TEST_USERNAME, TEST_QUEUE, TEST_SUPERVISOR));
         verify(subscriptionRepository, never()).save(any(WorkQueueSubscription.class));
     }
@@ -189,10 +199,3 @@ class WorkQueueSubscriptionServiceTest {
                 .build();
     }
 }
-
-
-
-
-
-
-

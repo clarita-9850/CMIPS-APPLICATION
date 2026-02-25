@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.dto.BatchTriggerRequest;
 import com.cmips.dto.BatchTriggerResponse;
 import com.cmips.service.BatchJobTriggerService;
@@ -13,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.JobExecution;
 import org.springframework.batch.core.explore.JobExplorer;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -49,7 +49,7 @@ public class BatchTriggerController {
         @ApiResponse(responseCode = "403", description = "Forbidden - insufficient role")
     })
     @PostMapping("/api/batch/trigger/start")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SCHEDULER', 'SYSTEM_SCHEDULER')")
+    @RequirePermission(resource = "Batch Job Resource", scope = "trigger")
     public ResponseEntity<BatchTriggerResponse> triggerJob(@RequestBody BatchTriggerRequest request) {
         String correlationId = request.getCorrelationId();
 
@@ -103,7 +103,7 @@ public class BatchTriggerController {
      * @return Current status and details of the job execution
      */
     @GetMapping("/api/batch/trigger/status/{executionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SCHEDULER', 'SYSTEM_SCHEDULER', 'SUPERVISOR')")
+    @RequirePermission(resource = "Batch Job Resource", scope = "status")
     public ResponseEntity<Map<String, Object>> getJobStatus(@PathVariable Long executionId) {
         log.debug("Getting status for execution ID: {}", executionId);
 
@@ -136,7 +136,7 @@ public class BatchTriggerController {
      * @return Result of the stop operation
      */
     @PostMapping("/api/batch/trigger/stop/{executionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_SCHEDULER')")
+    @RequirePermission(resource = "Batch Job Resource", scope = "stop")
     public ResponseEntity<Map<String, Object>> stopJob(@PathVariable Long executionId) {
         log.info("Stopping job execution: {}", executionId);
 
@@ -170,7 +170,7 @@ public class BatchTriggerController {
      * @return Current status and details of the job execution
      */
     @GetMapping({"/api/batch/status/{triggerId}", "/api/batch/trigger/status-by-trigger/{triggerId}"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'SCHEDULER', 'SYSTEM_SCHEDULER', 'SUPERVISOR')")
+    @RequirePermission(resource = "Batch Job Resource", scope = "status")
     public ResponseEntity<Map<String, Object>> getJobStatusByTriggerId(@PathVariable String triggerId) {
         log.debug("Getting status for trigger ID: {}", triggerId);
 
@@ -204,7 +204,7 @@ public class BatchTriggerController {
      * @return Result of the stop operation
      */
     @PostMapping({"/api/batch/stop/{triggerId}", "/api/batch/trigger/stop-by-trigger/{triggerId}"})
-    @PreAuthorize("hasAnyRole('ADMIN', 'SYSTEM_SCHEDULER')")
+    @RequirePermission(resource = "Batch Job Resource", scope = "stop")
     public ResponseEntity<Map<String, Object>> stopJobByTriggerId(@PathVariable String triggerId) {
         log.info("Stopping job by trigger ID: {}", triggerId);
 

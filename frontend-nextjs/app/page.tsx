@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDashboardForRoles, DASHBOARD_URLS } from '@/lib/roleDashboardMapping';
 
 export default function HomePage() {
   const { user, loading } = useAuth();
@@ -20,21 +21,10 @@ export default function HomePage() {
       return;
     }
 
-    // User is logged in, redirect to role-specific dashboard
-    const role = user.role || (user.roles?.includes('ADMIN') ? 'ADMIN' :
-                              user.roles?.includes('SUPERVISOR') ? 'SUPERVISOR' :
-                              user.roles?.includes('CASE_WORKER') ? 'CASE_WORKER' :
-                              user.roles?.includes('PROVIDER') ? 'PROVIDER' :
-                              user.roles?.includes('RECIPIENT') ? 'RECIPIENT' : 'USER');
-
-    let url = '/login';
-    if (role === 'ADMIN') url = '/admin/keycloak';
-    else if (role === 'SUPERVISOR') url = '/supervisor/dashboard';
-    else if (role === 'CASE_WORKER') url = '/caseworker/dashboard';
-    else if (role === 'PROVIDER') url = '/provider/dashboard';
-    else if (role === 'RECIPIENT') url = '/recipient/dashboard';
-
-    window.location.href = url;
+    // User is logged in - resolve dashboard from all Keycloak roles
+    const roles = user.roles || [];
+    const dashboard = getDashboardForRoles(roles);
+    window.location.href = DASHBOARD_URLS[dashboard];
   }, [user, loading, mounted]);
 
   // Show loading state while checking auth

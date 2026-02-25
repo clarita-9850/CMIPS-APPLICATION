@@ -5,8 +5,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import NotificationCenter from '@/components/NotificationCenter';
 import apiClient from '@/lib/api';
-import { FieldAuthorizedValue, ActionButtons, ConditionalField } from '@/components/FieldAuthorizedValue';
+import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
 import { isFieldVisible } from '@/hooks/useFieldAuthorization';
+import CmipsDashboardLayout from '@/components/structure/CmipsDashboardLayout';
+import { canAccessDashboard, MAIN_DASHBOARD_URL } from '@/lib/roleDashboardMapping';
 
 type Timesheet = {
   id: number;
@@ -58,8 +60,14 @@ export default function RecipientDashboard() {
 
   useEffect(() => {
     if (!mounted || authLoading) return;
-    if (!user || (user.role !== 'RECIPIENT' && !user.roles?.includes('RECIPIENT'))) {
+    if (!user) {
       window.location.href = '/login';
+      return;
+    }
+    const roles = user.roles || [];
+    const hasAccess = canAccessDashboard(roles, 'RECIPIENT');
+    if (!hasAccess) {
+      window.location.href = MAIN_DASHBOARD_URL;
       return;
     }
     fetchDashboardData();
@@ -126,8 +134,19 @@ export default function RecipientDashboard() {
     );
   }
 
+  const recipientShortcuts = [
+    { id: 'timesheets', label: 'Timesheets to Review', icon: '📋', href: '/recipient/timesheets' },
+    { id: 'providers', label: 'My Providers', icon: '👥', href: '/recipient/providers' },
+    { id: 'profile', label: 'My Profile', icon: '👤', href: '/recipient/profile' },
+    { id: 'help', label: 'Help & Support', icon: '❓', href: '#' },
+  ];
+
   return (
-    <div>
+    <CmipsDashboardLayout
+      title="My Workspace: Welcome to CMIPS"
+      subtitle={`Recipient Dashboard - ${user?.name || user?.username || 'User'}`}
+      shortcuts={recipientShortcuts}
+    >
       {/* Notification Center */}
       <div className="mb-3 d-flex justify-content-end">
         <NotificationCenter userId={user?.username || ''} />
@@ -193,7 +212,7 @@ export default function RecipientDashboard() {
 
         {/* Timesheets Awaiting Approval */}
         <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>🔔 TIMESHEETS AWAITING YOUR APPROVAL</h2>
             {allowedActions.length > 0 && (
               <small className="text-white-50">
@@ -241,7 +260,7 @@ export default function RecipientDashboard() {
 
         {/* My Providers */}
         <div className="card">
-          <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>👥 MY PROVIDERS</h2>
           </div>
           <div className="card-body">
@@ -272,7 +291,7 @@ export default function RecipientDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </CmipsDashboardLayout>
   );
 
   async function handleApproveTimesheet(id: number) {

@@ -636,7 +636,7 @@ public class ProviderManagementService {
                 .title("Review Overtime Violation for Provider " + violation.getProviderId())
                 .description("Overtime violation pending county review")
                 .workQueue("COUNTY_OVERTIME_VIOLATION")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.HIGH)
                 .dueDate(LocalDate.now().plusDays(3).atStartOfDay())
                 .build();
@@ -650,7 +650,7 @@ public class ProviderManagementService {
                 .title("Supervisor Review for Provider Overtime Violation " + violation.getProviderId())
                 .description("Override request pending supervisor review")
                 .workQueue("SUPERVISOR_OVERTIME_VIOLATION")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.HIGH)
                 .dueDate(LocalDate.now().plusDays(2).atStartOfDay())
                 .build();

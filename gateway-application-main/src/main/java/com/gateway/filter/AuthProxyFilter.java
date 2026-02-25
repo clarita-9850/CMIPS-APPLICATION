@@ -24,8 +24,15 @@ import java.util.Map;
 public class AuthProxyFilter extends AbstractGatewayFilterFactory<AuthProxyFilter.Config> {
 
     private static final String REALM = "cmips";
-    private static final String CLIENT_ID = "trial-app";
-    private static final String CLIENT_SECRET = "trial-app-secret-key-2024";
+    /**
+     * Use cmips-backend client for issuing tokens.
+     * Values can be overridden via env vars:
+     * GATEWAY_CLIENT_ID and GATEWAY_CLIENT_SECRET.
+     */
+    private static final String CLIENT_ID =
+            System.getenv().getOrDefault("GATEWAY_CLIENT_ID", "cmips-backend");
+    private static final String CLIENT_SECRET =
+            System.getenv().getOrDefault("GATEWAY_CLIENT_SECRET", "change-me");
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AuthProxyFilter() {

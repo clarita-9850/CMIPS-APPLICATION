@@ -56,6 +56,63 @@ public class Task {
     @Column(name = "action_link")
     private String actionLink;
 
+    @Column(name = "task_type_code")
+    private String taskTypeCode;
+
+    @Column(name = "reserved_by")
+    private String reservedBy;
+
+    @Column(name = "reserved_date")
+    private LocalDateTime reservedDate;
+
+    @Column(name = "deferred_by")
+    private String deferredBy;
+
+    @Column(name = "deferred_date")
+    private LocalDateTime deferredDate;
+
+    @Column(name = "restart_date")
+    private LocalDateTime restartDate;
+
+    @Column(name = "forwarded_to")
+    private String forwardedTo;
+
+    @Column(name = "forwarded_by")
+    private String forwardedBy;
+
+    @Column(name = "forwarded_date")
+    private LocalDateTime forwardedDate;
+
+    @Column(name = "closed_by")
+    private String closedBy;
+
+    @Column(name = "closed_date")
+    private LocalDateTime closedDate;
+
+    @Column(name = "close_comments", columnDefinition = "TEXT")
+    private String closeComments;
+
+    @Column(name = "case_number")
+    private String caseNumber;
+
+    @Column(name = "case_participant")
+    private String caseParticipant;
+
+    @Column
+    private String county;
+
+    @Column(name = "district_office")
+    private String districtOffice;
+
+    @Column(name = "time_worked")
+    private Integer timeWorked;
+
+    @Column(name = "is_notification", columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isNotification = false;
+
+    @Column(name = "subject")
+    private String subject;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -148,6 +205,63 @@ public class Task {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
+    public String getTaskTypeCode() { return taskTypeCode; }
+    public void setTaskTypeCode(String taskTypeCode) { this.taskTypeCode = taskTypeCode; }
+
+    public String getReservedBy() { return reservedBy; }
+    public void setReservedBy(String reservedBy) { this.reservedBy = reservedBy; }
+
+    public LocalDateTime getReservedDate() { return reservedDate; }
+    public void setReservedDate(LocalDateTime reservedDate) { this.reservedDate = reservedDate; }
+
+    public String getDeferredBy() { return deferredBy; }
+    public void setDeferredBy(String deferredBy) { this.deferredBy = deferredBy; }
+
+    public LocalDateTime getDeferredDate() { return deferredDate; }
+    public void setDeferredDate(LocalDateTime deferredDate) { this.deferredDate = deferredDate; }
+
+    public LocalDateTime getRestartDate() { return restartDate; }
+    public void setRestartDate(LocalDateTime restartDate) { this.restartDate = restartDate; }
+
+    public String getForwardedTo() { return forwardedTo; }
+    public void setForwardedTo(String forwardedTo) { this.forwardedTo = forwardedTo; }
+
+    public String getForwardedBy() { return forwardedBy; }
+    public void setForwardedBy(String forwardedBy) { this.forwardedBy = forwardedBy; }
+
+    public LocalDateTime getForwardedDate() { return forwardedDate; }
+    public void setForwardedDate(LocalDateTime forwardedDate) { this.forwardedDate = forwardedDate; }
+
+    public String getClosedBy() { return closedBy; }
+    public void setClosedBy(String closedBy) { this.closedBy = closedBy; }
+
+    public LocalDateTime getClosedDate() { return closedDate; }
+    public void setClosedDate(LocalDateTime closedDate) { this.closedDate = closedDate; }
+
+    public String getCloseComments() { return closeComments; }
+    public void setCloseComments(String closeComments) { this.closeComments = closeComments; }
+
+    public String getCaseNumber() { return caseNumber; }
+    public void setCaseNumber(String caseNumber) { this.caseNumber = caseNumber; }
+
+    public String getCaseParticipant() { return caseParticipant; }
+    public void setCaseParticipant(String caseParticipant) { this.caseParticipant = caseParticipant; }
+
+    public String getCounty() { return county; }
+    public void setCounty(String county) { this.county = county; }
+
+    public String getDistrictOffice() { return districtOffice; }
+    public void setDistrictOffice(String districtOffice) { this.districtOffice = districtOffice; }
+
+    public Integer getTimeWorked() { return timeWorked; }
+    public void setTimeWorked(Integer timeWorked) { this.timeWorked = timeWorked; }
+
+    public Boolean isNotification() { return isNotification != null ? isNotification : false; }
+    public void setNotification(Boolean notification) { isNotification = notification; }
+
+    public String getSubject() { return subject; }
+    public void setSubject(String subject) { this.subject = subject; }
+
     // Builder pattern
     public static TaskBuilder builder() { return new TaskBuilder(); }
 
@@ -199,7 +313,7 @@ public class Task {
     }
 
     public enum TaskStatus {
-        OPEN, PENDING, IN_PROGRESS, CLOSED, ESCALATED
+        OPEN, RESERVED, ASSIGNED, DEFERRED, CLOSED, ESCALATED
     }
 
     public enum TaskPriority {

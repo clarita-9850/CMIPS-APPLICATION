@@ -6,13 +6,16 @@ import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.Base64;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+
+    private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
 
     @Value("${keycloak.auth-server-url}")
     private String keycloakAuthServerUrl;
@@ -108,6 +111,40 @@ public class AuthController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(Map.of("error", "Token refresh failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<?> logout(@RequestBody Map<String, String> request) {
+        try {
+            String refreshToken = request.get("refresh_token");
+
+            if (refreshToken == null || refreshToken.isEmpty()) {
+                return ResponseEntity.badRequest()
+                    .body(Map.of("error", "Refresh token is required"));
+            }
+
+            // Call Keycloak's logout (end-session) endpoint
+            String logoutUrl = keycloakAuthServerUrl + "realms/" + realm + "/protocol/openid-connect/logout";
+
+            String requestBody = "client_id=" + clientId +
+                               "&client_secret=" + clientSecret +
+                               "&refresh_token=" + refreshToken;
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+            HttpEntity<String> entity = new HttpEntity<>(requestBody, headers);
+
+            restTemplate.postForEntity(logoutUrl, entity, String.class);
+
+            logger.info("User session invalidated via Keycloak logout");
+            return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
+
+        } catch (Exception e) {
+            logger.warn("Keycloak logout failed (non-critical): {}", e.getMessage());
+            // Return success anyway — local state is cleared regardless
+            return ResponseEntity.ok(Map.of("message", "Logged out (session cleanup best-effort)"));
         }
     }
 }

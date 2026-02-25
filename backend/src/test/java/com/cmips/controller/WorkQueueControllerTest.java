@@ -1,10 +1,13 @@
 package com.cmips.controller;
 
 import com.cmips.entity.Task;
+import com.cmips.entity.WorkQueue;
 import com.cmips.entity.WorkQueueSubscription;
+import com.cmips.repository.WorkQueueRepository;
 import com.cmips.service.KeycloakAdminService;
+import com.cmips.service.KeycloakPolicyEvaluationService;
+import com.cmips.service.TaskLifecycleService;
 import com.cmips.service.TaskService;
-import com.cmips.service.WorkQueueCatalogService;
 import com.cmips.service.WorkQueueSubscriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +16,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -24,27 +29,35 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for WorkQueueController
- * 
+ *
  * Tests cover:
- * - Queue catalog retrieval
+ * - Queue listing and catalog
  * - Subscription management
  * - Queue summary operations
+ * - User listing
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("WorkQueueController Tests")
 class WorkQueueControllerTest {
 
     @Mock
-    private WorkQueueCatalogService catalogService;
+    private WorkQueueRepository workQueueRepository;
 
     @Mock
     private TaskService taskService;
+
+    @Mock
+    private TaskLifecycleService lifecycleService;
 
     @Mock
     private WorkQueueSubscriptionService subscriptionService;
 
     @Mock
     private KeycloakAdminService keycloakAdminService;
+
+    @Mock
+    private KeycloakPolicyEvaluationService policyEvaluationService;
 
     @InjectMocks
     private WorkQueueController workQueueController;
@@ -58,61 +71,88 @@ class WorkQueueControllerTest {
     }
 
     @Test
-    @DisplayName("Should get queue catalog successfully")
-    void testGetQueueCatalog_Success() {
+    @DisplayName("Should get all active queues successfully")
+    void testGetAllQueues_Success() {
         // Arrange
-        List<WorkQueueCatalogService.WorkQueueInfo> mockQueues = createMockQueueInfos();
-        when(catalogService.getAllQueues()).thenReturn(mockQueues);
+        List<WorkQueue> mockQueues = createMockWorkQueues();
+        when(workQueueRepository.findByActiveTrue()).thenReturn(mockQueues);
 
         // Act
-        ResponseEntity<List<WorkQueueCatalogService.WorkQueueInfo>> response = workQueueController.getQueueCatalog();
+        ResponseEntity<List<WorkQueue>> response = workQueueController.getAllQueues();
 
         // Assert
         assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
-        verify(catalogService, times(1)).getAllQueues();
+        verify(workQueueRepository, times(1)).findByActiveTrue();
+    }
+
+    @Test
+    @DisplayName("Should get queue catalog (delegates to getAllQueues)")
+    void testGetQueueCatalog_Success() {
+        // Arrange
+        List<WorkQueue> mockQueues = createMockWorkQueues();
+        when(workQueueRepository.findByActiveTrue()).thenReturn(mockQueues);
+
+        // Act
+        ResponseEntity<List<WorkQueue>> response = workQueueController.getQueueCatalog();
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(2, response.getBody().size());
+    }
+
+    @Test
+    @DisplayName("Should get queue by ID successfully")
+    void testGetQueueById_Success() {
+        // Arrange
+        Long queueId = 1L;
+        WorkQueue mockQueue = createMockWorkQueue(queueId, TEST_QUEUE);
+        when(workQueueRepository.findById(queueId)).thenReturn(Optional.of(mockQueue));
+
+        // Act
+        ResponseEntity<WorkQueue> response = workQueueController.getQueueById(queueId);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals(TEST_QUEUE, response.getBody().getName());
+    }
+
+    @Test
+    @DisplayName("Should return NotFound for non-existent queue")
+    void testGetQueueById_NotFound() {
+        // Arrange
+        when(workQueueRepository.findById(999L)).thenReturn(Optional.empty());
+
+        // Act
+        ResponseEntity<WorkQueue> response = workQueueController.getQueueById(999L);
+
+        // Assert
+        assertNotNull(response);
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
     }
 
     @Test
     @DisplayName("Should get queue tasks successfully")
     void testGetQueueTasks_Success() {
         // Arrange
+        Long queueId = 1L;
+        WorkQueue mockQueue = createMockWorkQueue(queueId, TEST_QUEUE);
         List<Task> mockTasks = createMockTasks(3);
+        when(workQueueRepository.findById(queueId)).thenReturn(Optional.of(mockQueue));
         when(taskService.getQueueTasks(TEST_QUEUE)).thenReturn(mockTasks);
 
         // Act
-        ResponseEntity<List<Task>> response = workQueueController.getQueueTasks(TEST_QUEUE);
+        ResponseEntity<?> response = workQueueController.getQueueTasks(queueId);
 
         // Assert
         assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(3, response.getBody().size());
-        verify(taskService, times(1)).getQueueTasks(TEST_QUEUE);
-    }
-
-    @Test
-    @DisplayName("Should get queues summary successfully")
-    void testGetQueuesSummary_Success() {
-        // Arrange
-        List<WorkQueueCatalogService.WorkQueueInfo> mockQueues = createMockQueueInfos();
-        List<Task> mockTasks1 = createMockTasks(2);
-        List<Task> mockTasks2 = createMockTasks(1);
-
-        when(catalogService.getAllQueues()).thenReturn(mockQueues);
-        when(taskService.getQueueTasks(mockQueues.get(0).getName())).thenReturn(mockTasks1);
-        when(taskService.getQueueTasks(mockQueues.get(1).getName())).thenReturn(mockTasks2);
-
-        // Act
-        ResponseEntity<Map<String, Object>> response = workQueueController.getQueuesSummary();
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        verify(catalogService, times(1)).getAllQueues();
     }
 
     @Test
@@ -134,108 +174,58 @@ class WorkQueueControllerTest {
     }
 
     @Test
-    @DisplayName("Should subscribe user to queue successfully")
-    void testSubscribeUserToQueue_Success() {
+    @DisplayName("Should get queues summary successfully")
+    void testGetQueuesSummary_Success() {
         // Arrange
-        Map<String, String> request = Map.of(
-                "username", TEST_USERNAME,
-                "workQueue", TEST_QUEUE,
-                "subscribedBy", "supervisor1"
-        );
-        WorkQueueSubscription mockSubscription = createMockSubscription();
-        when(subscriptionService.subscribeUserToQueue(eq(TEST_USERNAME), eq(TEST_QUEUE), anyString()))
-                .thenReturn(mockSubscription);
+        List<WorkQueue> mockQueues = createMockWorkQueues();
+        when(workQueueRepository.findByActiveTrue()).thenReturn(mockQueues);
+        when(taskService.getQueueTaskCountByStatus(anyString(), eq(Task.TaskStatus.OPEN))).thenReturn(2L);
 
         // Act
-        ResponseEntity<Map<String, Object>> response = workQueueController.subscribeUserToQueue(request);
+        ResponseEntity<List<Map<String, Object>>> response = workQueueController.getQueuesSummary();
 
         // Assert
         assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertTrue((Boolean) response.getBody().get("success"));
-        verify(subscriptionService, times(1)).subscribeUserToQueue(anyString(), anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("Should return BadRequest when missing username")
-    void testSubscribeUserToQueue_MissingUsername() {
-        // Arrange
-        Map<String, String> request = Map.of("workQueue", TEST_QUEUE);
-
-        // Act
-        ResponseEntity<Map<String, Object>> response = workQueueController.subscribeUserToQueue(request);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertTrue(response.getBody().containsKey("error"));
-        verify(subscriptionService, never()).subscribeUserToQueue(anyString(), anyString(), anyString());
-    }
-
-    @Test
-    @DisplayName("Should unsubscribe user from queue successfully")
-    void testUnsubscribeUserFromQueue_Success() {
-        // Arrange
-        Map<String, String> request = Map.of(
-                "username", TEST_USERNAME,
-                "workQueue", TEST_QUEUE
-        );
-        doNothing().when(subscriptionService).unsubscribeUserFromQueue(TEST_USERNAME, TEST_QUEUE);
-
-        // Act
-        ResponseEntity<Map<String, Object>> response = workQueueController.unsubscribeUserFromQueue(request);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertTrue((Boolean) response.getBody().get("success"));
-        verify(subscriptionService, times(1)).unsubscribeUserFromQueue(TEST_USERNAME, TEST_QUEUE);
+        assertEquals(2, response.getBody().size());
     }
 
     @Test
     @DisplayName("Should get queue subscribers successfully")
     void testGetQueueSubscribers_Success() {
         // Arrange
+        Long queueId = 1L;
+        WorkQueue mockQueue = createMockWorkQueue(queueId, TEST_QUEUE);
         List<WorkQueueSubscription> mockSubscriptions = createMockSubscriptions();
+        when(workQueueRepository.findById(queueId)).thenReturn(Optional.of(mockQueue));
         when(subscriptionService.getQueueSubscriptions(TEST_QUEUE)).thenReturn(mockSubscriptions);
 
         // Act
-        ResponseEntity<List<WorkQueueSubscription>> response = workQueueController.getQueueSubscribers(TEST_QUEUE);
+        ResponseEntity<List<WorkQueueSubscription>> response = workQueueController.getQueueSubscribers(queueId);
 
         // Assert
         assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
-        verify(subscriptionService, times(1)).getQueueSubscriptions(TEST_QUEUE);
-    }
-
-    @Test
-    @DisplayName("Should get queue subscription details successfully")
-    void testGetQueueSubscriptionDetails_Success() {
-        // Arrange
-        List<WorkQueueSubscription> mockSubscriptions = createMockSubscriptions();
-        when(subscriptionService.getQueueSubscriptions(TEST_QUEUE)).thenReturn(mockSubscriptions);
-
-        // Act
-        ResponseEntity<List<WorkQueueSubscription>> response = workQueueController.getQueueSubscriptionDetails(TEST_QUEUE);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().size());
-        verify(subscriptionService, times(1)).getQueueSubscriptions(TEST_QUEUE);
     }
 
     // Helper methods
-    private List<WorkQueueCatalogService.WorkQueueInfo> createMockQueueInfos() {
+    private WorkQueue createMockWorkQueue(Long id, String name) {
+        WorkQueue queue = new WorkQueue();
+        queue.setId(id);
+        queue.setName(name);
+        queue.setDisplayName(name);
+        queue.setActive(true);
+        queue.setSupervisorOnly(false);
+        return queue;
+    }
+
+    private List<WorkQueue> createMockWorkQueues() {
         return Arrays.asList(
-                new WorkQueueCatalogService.WorkQueueInfo("address-changes", "Address Changes", "Tasks for address changes", false),
-                new WorkQueueCatalogService.WorkQueueInfo("status-updates", "Status Updates", "Tasks for status updates", false)
+                createMockWorkQueue(1L, "address-changes"),
+                createMockWorkQueue(2L, "status-updates")
         );
     }
 
@@ -258,14 +248,6 @@ class WorkQueueControllerTest {
         );
     }
 
-    private WorkQueueSubscription createMockSubscription() {
-        WorkQueueSubscription subscription = new WorkQueueSubscription();
-        subscription.setId(1L);
-        subscription.setUsername(TEST_USERNAME);
-        subscription.setWorkQueue(TEST_QUEUE);
-        return subscription;
-    }
-
     private List<WorkQueueSubscription> createMockSubscriptions() {
         List<WorkQueueSubscription> subscriptions = new ArrayList<>();
         for (int i = 1; i <= 2; i++) {
@@ -278,4 +260,3 @@ class WorkQueueControllerTest {
         return subscriptions;
     }
 }
-

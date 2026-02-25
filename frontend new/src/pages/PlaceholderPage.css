@@ -1,0 +1,24 @@
+.placeholder-page {
+  padding: 1.5rem 2rem;
+  max-width: 900px;
+}
+
+.placeholder-page h2 {
+  color: #153554;
+  margin-bottom: 1rem;
+}
+
+.placeholder-page .list-group {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.placeholder-page .list-group-item {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.placeholder-page .text-danger {
+  color: #dc3545;
+}

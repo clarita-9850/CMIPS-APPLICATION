@@ -7,6 +7,8 @@ import AnalyticsTab from './components/AnalyticsTab';
 import BatchJobsTab from './components/BatchJobsTab';
 import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
 import { isFieldVisible } from '@/hooks/useFieldAuthorization';
+import CmipsDashboardLayout from '@/components/structure/CmipsDashboardLayout';
+import { canAccessDashboard, MAIN_DASHBOARD_URL } from '@/lib/roleDashboardMapping';
 
 type Timesheet = {
   id: number;
@@ -132,19 +134,11 @@ export default function SupervisorDashboard() {
       return;
     }
 
-    // Allow both ADMIN and SUPERVISOR roles
-    const isSupervisor =
-      user?.role === 'SUPERVISOR' ||
-      user?.roles?.includes('SUPERVISOR') ||
-      user?.roles?.some((r: string) => r.toUpperCase() === 'SUPERVISOR');
+    const roles = user?.roles || [];
+    const hasAccess = canAccessDashboard(roles, 'SUPERVISOR');
 
-    const isAdmin =
-      user?.role === 'ADMIN' ||
-      user?.roles?.includes('ADMIN') ||
-      user?.roles?.some((r: string) => r.toUpperCase() === 'ADMIN');
-
-    if (!isSupervisor && !isAdmin) {
-      window.location.href = '/login';
+    if (!hasAccess) {
+      window.location.href = MAIN_DASHBOARD_URL;
       return;
     }
 
@@ -469,8 +463,19 @@ export default function SupervisorDashboard() {
     );
   }
 
+  const supervisorShortcuts = [
+    { id: 'work-queues', label: 'Work Queues', icon: '📥', href: '#' },
+    { id: 'timesheets', label: 'Timesheet Review', icon: '📋', href: '#' },
+    { id: 'analytics', label: 'Analytics', icon: '📊', href: '/analytics' },
+    { id: 'batch-jobs', label: 'Batch Jobs', icon: '⚙️', href: '/batch-jobs' },
+  ];
+
   return (
-    <div>
+    <CmipsDashboardLayout
+      title="My Workspace: Welcome to CMIPS"
+      subtitle={`Supervisor Dashboard - ${user?.name || user?.username || 'User'}`}
+      shortcuts={supervisorShortcuts}
+    >
       {/* Dashboard Navigation Tabs */}
       <div className="mb-4">
         <ul className="nav nav-tabs" role="tablist">
@@ -555,7 +560,7 @@ export default function SupervisorDashboard() {
 
               {/* Escalated Tasks Section */}
               <div className="card mb-4">
-                <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                   <h3 className="card-title mb-0" style={{ color: 'white' }}>⚠️ Escalated Tasks (Supervisor Only)</h3>
                   <p className="text-muted mb-0" style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.875rem' }}>Tasks requiring immediate supervisor attention</p>
                 </div>
@@ -601,7 +606,7 @@ export default function SupervisorDashboard() {
 
               {/* Users by Queue Section */}
               <div className="card">
-                <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                   <h3 className="card-title mb-0" style={{ color: 'white' }}>👥 Users by Work Queue</h3>
                   <p className="text-muted mb-0" style={{ color: 'rgba(255,255,255,0.9)', fontSize: '0.875rem' }}>View which users are in which queues and their active tasks</p>
                 </div>
@@ -703,7 +708,7 @@ export default function SupervisorDashboard() {
 
                   {/* Work Queues Table */}
                   <div className="card">
-                    <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                    <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                       <h3 className="card-title mb-0" style={{ color: 'white' }}>Work Queues List</h3>
                     </div>
                     <div className="card-body">
@@ -804,7 +809,7 @@ export default function SupervisorDashboard() {
 
                   {/* Tasks Table */}
                   <div className="card">
-                    <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                    <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                       <h3 className="card-title mb-0" style={{ color: 'white' }}>Total Tasks: {queueTasks.length}</h3>
                     </div>
                     <div className="card-body">
@@ -935,7 +940,7 @@ export default function SupervisorDashboard() {
 
                   {/* Subscriptions Table */}
                   <div className="card">
-                    <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                    <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                       <h3 className="card-title mb-0" style={{ color: 'white' }}>Subscribed Users</h3>
                     </div>
                     <div className="card-body">
@@ -1019,7 +1024,7 @@ export default function SupervisorDashboard() {
 
               {/* Pending Timesheets */}
               <div className="card">
-                <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+                <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                   <h3 className="card-title mb-0" style={{ color: 'white' }}>📋 Pending Timesheets for Review</h3>
                 </div>
                 <div className="card-body">
@@ -1120,7 +1125,7 @@ export default function SupervisorDashboard() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+              <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
                 <div className="d-flex justify-content-between align-items-center">
                   <h3 className="card-title mb-0" style={{ color: 'white' }}>
                     Add Work Queue Subscription: {selectedQueue.displayName}
@@ -1181,6 +1186,6 @@ export default function SupervisorDashboard() {
         </div>
       )}
       </div>
-    </div>
+    </CmipsDashboardLayout>
   );
 }

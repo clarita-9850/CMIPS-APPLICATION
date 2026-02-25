@@ -1,12 +1,12 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.RecipientWaiverEntity;
 import com.cmips.entity.RecipientWaiverEntity.*;
 import com.cmips.service.RecipientWaiverService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +39,7 @@ public class RecipientWaiverController {
      * Initiate waiver process after Tier 2 conviction identified
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "create")
     public ResponseEntity<?> initiateWaiver(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -68,7 +68,7 @@ public class RecipientWaiverController {
      * Record disclosure to recipient
      */
     @PostMapping("/{waiverId}/disclose")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "edit")
     public ResponseEntity<?> recordDisclosure(@PathVariable String waiverId,
                                                @RequestBody Map<String, String> request) {
         try {
@@ -94,7 +94,7 @@ public class RecipientWaiverController {
      * Record recipient's decision
      */
     @PostMapping("/{waiverId}/recipient-decision")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "edit")
     public ResponseEntity<?> recordRecipientDecision(@PathVariable String waiverId,
                                                       @RequestBody Map<String, Object> request) {
         try {
@@ -119,7 +119,7 @@ public class RecipientWaiverController {
      * Sign SOC 2298 form
      */
     @PostMapping("/{waiverId}/soc-2298/sign")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "edit")
     public ResponseEntity<?> signSOC2298(@PathVariable String waiverId,
                                           @RequestBody Map<String, String> request) {
         try {
@@ -142,7 +142,7 @@ public class RecipientWaiverController {
      * Submit for county review (after SOC 2298 is signed)
      */
     @PostMapping("/{waiverId}/submit-for-review")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "submit")
     public ResponseEntity<?> submitForReview(@PathVariable String waiverId) {
         try {
             String userId = getCurrentUserId();
@@ -163,7 +163,7 @@ public class RecipientWaiverController {
      * Submit for county review
      */
     @PostMapping("/{waiverId}/submit-county-review")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "submit")
     public ResponseEntity<?> submitForCountyReview(@PathVariable String waiverId) {
         try {
             String userId = getCurrentUserId();
@@ -181,7 +181,7 @@ public class RecipientWaiverController {
      * Assign county reviewer
      */
     @PostMapping("/{waiverId}/assign-reviewer")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "assign")
     public ResponseEntity<?> assignCountyReviewer(@PathVariable String waiverId,
                                                    @RequestBody Map<String, String> request) {
         try {
@@ -204,7 +204,7 @@ public class RecipientWaiverController {
      * Record county decision
      */
     @PostMapping("/{waiverId}/county-decision")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "approve")
     public ResponseEntity<?> recordCountyDecision(@PathVariable String waiverId,
                                                    @RequestBody Map<String, Object> request) {
         try {
@@ -231,7 +231,7 @@ public class RecipientWaiverController {
      * Assign supervisor
      */
     @PostMapping("/{waiverId}/assign-supervisor")
-    @PreAuthorize("hasRole('admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "assign")
     public ResponseEntity<?> assignSupervisor(@PathVariable String waiverId,
                                                @RequestBody Map<String, String> request) {
         try {
@@ -254,7 +254,7 @@ public class RecipientWaiverController {
      * Record supervisor decision
      */
     @PostMapping("/{waiverId}/supervisor-decision")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "approve")
     public ResponseEntity<?> recordSupervisorDecision(@PathVariable String waiverId,
                                                        @RequestBody Map<String, Object> request) {
         try {
@@ -279,7 +279,7 @@ public class RecipientWaiverController {
      * Revoke waiver
      */
     @PostMapping("/{waiverId}/revoke")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "revoke")
     public ResponseEntity<?> revokeWaiver(@PathVariable String waiverId,
                                            @RequestBody Map<String, String> request) {
         try {
@@ -302,7 +302,7 @@ public class RecipientWaiverController {
      * Get waiver by ID
      */
     @GetMapping("/{waiverId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getWaiver(@PathVariable String waiverId) {
         try {
             RecipientWaiverEntity waiver = waiverService.getWaiverById(waiverId);
@@ -316,7 +316,7 @@ public class RecipientWaiverController {
      * Check if provider has active waiver
      */
     @GetMapping("/provider/{providerId}/has-active")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> hasActiveWaiver(@PathVariable Long providerId) {
         try {
             boolean hasActive = waiverService.hasActiveWaiver(providerId);
@@ -334,7 +334,7 @@ public class RecipientWaiverController {
      * Get active waiver for recipient-provider pair
      */
     @GetMapping("/active")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getActiveWaiver(@RequestParam Long recipientId,
                                               @RequestParam Long providerId) {
         try {
@@ -351,7 +351,7 @@ public class RecipientWaiverController {
      * Get waivers by recipient
      */
     @GetMapping("/recipient/{recipientId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getWaiversByRecipient(@PathVariable Long recipientId) {
         try {
             List<RecipientWaiverEntity> waivers = waiverService.getWaiversByRecipient(recipientId);
@@ -366,7 +366,7 @@ public class RecipientWaiverController {
      * Get waivers by provider
      */
     @GetMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getWaiversByProvider(@PathVariable Long providerId) {
         try {
             List<RecipientWaiverEntity> waivers = waiverService.getWaiversByProvider(providerId);
@@ -381,7 +381,7 @@ public class RecipientWaiverController {
      * Get pending waivers
      */
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getPendingWaivers(@RequestParam(required = false) String countyCode) {
         try {
             List<RecipientWaiverEntity> waivers = countyCode != null ?
@@ -398,7 +398,7 @@ public class RecipientWaiverController {
      * Get waivers pending county review
      */
     @GetMapping("/pending-county-review")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getPendingCountyReview(@RequestParam(required = false) String countyCode) {
         try {
             List<RecipientWaiverEntity> waivers = countyCode != null ?
@@ -415,7 +415,7 @@ public class RecipientWaiverController {
      * Get waivers pending supervisor review
      */
     @GetMapping("/pending-supervisor-review")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getPendingSupervisorReview() {
         try {
             List<RecipientWaiverEntity> waivers = waiverService.getWaiversPendingSupervisorReview();
@@ -430,7 +430,7 @@ public class RecipientWaiverController {
      * Get expiring waivers
      */
     @GetMapping("/expiring")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getExpiringWaivers(@RequestParam(defaultValue = "30") int daysUntilExpiration) {
         try {
             List<RecipientWaiverEntity> waivers = waiverService.getExpiringWaivers(daysUntilExpiration);
@@ -445,7 +445,7 @@ public class RecipientWaiverController {
      * Search waivers
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> searchWaivers(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String countyCode,
@@ -473,7 +473,7 @@ public class RecipientWaiverController {
      * Get waiver statistics by county
      */
     @GetMapping("/stats/{countyCode}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Recipient Waiver Resource", scope = "view")
     public ResponseEntity<?> getWaiverStats(@PathVariable String countyCode) {
         try {
             Map<String, Object> stats = new HashMap<>();

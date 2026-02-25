@@ -1,6 +1,8 @@
 package com.cmips.service;
 
+import com.cmips.entity.WorkQueue;
 import com.cmips.entity.WorkQueueSubscription;
+import com.cmips.repository.WorkQueueRepository;
 import com.cmips.repository.WorkQueueSubscriptionRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,12 +19,12 @@ public class WorkQueueSubscriptionService {
     private static final Logger log = LoggerFactory.getLogger(WorkQueueSubscriptionService.class);
 
     private final WorkQueueSubscriptionRepository subscriptionRepository;
-    private final WorkQueueCatalogService catalogService;
+    private final WorkQueueRepository workQueueRepository;
 
     public WorkQueueSubscriptionService(WorkQueueSubscriptionRepository subscriptionRepository,
-                                        WorkQueueCatalogService catalogService) {
+                                        WorkQueueRepository workQueueRepository) {
         this.subscriptionRepository = subscriptionRepository;
-        this.catalogService = catalogService;
+        this.workQueueRepository = workQueueRepository;
     }
 
     /**
@@ -32,8 +34,9 @@ public class WorkQueueSubscriptionService {
     public WorkQueueSubscription subscribeUserToQueue(String username, String workQueue, String subscribedBy) {
         log.info("Subscribing user {} to queue {} by {}", username, workQueue, subscribedBy);
 
-        // Prevent subscribing to supervisor-only queues (like ESCALATED)
-        if (catalogService.isSupervisorOnly(workQueue)) {
+        // Prevent subscribing to supervisor-only queues (check from DB)
+        Optional<WorkQueue> queueOpt = workQueueRepository.findByName(workQueue);
+        if (queueOpt.isPresent() && queueOpt.get().isSupervisorOnly()) {
             throw new IllegalArgumentException("Cannot subscribe to supervisor-only queue: " + workQueue);
         }
 

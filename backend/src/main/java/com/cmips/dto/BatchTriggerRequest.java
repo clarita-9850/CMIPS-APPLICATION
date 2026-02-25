@@ -24,7 +24,7 @@ public class BatchTriggerRequest {
 
     /**
      * Unique trigger ID from the Scheduler application (UUID).
-     * Used to correlate Trial's Spring Batch execution with Scheduler's execution record.
+     * Used to correlate CMIPS backend's Spring Batch execution with Scheduler's execution record.
      * This is published back via Redis events for status tracking.
      */
     private String triggerId;

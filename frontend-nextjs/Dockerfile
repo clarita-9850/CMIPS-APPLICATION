@@ -14,6 +14,18 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# Build arguments for Next.js public environment variables (baked at build time)
+ARG NEXT_PUBLIC_API_URL=http://localhost:8090
+ARG NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
+ARG NEXT_PUBLIC_KEYCLOAK_REALM=cmips
+ARG NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=cmips-frontend
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_KEYCLOAK_URL=$NEXT_PUBLIC_KEYCLOAK_URL
+ENV NEXT_PUBLIC_KEYCLOAK_REALM=$NEXT_PUBLIC_KEYCLOAK_REALM
+ENV NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=$NEXT_PUBLIC_KEYCLOAK_CLIENT_ID
+ENV NODE_ENV=production
+
 # Build the Next.js app
 RUN npm run build
 

@@ -14,7 +14,7 @@
 .heroTitle {
   font-size: 2rem;
   font-weight: 700;
-  color: var(--color-p2, #046b99);
+  color: #153554;
   margin-bottom: 0.75rem;
 }
 
@@ -199,7 +199,7 @@
 }
 
 .dataTable thead {
-  background: var(--color-p2, #046b99);
+  background: #153554;
   color: white;
 }
 

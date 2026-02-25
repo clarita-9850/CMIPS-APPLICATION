@@ -127,7 +127,7 @@ class TaskServiceTest {
     void testUpdateTaskStatus_Success() {
         // Arrange
         Long taskId = 1L;
-        Task.TaskStatus newStatus = Task.TaskStatus.IN_PROGRESS;
+        Task.TaskStatus newStatus = Task.TaskStatus.ASSIGNED;
         Task existingTask = createMockTask(taskId);
         existingTask.setStatus(Task.TaskStatus.OPEN);
         

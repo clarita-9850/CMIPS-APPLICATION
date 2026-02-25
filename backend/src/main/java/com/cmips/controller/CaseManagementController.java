@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import com.cmips.entity.CaseStatusHistory;
 
 /**
  * Case Management REST Controller
@@ -120,7 +121,9 @@ public class CaseManagementController {
             @RequestBody TerminationRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
 
-        CaseEntity caseEntity = caseManagementService.terminateCase(id, request.getReason(), userId);
+        LocalDate authEndDate = request.getAuthorizationEndDate() != null
+                ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
+        CaseEntity caseEntity = caseManagementService.terminateCase(id, request.getReason(), authEndDate, userId);
         return ResponseEntity.ok(caseEntity);
     }
 
@@ -131,7 +134,12 @@ public class CaseManagementController {
             @RequestBody LeaveRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
 
-        CaseEntity caseEntity = caseManagementService.placeCaseOnLeave(id, request.getReason(), userId);
+        LocalDate authEndDate = request.getAuthorizationEndDate() != null
+                ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
+        LocalDate suspEndDate = request.getResourceSuspensionEndDate() != null
+                ? LocalDate.parse(request.getResourceSuspensionEndDate()) : null;
+        CaseEntity caseEntity = caseManagementService.placeCaseOnLeave(
+                id, request.getReason(), authEndDate, suspEndDate, userId);
         return ResponseEntity.ok(caseEntity);
     }
 
@@ -142,8 +150,59 @@ public class CaseManagementController {
             @RequestBody WithdrawalRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
 
-        CaseEntity caseEntity = caseManagementService.withdrawApplication(id, request.getReason(), userId);
+        LocalDate withdrawalDate = request.getWithdrawalDate() != null
+                ? LocalDate.parse(request.getWithdrawalDate()) : null;
+        CaseEntity caseEntity = caseManagementService.withdrawApplication(
+                id, request.getReason(), withdrawalDate, userId);
         return ResponseEntity.ok(caseEntity);
+    }
+
+    // ==================== RESCIND (DSD Section 3.4) ====================
+
+    @PutMapping("/{id}/rescind")
+    @RequirePermission(resource = "Case Resource", scope = "rescind")
+    public ResponseEntity<CaseEntity> rescindCase(
+            @PathVariable Long id,
+            @RequestBody RescindRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        CaseEntity caseEntity = caseManagementService.rescindCase(id, request.getReason(), userId);
+        return ResponseEntity.ok(caseEntity);
+    }
+
+    // ==================== REACTIVATE (DSD Section 3.6) ====================
+
+    @PutMapping("/{id}/reactivate")
+    @RequirePermission(resource = "Case Resource", scope = "reactivate")
+    public ResponseEntity<CaseEntity> reactivateCase(
+            @PathVariable Long id,
+            @RequestBody ReactivateRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        LocalDate refDate = request.getReferralDate() != null
+                ? LocalDate.parse(request.getReferralDate()) : null;
+        CaseEntity caseEntity = caseManagementService.reactivateCase(
+                id, refDate, request.getMeetsResidencyRequirement(),
+                request.getReferralSource(), request.isInterpreterAvailable(),
+                request.getAssignedWorkerId(), userId);
+        return ResponseEntity.ok(caseEntity);
+    }
+
+    // ==================== STATUS HISTORY ====================
+
+    @GetMapping("/{id}/status-history")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<List<CaseStatusHistory>> getCaseStatusHistory(@PathVariable Long id) {
+        List<CaseStatusHistory> history = caseManagementService.getCaseStatusHistory(id);
+        return ResponseEntity.ok(history);
+    }
+
+    // ==================== CODE TABLES ====================
+
+    @GetMapping("/code-tables")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<Map<String, Object>> getCodeTables() {
+        return ResponseEntity.ok(caseManagementService.getCodeTables());
     }
 
     @PutMapping("/{id}/assign")
@@ -326,16 +385,34 @@ public class CaseManagementController {
     @lombok.Data
     public static class TerminationRequest {
         private String reason;
+        private String authorizationEndDate; // DSD: required, MM/DD/YYYY
     }
 
     @lombok.Data
     public static class LeaveRequest {
         private String reason;
+        private String authorizationEndDate;       // DSD: required
+        private String resourceSuspensionEndDate;  // DSD: conditional (L0006 only)
     }
 
     @lombok.Data
     public static class WithdrawalRequest {
         private String reason;
+        private String withdrawalDate; // DSD: required
+    }
+
+    @lombok.Data
+    public static class RescindRequest {
+        private String reason; // R0001-R0005
+    }
+
+    @lombok.Data
+    public static class ReactivateRequest {
+        private String referralDate;
+        private String meetsResidencyRequirement;
+        private String referralSource;
+        private boolean interpreterAvailable;
+        private String assignedWorkerId;
     }
 
     @lombok.Data

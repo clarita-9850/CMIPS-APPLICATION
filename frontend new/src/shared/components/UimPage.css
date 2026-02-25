@@ -1,0 +1,279 @@
+/**
+ * Shared styles for all UIM-generated stub pages.
+ * Uses CSS variables defined in index.css.
+ */
+
+/* Page wrapper */
+.uim-page {
+  min-height: 100%;
+  background-color: white;
+  padding-bottom: 2rem;
+}
+
+/* Container */
+.uim-page .container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Page title */
+.uim-page .page-title {
+  color: var(--cdss-blue);
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  padding-top: 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 3px solid var(--cdss-blue);
+}
+
+/* Section cluster panel */
+.uim-cluster {
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.uim-cluster-title {
+  background: var(--cdss-blue);
+  color: white;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.uim-cluster-body {
+  padding: 1rem 1.25rem;
+}
+
+/* Two-column form grid */
+.uim-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 2rem;
+}
+
+.uim-form-grid.cols-1 {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 768px) {
+  .uim-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form field row */
+.uim-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.uim-field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.uim-field input,
+.uim-field select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border-color-dark);
+  border-radius: 3px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: white;
+  color: var(--text-primary);
+  transition: border-color 0.15s;
+}
+
+.uim-field input:focus,
+.uim-field select:focus {
+  outline: none;
+  border-color: var(--cdss-blue);
+  box-shadow: 0 0 0 2px rgba(21, 53, 84, 0.15);
+}
+
+.uim-field input[readonly],
+.uim-field input:disabled {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+/* Read-only value display */
+.uim-field-value {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  padding: 0.3rem 0;
+}
+
+/* Action bar (button row) */
+.uim-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 0 0.25rem;
+}
+
+/* Buttons */
+.uim-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, opacity 0.2s;
+  white-space: nowrap;
+}
+
+.uim-btn-primary {
+  background: var(--cdss-blue);
+  color: white;
+}
+
+.uim-btn-primary:hover {
+  background: var(--cdss-blue-dark);
+}
+
+.uim-btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color-dark);
+}
+
+.uim-btn-secondary:hover {
+  background: #d0d3d6;
+}
+
+.uim-btn-danger {
+  background: var(--error);
+  color: white;
+}
+
+.uim-btn-link {
+  background: none;
+  border: none;
+  color: var(--cdss-blue);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  font-family: inherit;
+}
+
+.uim-btn-link:hover {
+  color: var(--cdss-blue-dark);
+}
+
+/* Table */
+.uim-table-wrapper {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.uim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.uim-table th {
+  background: var(--cdss-blue);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.uim-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.uim-table tr:nth-child(even) td {
+  background: var(--bg-secondary);
+}
+
+.uim-table tr:hover td {
+  background: rgba(21, 53, 84, 0.05);
+}
+
+.uim-table .link-cell button,
+.uim-table .link-cell a {
+  color: var(--cdss-blue);
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.uim-table .empty-row td {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 1.5rem;
+}
+
+/* Pagination */
+.uim-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+/* Tab navigation */
+.uim-tab-nav {
+  display: flex;
+  border-bottom: 2px solid var(--cdss-blue);
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.uim-tab-nav .tab-item {
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+
+.uim-tab-nav .tab-item.active {
+  color: var(--cdss-blue);
+  border-bottom-color: var(--cdss-blue);
+  font-weight: 600;
+}
+
+.uim-tab-nav .tab-item:hover {
+  color: var(--cdss-blue);
+}
+
+/* Info message banner */
+.uim-info-banner {
+  background: #d1ecf1;
+  border: 1px solid #bee5eb;
+  border-radius: 3px;
+  padding: 0.6rem 1rem;
+  color: #0c5460;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}

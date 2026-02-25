@@ -212,10 +212,17 @@ public class FieldLevelAuthorizationService {
         }
     }
     
+    // System roles that should be excluded when determining the user's business role
+    private static final Set<String> SYSTEM_ROLES = Set.of(
+        "offline_access", "uma_authorization", "ADMIN"
+    );
+
     /**
-     * Gets the current user's role from the JWT token
-     * 
-     * @return The user's primary business role (PROVIDER, RECIPIENT, CASE_WORKER, or UNKNOWN)
+     * Gets the current user's primary business role from the JWT token.
+     * Returns the first role that is not a Keycloak system role.
+     * Supports all 51 DSD core business roles dynamically.
+     *
+     * @return The user's primary business role, or "UNKNOWN" if none found
      */
     private String getCurrentUserRole() {
         try {
@@ -227,13 +234,10 @@ public class FieldLevelAuthorizationService {
                     @SuppressWarnings("unchecked")
                     List<String> rolesList = (List<String>) realmAccess.get("roles");
                     logger.debug("User roles from JWT: {}", rolesList);
-                    
-                    // Find the first business role (not system roles)
+
+                    // Find the first business role (exclude system roles)
                     for (String role : rolesList) {
-                        if (!role.startsWith("default-roles") &&
-                            !role.equals("uma_authorization") &&
-                            !role.equals("offline_access") &&
-                            (role.equals("PROVIDER") || role.equals("RECIPIENT") || role.equals("CASE_WORKER") || role.equals("SUPERVISOR"))) {
+                        if (!role.startsWith("default-roles") && !SYSTEM_ROLES.contains(role)) {
                             return role;
                         }
                     }

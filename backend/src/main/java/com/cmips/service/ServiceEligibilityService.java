@@ -289,7 +289,7 @@ public class ServiceEligibilityService {
                 .title("Approve Assessment for Case " + assessment.getCaseId())
                 .description("Service eligibility assessment pending approval")
                 .workQueue("ASSESSMENT_APPROVAL")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.MEDIUM)
                 .dueDate(LocalDate.now().plusDays(5).atStartOfDay())
                 .build();
@@ -382,7 +382,7 @@ public class ServiceEligibilityService {
                 .title("Health Care Certification Due Soon - Case " + cert.getCaseId())
                 .description("SOC 873 due in 10 business days")
                 .workQueue("HEALTH_CARE_CERTIFICATION")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.MEDIUM)
                 .dueDate(firstTaskDate.atStartOfDay())
                 .build();
@@ -394,7 +394,7 @@ public class ServiceEligibilityService {
                 .title("Health Care Certification Due Tomorrow - Case " + cert.getCaseId())
                 .description("SOC 873 due tomorrow - take action if not received")
                 .workQueue("HEALTH_CARE_CERTIFICATION")
-                .status(Task.TaskStatus.PENDING)
+                .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.HIGH)
                 .dueDate(secondTaskDate.atStartOfDay())
                 .build();

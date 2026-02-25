@@ -1,12 +1,12 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.ApplicationEntity;
 import com.cmips.entity.ApplicationEntity.*;
 import com.cmips.service.ApplicationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +39,7 @@ public class ApplicationController {
      * Create a new application
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "create")
     public ResponseEntity<?> createApplication(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -67,7 +67,7 @@ public class ApplicationController {
      * Create application from referral
      */
     @PostMapping("/from-referral/{referralId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "create")
     public ResponseEntity<?> createFromReferral(@PathVariable String referralId,
                                                  @RequestBody Map<String, Object> request) {
         try {
@@ -97,7 +97,7 @@ public class ApplicationController {
      * Initiate CIN clearance
      */
     @PostMapping("/{applicationId}/cin-clearance")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> initiateCINClearance(@PathVariable String applicationId) {
         try {
             String userId = getCurrentUserId();
@@ -114,7 +114,7 @@ public class ApplicationController {
      * Select CIN match (when multiple matches found)
      */
     @PostMapping("/{applicationId}/select-cin")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> selectCINMatch(@PathVariable String applicationId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -137,7 +137,7 @@ public class ApplicationController {
      * Initiate MEDS verification
      */
     @PostMapping("/{applicationId}/meds-verification")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> initiateMEDSVerification(@PathVariable String applicationId) {
         try {
             String userId = getCurrentUserId();
@@ -156,7 +156,7 @@ public class ApplicationController {
      * Update application status
      */
     @PatchMapping("/{applicationId}/status")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> updateStatus(@PathVariable String applicationId,
                                            @RequestBody Map<String, String> request) {
         try {
@@ -178,7 +178,7 @@ public class ApplicationController {
      * Schedule functional assessment
      */
     @PostMapping("/{applicationId}/schedule-assessment")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> scheduleAssessment(@PathVariable String applicationId,
                                                  @RequestBody Map<String, String> request) {
         try {
@@ -200,7 +200,7 @@ public class ApplicationController {
      * Complete assessment
      */
     @PostMapping("/{applicationId}/complete-assessment")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> completeAssessment(@PathVariable String applicationId) {
         try {
             String userId = getCurrentUserId();
@@ -220,7 +220,7 @@ public class ApplicationController {
      * Approve application
      */
     @PostMapping("/{applicationId}/approve")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "approve")
     public ResponseEntity<?> approveApplication(@PathVariable String applicationId) {
         try {
             String userId = getCurrentUserId();
@@ -238,7 +238,7 @@ public class ApplicationController {
      * Deny application
      */
     @PostMapping("/{applicationId}/deny")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "deny")
     public ResponseEntity<?> denyApplication(@PathVariable String applicationId,
                                               @RequestBody Map<String, String> request) {
         try {
@@ -260,7 +260,7 @@ public class ApplicationController {
      * Withdraw application
      */
     @PostMapping("/{applicationId}/withdraw")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> withdrawApplication(@PathVariable String applicationId,
                                                   @RequestBody Map<String, String> request) {
         try {
@@ -283,7 +283,7 @@ public class ApplicationController {
      * Extend 45-day deadline
      */
     @PostMapping("/{applicationId}/extend-deadline")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> extendDeadline(@PathVariable String applicationId,
                                              @RequestBody Map<String, Object> request) {
         try {
@@ -308,7 +308,7 @@ public class ApplicationController {
      * Update SOC 873 received status
      */
     @PatchMapping("/{applicationId}/soc873")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> updateSoc873(@PathVariable String applicationId,
                                            @RequestBody Map<String, Boolean> request) {
         try {
@@ -328,7 +328,7 @@ public class ApplicationController {
      * Update medical certification received status
      */
     @PatchMapping("/{applicationId}/medical-cert")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> updateMedicalCert(@PathVariable String applicationId,
                                                 @RequestBody Map<String, Boolean> request) {
         try {
@@ -348,7 +348,7 @@ public class ApplicationController {
      * Link application to case
      */
     @PostMapping("/{applicationId}/link-case")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> linkToCase(@PathVariable String applicationId,
                                          @RequestBody Map<String, Object> request) {
         try {
@@ -371,7 +371,7 @@ public class ApplicationController {
      * Get application by ID
      */
     @GetMapping("/{applicationId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getApplication(@PathVariable String applicationId) {
         try {
             ApplicationEntity application = applicationService.getApplicationById(applicationId);
@@ -386,7 +386,7 @@ public class ApplicationController {
      * Get application by application number
      */
     @GetMapping("/by-number/{applicationNumber}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getByApplicationNumber(@PathVariable String applicationNumber) {
         try {
             ApplicationEntity application = applicationService.getApplicationByNumber(applicationNumber);
@@ -401,7 +401,7 @@ public class ApplicationController {
      * Get applications with filters
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getApplications(
             @RequestParam(required = false) String countyCode,
             @RequestParam(required = false) String status,
@@ -430,7 +430,7 @@ public class ApplicationController {
      * Get pending applications
      */
     @GetMapping("/pending")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getPendingApplications(@RequestParam(required = false) String countyCode) {
         try {
             List<ApplicationEntity> applications;
@@ -450,7 +450,7 @@ public class ApplicationController {
      * Get overdue applications (past 45-day deadline)
      */
     @GetMapping("/overdue")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getOverdueApplications(@RequestParam(required = false) String countyCode) {
         try {
             List<ApplicationEntity> applications;
@@ -470,7 +470,7 @@ public class ApplicationController {
      * Get applications approaching deadline
      */
     @GetMapping("/approaching-deadline")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getApproachingDeadline(
             @RequestParam(defaultValue = "7") int daysUntilDeadline) {
         try {
@@ -486,7 +486,7 @@ public class ApplicationController {
      * Search applications
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> searchApplications(
             @RequestParam(required = false) String applicationNumber,
             @RequestParam(required = false) String status,
@@ -520,7 +520,7 @@ public class ApplicationController {
      * Get application statistics by county
      */
     @GetMapping("/stats/{countyCode}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getApplicationStats(@PathVariable String countyCode) {
         try {
             Map<String, Object> stats = new HashMap<>();
@@ -538,7 +538,7 @@ public class ApplicationController {
      * Get timeline status for an application
      */
     @GetMapping("/{applicationId}/timeline")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Application Resource", scope = "view")
     public ResponseEntity<?> getTimelineStatus(@PathVariable String applicationId) {
         try {
             ApplicationEntity application = applicationService.getApplicationById(applicationId);

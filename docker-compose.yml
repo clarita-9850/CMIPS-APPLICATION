@@ -69,14 +69,66 @@ services:
       KC_HTTP_RELATIVE_PATH: /
       KC_PROXY: edge
       KC_PROXY_ADDRESS_FORWARDING: true
+      KC_HEALTH_ENABLED: true
     ports:
       - "8080:8080"
       - "8180:8080"
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     command: start-dev --http-relative-path=/
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 && cat <&3 | grep -q '200 OK'"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
     networks:
       - cmips-network
+
+  # Keycloak Authorization Setup (one-time init)
+  # Runs setup_keycloak_authorization.py to create all 51 DSD role policies,
+  # resources, scopes, and permissions. Idempotent - safe to re-run.
+  keycloak-setup:
+    image: python:3.12-slim
+    container_name: cmips-keycloak-setup
+    working_dir: /setup
+    volumes:
+      - ../setup_keycloak_authorization.py:/setup/setup_keycloak_authorization.py:ro
+    environment:
+      KC_URL: http://keycloak:8080
+      KC_REALM: cmips
+      KC_CLIENT_ID: cmips-backend
+      KC_ADMIN_USER: admin
+      KC_ADMIN_PASS: admin123
+    command: >
+      bash -c "
+        pip install --quiet requests &&
+        python setup_keycloak_authorization.py --wait
+      "
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - cmips-network
+    restart: "no"
+
+  # Redis - Shared by CMIPS Backend (job events) and Scheduler Backend (pub/sub)
+  redis:
+    image: redis:7-alpine
+    container_name: cmips-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cmips-network
+    restart: unless-stopped
 
   # CMIPS Backend Application
   cmips-backend:
@@ -95,6 +147,11 @@ services:
       KEYCLOAK_CLIENT_SECRET: X6282J5tQzu2tzqLcglKmjhwfidB0vh9
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9093
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/cmips
+      # Validate Keycloak authorization state on startup and refresh permission cache
+      CMIPS_KEYCLOAK_INIT_RESOURCES: "true"
+      # Redis for job event pub/sub (Scheduler integration)
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
       # Batch Job Processing Configuration
       BATCH_SCHEDULER_ENABLED: "true"
       BATCH_SCHEDULER_INTERVAL_MS: "5000"
@@ -110,9 +167,13 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
+      keycloak-setup:
+        condition: service_completed_successfully
       kafka:
         condition: service_started
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
       interval: 30s
@@ -120,34 +181,112 @@ services:
       retries: 3
       start_period: 90s
     networks:
+      cmips-network:
+        aliases:
+          - cmips-backend
+    restart: unless-stopped
+
+  # CMIPS React Frontend Application (main dashboard for all users)
+  # To see code changes: docker-compose build --no-cache cmips-frontend && docker-compose up -d cmips-frontend
+  # Or run: ./scripts/rebuild-cmips-frontend.sh
+  cmips-frontend:
+    build:
+      context: "./frontend new"
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_API_BASE_URL: http://localhost:8090
+        REACT_APP_DISABLE_AUTH: "true"
+        REACT_APP_KEYCLOAK_URL: http://localhost:8080
+        REACT_APP_KEYCLOAK_REALM: cmips
+        REACT_APP_KEYCLOAK_CLIENT_ID: cmips-frontend
+    container_name: cmips-frontend
+    environment:
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
       - cmips-network
     restart: unless-stopped
 
-  # CMIPS Next.js Frontend Application
-  cmips-frontend-nextjs:
-    build:
-      context: ./frontend-nextjs
-      dockerfile: Dockerfile.dev
-    container_name: cmips-frontend-nextjs
+  # Scheduler PostgreSQL Database
+  scheduler-postgres:
+    image: postgres:15-alpine
+    container_name: scheduler-postgres
     environment:
-      NODE_ENV: development
-      NEXT_PUBLIC_API_URL: http://localhost:8090/api
+      POSTGRES_DB: scheduler_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - scheduler_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cmips-network
+    restart: unless-stopped
+
+  # Scheduler Backend
+  scheduler-backend:
+    build:
+      context: ./scheduler-app-master/scheduler-backend
+      dockerfile: Dockerfile
+    container_name: scheduler-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: scheduler-postgres
+      DB_PORT: "5432"
+      DB_NAME: scheduler_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: cmips
+      KEYCLOAK_CLIENT_ID: batch-scheduler-app
+      CMIPS_BACKEND_URL: http://cmips-backend:8081
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/cmips
+    ports:
+      - "8084:8084"
+    depends_on:
+      scheduler-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      cmips-backend:
+        condition: service_healthy
+    networks:
+      - cmips-network
+    restart: unless-stopped
+
+  # Scheduler Frontend
+  scheduler-frontend:
+    build:
+      context: ./scheduler-app-master/scheduler-frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8084
+        NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+        NEXT_PUBLIC_KEYCLOAK_REALM: cmips
+        NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: batch-scheduler-app
+    container_name: scheduler-frontend
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: http://localhost:8084
       NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
       NEXT_PUBLIC_KEYCLOAK_REALM: cmips
-      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: cmips-frontend
-      # Enable hot reloading
-      WATCHPACK_POLLING: "true"
-      CHOKIDAR_USEPOLLING: "true"
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: batch-scheduler-app
     ports:
-      - "3000:3000"
-    volumes:
-      # Mount source code for hot reloading - exclude node_modules and .next
-      - ./frontend-nextjs:/app
-      - /app/node_modules
-      - /app/.next
-    command: sh -c "npm install && npm run dev -- --hostname 0.0.0.0"
+      - "3002:3002"
     depends_on:
-      - api-gateway
+      - scheduler-backend
     networks:
       - cmips-network
     restart: unless-stopped
@@ -163,8 +302,10 @@ services:
     environment:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://keycloak:8080/realms/cmips
     depends_on:
-      - keycloak
-      - cmips-backend
+      keycloak:
+        condition: service_healthy
+      cmips-backend:
+        condition: service_started
     networks:
       - cmips-network
     healthcheck:
@@ -178,6 +319,8 @@ services:
 volumes:
   postgres_data:
   report_data:
+  redis_data:
+  scheduler_postgres_data:
 
 networks:
   cmips-network:

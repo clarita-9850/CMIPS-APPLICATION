@@ -464,6 +464,130 @@ public class KeycloakAdminService {
     }
     
     /**
+     * Get all authorization scopes for the resource server
+     */
+    public List<Map<String, Object>> getAllScopes() {
+        logger.info("Getting all authorization scopes");
+
+        try {
+            String clientInternalId = getBackendClientInternalId();
+            HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
+            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId + "/authz/resource-server/scope";
+
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                logger.info("Retrieved {} scopes", response.getBody().size());
+                return response.getBody();
+            }
+
+            return new ArrayList<>();
+
+        } catch (Exception e) {
+            logger.error("Error getting scopes: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to get scopes", e);
+        }
+    }
+
+    /**
+     * Get all role-type policies (filtered by type=role)
+     */
+    public List<Map<String, Object>> getRolePolicies() {
+        logger.info("Getting all role-type policies");
+
+        try {
+            String clientInternalId = getBackendClientInternalId();
+            HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
+            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId + "/authz/resource-server/policy?type=role&first=0&max=500";
+
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                logger.info("Retrieved {} role policies", response.getBody().size());
+                return response.getBody();
+            }
+
+            return new ArrayList<>();
+
+        } catch (Exception e) {
+            logger.error("Error getting role policies: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to get role policies", e);
+        }
+    }
+
+    /**
+     * Get associated policies for a permission (resolves which policies are linked to a permission)
+     */
+    public List<Map<String, Object>> getPermissionAssociatedPolicies(String permissionId) {
+        try {
+            String clientInternalId = getBackendClientInternalId();
+            HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
+            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId
+                + "/authz/resource-server/policy/" + permissionId + "/associatedPolicies";
+
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+
+            return new ArrayList<>();
+
+        } catch (Exception e) {
+            logger.warn("Error getting associated policies for permission {}: {}", permissionId, e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get associated resources for a permission
+     */
+    public List<Map<String, Object>> getPermissionResources(String permissionId) {
+        try {
+            String clientInternalId = getBackendClientInternalId();
+            HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
+            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId
+                + "/authz/resource-server/policy/" + permissionId + "/resources";
+
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+
+            return new ArrayList<>();
+
+        } catch (Exception e) {
+            logger.warn("Error getting resources for permission {}: {}", permissionId, e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get associated scopes for a permission
+     */
+    public List<Map<String, Object>> getPermissionScopes(String permissionId) {
+        try {
+            String clientInternalId = getBackendClientInternalId();
+            HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
+            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId
+                + "/authz/resource-server/policy/" + permissionId + "/scopes";
+
+            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            }
+
+            return new ArrayList<>();
+
+        } catch (Exception e) {
+            logger.warn("Error getting scopes for permission {}: {}", permissionId, e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
      * Get all policies
      */
     public List<Map<String, Object>> getAllPolicies() {
@@ -543,21 +667,34 @@ public class KeycloakAdminService {
      */
     public List<Map<String, Object>> getAllPermissions() {
         logger.info("Getting all permissions");
-        
+
         try {
-            String clientInternalId = getBackendClientInternalId(); // Use cmips-backend for authorization resources
+            String clientInternalId = getBackendClientInternalId();
             HttpEntity<Void> entity = new HttpEntity<>(getAuthHeaders());
-            String url = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId + "/authz/resource-server/permission";
-            
-            ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
-            
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                logger.info("Retrieved {} permissions", response.getBody().size());
-                return response.getBody();
+            String baseUrl = keycloakServerUrl + "admin/realms/" + realm + "/clients/" + clientInternalId + "/authz/resource-server/permission";
+
+            List<Map<String, Object>> allPermissions = new ArrayList<>();
+            int pageSize = 500;
+            int first = 0;
+
+            while (true) {
+                String url = baseUrl + "?first=" + first + "&max=" + pageSize;
+                ResponseEntity<List> response = restTemplate.exchange(url, HttpMethod.GET, entity, List.class);
+
+                if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null && !response.getBody().isEmpty()) {
+                    allPermissions.addAll(response.getBody());
+                    if (response.getBody().size() < pageSize) {
+                        break; // Last page
+                    }
+                    first += pageSize;
+                } else {
+                    break;
+                }
             }
-            
-            return new ArrayList<>();
-            
+
+            logger.info("Retrieved {} permissions (paginated)", allPermissions.size());
+            return allPermissions;
+
         } catch (Exception e) {
             logger.error("Error getting permissions: {}", e.getMessage(), e);
             throw new RuntimeException("Failed to get permissions", e);

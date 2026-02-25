@@ -1,80 +1,107 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
+import Breadcrumb from '@/components/Breadcrumb';
+import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
+import styles from './recipients.module.css';
 
-type Recipient = {
+interface Recipient {
   id: number;
-  personType: string;
+  cin: string;
   firstName: string;
   lastName: string;
-  middleName: string;
-  ssn: string;
-  ssnVerificationStatus: string;
+  middleName?: string;
   dateOfBirth: string;
-  gender: string;
-  cin: string;
+  email: string;
+  primaryPhone: string;
+  personType: string;
   countyCode: string;
-  residenceCity: string;
-  residenceState: string;
-  primaryLanguage: string;
-  interpreterNeeded: boolean;
-  espRegistered: boolean;
-  referralCloseDate: string;
-  referralCloseReason: string;
-};
+  residenceCounty: string;
+  primaryLanguage?: string;
+  interpreterNeeded?: boolean;
+  espRegistered?: boolean;
+}
+
+interface SearchParams {
+  recipientId: string;
+  cin: string;
+  firstName: string;
+  lastName: string;
+  countyCode: string;
+  status: string;
+}
+
+interface Stats {
+  total: number;
+  eligible: number;
+  pending: number;
+  needsReassessment: number;
+}
 
 export default function RecipientManagementPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [recipients, setRecipients] = useState<Recipient[]>([]);
   const [filteredRecipients, setFilteredRecipients] = useState<Recipient[]>([]);
-  const [searchParams, setSearchParams] = useState({
-    lastName: '',
-    firstName: '',
-    ssn: '',
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [pageSize] = useState(50);
+  const [searchParams, setSearchParams] = useState<SearchParams>({
+    recipientId: '',
     cin: '',
+    firstName: '',
+    lastName: '',
     countyCode: '',
-    personType: ''
+    status: ''
   });
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     total: 0,
-    openReferrals: 0,
-    applicants: 0,
-    recipients: 0
+    eligible: 0,
+    pending: 0,
+    needsReassessment: 0
   });
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      window.location.href = '/login';
-      return;
+    if (!authLoading && !user) {
+      router.replace('/login');
     }
-    fetchRecipients();
-  }, [user, authLoading]);
+  }, [authLoading, user, router]);
 
-  const fetchRecipients = async () => {
+  const fetchRecipients = useCallback(async (page: number = 0) => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/recipients');
-      const data = response.data || [];
-      setRecipients(data);
-      setFilteredRecipients(data);
+      // Filter by user's county if available
+      const countyCode = user?.county || '';
+      const response = await apiClient.get(`/recipients?page=${page}&size=${pageSize}${countyCode ? `&countyCode=${countyCode}` : ''}`);
+      const data = response.data;
 
-      // Calculate statistics
+      // Handle both paginated and non-paginated responses
+      const recipientData = data.content || data || [];
+      setRecipients(recipientData);
+      setFilteredRecipients(recipientData);
+      setTotalPages(data.totalPages || Math.ceil(recipientData.length / pageSize) || 1);
+      setTotalElements(data.totalElements || recipientData.length || 0);
+      setCurrentPage(data.currentPage || page || 0);
+
+      // Calculate statistics - estimate from total based on current page ratios
+      const eligibleCount = recipientData.filter((r: Recipient) => r.personType === 'RECIPIENT').length;
+      const pendingCount = recipientData.filter((r: Recipient) => r.personType === 'APPLICANT').length;
+      const openReferralCount = recipientData.filter((r: Recipient) => r.personType === 'OPEN_REFERRAL').length;
+      const pageTotal = recipientData.length || 1;
+      const total = data.totalElements || recipientData.length || 0;
+
       setStats({
-        total: data.length,
-        openReferrals: data.filter((r: Recipient) => r.personType === 'OPEN_REFERRAL').length,
-        applicants: data.filter((r: Recipient) => r.personType === 'APPLICANT').length,
-        recipients: data.filter((r: Recipient) => r.personType === 'RECIPIENT').length
+        total: total,
+        eligible: total > 0 ? Math.round((eligibleCount / pageTotal) * total) : eligibleCount,
+        pending: total > 0 ? Math.round((pendingCount / pageTotal) * total) : pendingCount,
+        needsReassessment: total > 0 ? Math.round((openReferralCount / pageTotal) * total) : openReferralCount
       });
     } catch (err) {
       console.error('Error fetching recipients:', err);
@@ -83,27 +110,38 @@ export default function RecipientManagementPage() {
     } finally {
       setLoading(false);
     }
+  }, [pageSize, user?.county]);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      fetchRecipients(currentPage + 1);
+    }
   };
+
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      fetchRecipients(currentPage - 1);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchRecipients();
+    }
+  }, [user, fetchRecipients]);
 
   const handleSearch = async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
-      if (searchParams.lastName) params.append('lastName', searchParams.lastName);
-      if (searchParams.firstName) params.append('firstName', searchParams.firstName);
-      if (searchParams.ssn) params.append('ssn', searchParams.ssn);
       if (searchParams.cin) params.append('cin', searchParams.cin);
+      if (searchParams.firstName) params.append('firstName', searchParams.firstName);
+      if (searchParams.lastName) params.append('lastName', searchParams.lastName);
       if (searchParams.countyCode) params.append('countyCode', searchParams.countyCode);
+      if (searchParams.status) params.append('personType', searchParams.status);
 
       const response = await apiClient.get(`/recipients/search?${params.toString()}`);
-      let results = response.data || [];
-
-      // Filter by person type if specified
-      if (searchParams.personType) {
-        results = results.filter((r: Recipient) => r.personType === searchParams.personType);
-      }
-
-      setFilteredRecipients(results);
+      setFilteredRecipients(response.data || []);
     } catch (err) {
       console.error('Error searching recipients:', err);
     } finally {
@@ -113,292 +151,293 @@ export default function RecipientManagementPage() {
 
   const handleClearSearch = () => {
     setSearchParams({
-      lastName: '',
-      firstName: '',
-      ssn: '',
+      recipientId: '',
       cin: '',
+      firstName: '',
+      lastName: '',
       countyCode: '',
-      personType: ''
+      status: ''
     });
     setFilteredRecipients(recipients);
   };
 
-  const getPersonTypeBadgeClass = (type: string) => {
-    switch (type) {
-      case 'OPEN_REFERRAL': return 'bg-info';
-      case 'CLOSED_REFERRAL': return 'bg-secondary';
-      case 'APPLICANT': return 'bg-warning text-dark';
-      case 'RECIPIENT': return 'bg-success';
-      default: return 'bg-secondary';
+  const getPersonTypeBadgeClass = (personType: string): string => {
+    switch (personType) {
+      case 'RECIPIENT': return styles.badgeActive;
+      case 'APPLICANT': return styles.badgePending;
+      case 'OPEN_REFERRAL': return styles.badgeOnLeave;
+      case 'CLOSED_REFERRAL': return styles.badgeTerminated;
+      default: return styles.badgeDefault;
     }
   };
 
-  if (!mounted || loading || authLoading || !user) {
+  if (authLoading || !user) {
     return (
-      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
-        <div className="text-center card p-5">
-          <div className="spinner-border text-primary mb-3" role="status">
-            <span className="visually-hidden">Loading...</span>
+      <div className={styles.pageContainer}>
+        <div className="container">
+          <div className={styles.loadingContainer}>
+            <div className={styles.spinner}></div>
           </div>
-          <p className="text-muted mb-0">Loading Recipient Management...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container-fluid py-4">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Person/Recipient Search</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => router.push('/recipients/new')}
-        >
-          <i className="bi bi-plus-lg me-2"></i>New Referral
-        </button>
-      </div>
+    <div className={styles.pageContainer}>
+      <div className="container">
+        <Breadcrumb path={['Home']} currentPage="Recipient Management" />
 
-      {/* Statistics Cards */}
-      <div className="row mb-4">
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: 'var(--color-p2, #046b99)' }}>{stats.total}</div>
-              <p className="text-muted small mb-0">TOTAL PERSONS</p>
+        <div className={styles.content}>
+          {/* Header */}
+          <div className={styles.header}>
+            <div className={styles.headerTitle}>
+              <h1>Recipient Management</h1>
+              <p>Search, view, and manage IHSS recipients</p>
             </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => router.push('/recipients/new')}
+            >
+              <span className="ca-gov-icon-plus-line" aria-hidden="true"></span>
+              New Recipient
+            </button>
           </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#0dcaf0' }}>{stats.openReferrals}</div>
-              <p className="text-muted small mb-0">OPEN REFERRALS</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#ffc107' }}>{stats.applicants}</div>
-              <p className="text-muted small mb-0">APPLICANTS</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#198754' }}>{stats.recipients}</div>
-              <p className="text-muted small mb-0">RECIPIENTS</p>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* Search Panel */}
-      <div className="card mb-4">
-        <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-          <h5 className="mb-0">Search Persons</h5>
-        </div>
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-2">
-              <label className="form-label">Last Name</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.lastName}
-                onChange={(e) => setSearchParams({ ...searchParams, lastName: e.target.value })}
-                placeholder="Enter last name"
-              />
+          {/* Statistics Cards */}
+          <div className={styles.statsGrid}>
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.primary}`}>{stats.total}</div>
+              <div className={styles.statLabel}>Total Recipients</div>
             </div>
-            <div className="col-md-2">
-              <label className="form-label">First Name</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.firstName}
-                onChange={(e) => setSearchParams({ ...searchParams, firstName: e.target.value })}
-                placeholder="Enter first name"
-              />
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.success}`}>{stats.eligible}</div>
+              <div className={styles.statLabel}>Eligible</div>
             </div>
-            <div className="col-md-2">
-              <label className="form-label">SSN</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.ssn}
-                onChange={(e) => setSearchParams({ ...searchParams, ssn: e.target.value })}
-                placeholder="XXX-XX-XXXX"
-                maxLength={11}
-              />
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.warning}`}>{stats.pending}</div>
+              <div className={styles.statLabel}>Pending</div>
             </div>
-            <div className="col-md-2">
-              <label className="form-label">CIN</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.cin}
-                onChange={(e) => setSearchParams({ ...searchParams, cin: e.target.value })}
-                placeholder="Enter CIN"
-              />
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.info}`}>{stats.needsReassessment}</div>
+              <div className={styles.statLabel}>Needs Reassessment</div>
             </div>
-            <div className="col-md-2">
-              <label className="form-label">County Code</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.countyCode}
-                onChange={(e) => setSearchParams({ ...searchParams, countyCode: e.target.value })}
-                placeholder="e.g., 19"
-              />
+          </div>
+
+          {/* Search Panel */}
+          <div className={styles.searchPanel}>
+            <div className={styles.searchHeader}>
+              <h3>Search Recipients</h3>
             </div>
-            <div className="col-md-2">
-              <label className="form-label">Person Type</label>
-              <select
-                className="form-select"
-                value={searchParams.personType}
-                onChange={(e) => setSearchParams({ ...searchParams, personType: e.target.value })}
+            <div className={styles.searchBody}>
+              <div className={styles.searchGrid}>
+                <div className={styles.searchField}>
+                  <label>Recipient ID</label>
+                  <input
+                    type="text"
+                    value={searchParams.recipientId}
+                    onChange={(e) => setSearchParams({ ...searchParams, recipientId: e.target.value })}
+                    placeholder="Enter recipient ID"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>CIN</label>
+                  <input
+                    type="text"
+                    value={searchParams.cin}
+                    onChange={(e) => setSearchParams({ ...searchParams, cin: e.target.value })}
+                    placeholder="Enter CIN"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>First Name</label>
+                  <input
+                    type="text"
+                    value={searchParams.firstName}
+                    onChange={(e) => setSearchParams({ ...searchParams, firstName: e.target.value })}
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={searchParams.lastName}
+                    onChange={(e) => setSearchParams({ ...searchParams, lastName: e.target.value })}
+                    placeholder="Enter last name"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>Person Type</label>
+                  <select
+                    value={searchParams.status}
+                    onChange={(e) => setSearchParams({ ...searchParams, status: e.target.value })}
+                  >
+                    <option value="">All Types</option>
+                    <option value="RECIPIENT">Recipient</option>
+                    <option value="APPLICANT">Applicant</option>
+                    <option value="OPEN_REFERRAL">Open Referral</option>
+                    <option value="CLOSED_REFERRAL">Closed Referral</option>
+                  </select>
+                </div>
+              </div>
+              <div className={styles.searchActions}>
+                <button className="btn btn-primary" onClick={handleSearch} disabled={loading}>
+                  <span className="ca-gov-icon-search" aria-hidden="true"></span>
+                  {loading ? 'Searching...' : 'Search'}
+                </button>
+                <button className="btn btn-secondary" onClick={handleClearSearch}>
+                  <span className="ca-gov-icon-close-line" aria-hidden="true"></span>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className={styles.quickActions}>
+            <div className={styles.quickActionsHeader}>
+              <h3>Quick Actions</h3>
+            </div>
+            <div className={styles.quickActionsBody}>
+              <button className={styles.quickActionBtn} onClick={() => {
+                setFilteredRecipients(recipients.filter(r => r.personType === 'RECIPIENT'));
+              }}>
+                <span className="ca-gov-icon-check-list" aria-hidden="true"></span>
+                View All Recipients
+              </button>
+              <button
+                className={styles.quickActionBtn}
+                onClick={() => {
+                  setFilteredRecipients(recipients.filter(r => r.personType === 'APPLICANT'));
+                }}
               >
-                <option value="">All Types</option>
-                <option value="OPEN_REFERRAL">Open Referral</option>
-                <option value="CLOSED_REFERRAL">Closed Referral</option>
-                <option value="APPLICANT">Applicant</option>
-                <option value="RECIPIENT">Recipient</option>
-              </select>
+                <span className="ca-gov-icon-calendar" aria-hidden="true"></span>
+                Applicants
+              </button>
+              <button className={styles.quickActionBtn} onClick={() => {
+                setFilteredRecipients(recipients.filter(r => r.personType === 'OPEN_REFERRAL'));
+              }}>
+                <span className="ca-gov-icon-file-certificate" aria-hidden="true"></span>
+                Open Referrals
+              </button>
+              <button className={styles.quickActionBtn} onClick={() => {
+                setFilteredRecipients(recipients.filter(r => r.personType === 'CLOSED_REFERRAL'));
+              }}>
+                <span className="ca-gov-icon-close-line" aria-hidden="true"></span>
+                Closed Referrals
+              </button>
             </div>
           </div>
-          <div className="mt-3">
-            <button className="btn btn-primary me-2" onClick={handleSearch}>
-              <i className="bi bi-search me-2"></i>Search
-            </button>
-            <button className="btn btn-outline-secondary" onClick={handleClearSearch}>
-              <i className="bi bi-x-lg me-2"></i>Clear
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Quick Actions */}
-      <div className="card mb-4">
-        <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-          <h5 className="mb-0">Quick Actions</h5>
-        </div>
-        <div className="card-body">
-          <div className="btn-group">
-            <button className="btn btn-outline-primary" onClick={() => router.push('/recipients/referrals/open')}>
-              <i className="bi bi-folder2-open me-2"></i>Open Referrals
-            </button>
-            <button className="btn btn-outline-primary" onClick={() => router.push('/recipients/referrals/closed')}>
-              <i className="bi bi-folder-x me-2"></i>Closed Referrals
-            </button>
-            <button className="btn btn-outline-primary" onClick={() => router.push('/recipients/new')}>
-              <i className="bi bi-person-plus me-2"></i>Create Referral
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Recipients Table */}
-      <div className="card">
-        <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-          <h5 className="mb-0">Search Results ({filteredRecipients.length})</h5>
-        </div>
-        <div className="card-body">
-          {filteredRecipients.length === 0 ? (
-            <p className="text-center text-muted py-4">No persons found. Try adjusting your search criteria.</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-striped table-hover">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>CIN</th>
-                    <th>Person Type</th>
-                    <th>County</th>
-                    <th>DOB</th>
-                    <th>Language</th>
-                    <th>ESP</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRecipients.map((recipient) => (
-                    <tr key={recipient.id}>
-                      <td>
-                        <a
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); router.push(`/recipients/${recipient.id}`); }}
-                          className="text-primary fw-bold text-decoration-none"
-                        >
-                          {recipient.lastName}, {recipient.firstName} {recipient.middleName || ''}
-                        </a>
-                      </td>
-                      <td>{recipient.cin || '-'}</td>
-                      <td>
-                        <span className={`badge ${getPersonTypeBadgeClass(recipient.personType)}`}>
-                          {recipient.personType?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td>{recipient.countyCode || '-'}</td>
-                      <td>{recipient.dateOfBirth || '-'}</td>
-                      <td>
-                        {recipient.primaryLanguage || '-'}
-                        {recipient.interpreterNeeded && (
-                          <span className="badge bg-warning text-dark ms-1" title="Interpreter Needed">
-                            <i className="bi bi-translate"></i>
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        {recipient.espRegistered ? (
-                          <span className="badge bg-success">Registered</span>
-                        ) : (
-                          <span className="badge bg-secondary">No</span>
-                        )}
-                      </td>
-                      <td>
-                        <div className="btn-group btn-group-sm">
-                          <button
-                            className="btn btn-outline-primary"
-                            onClick={() => router.push(`/recipients/${recipient.id}`)}
-                            title="View"
-                          >
-                            <i className="bi bi-eye"></i>
-                          </button>
-                          <button
-                            className="btn btn-outline-secondary"
-                            onClick={() => router.push(`/recipients/${recipient.id}/edit`)}
-                            title="Edit"
-                          >
-                            <i className="bi bi-pencil"></i>
-                          </button>
-                          {recipient.personType === 'OPEN_REFERRAL' && (
-                            <button
-                              className="btn btn-outline-success"
-                              onClick={() => router.push(`/cases/new?recipientId=${recipient.id}`)}
-                              title="Create Case"
-                            >
-                              <i className="bi bi-folder-plus"></i>
-                            </button>
-                          )}
-                          {recipient.personType === 'RECIPIENT' && (
-                            <button
-                              className="btn btn-outline-info"
-                              onClick={() => router.push(`/recipients/${recipient.id}/companion-cases`)}
-                              title="Companion Cases"
-                            >
-                              <i className="bi bi-people"></i>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Results Table */}
+          <div className={styles.resultsPanel}>
+            <div className={styles.resultsHeader}>
+              <h3>Recipients</h3>
+              <span className={styles.resultsCount}>{filteredRecipients.length} results</span>
             </div>
-          )}
+            <div className={styles.resultsBody}>
+              {loading ? (
+                <div className={styles.loadingContainer}>
+                  <div className={styles.spinner}></div>
+                </div>
+              ) : filteredRecipients.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>👥</div>
+                  <h4>No recipients found</h4>
+                  <p>Try adjusting your search criteria or add a new recipient.</p>
+                </div>
+              ) : (
+                <div className={styles.tableWrapper}>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>CIN</th>
+                        <th>Name</th>
+                        <th>Date of Birth</th>
+                        <th>Type</th>
+                        <th>County</th>
+                        <th>Phone</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecipients.map((recipient) => (
+                        <tr key={recipient.id}>
+                          <td>
+                            <span
+                              className={styles.recipientLink}
+                              onClick={() => router.push(`/recipients/${recipient.id}`)}
+                            >
+                              {recipient.cin || '-'}
+                            </span>
+                          </td>
+                          <td>{`${recipient.firstName || ''} ${recipient.lastName || ''}`.trim() || '-'}</td>
+                          <td>{recipient.dateOfBirth || '-'}</td>
+                          <td>
+                            <span className={`${styles.badge} ${getPersonTypeBadgeClass(recipient.personType)}`}>
+                              {recipient.personType?.replace(/_/g, ' ') || '-'}
+                            </span>
+                          </td>
+                          <td>{recipient.residenceCounty || recipient.countyCode || '-'}</td>
+                          <td>{recipient.primaryPhone || '-'}</td>
+                          <td>
+                            <div className={styles.actionButtons}>
+                              <button
+                                className={styles.actionBtn}
+                                onClick={() => router.push(`/recipients/${recipient.id}`)}
+                                title="View"
+                              >
+                                <span className="ca-gov-icon-user" aria-hidden="true"></span>
+                              </button>
+                              <button
+                                className={styles.actionBtn}
+                                onClick={() => router.push(`/recipients/${recipient.id}/edit`)}
+                                title="Edit"
+                              >
+                                <span className="ca-gov-icon-edit" aria-hidden="true"></span>
+                              </button>
+                              {recipient.personType === 'OPEN_REFERRAL' && (
+                                <button
+                                  className={styles.actionBtn}
+                                  onClick={() => router.push(`/cases/new?recipientId=${recipient.id}`)}
+                                  title="Create Case"
+                                >
+                                  <span className="ca-gov-icon-folder-plus" aria-hidden="true"></span>
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className={styles.pagination}>
+                  <button
+                    className={styles.paginationBtn}
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 0}
+                  >
+                    &larr; Previous
+                  </button>
+                  <span className={styles.pageInfo}>
+                    Page {currentPage + 1} of {totalPages} ({totalElements} total)
+                  </span>
+                  <button
+                    className={styles.paginationBtn}
+                    onClick={handleNextPage}
+                    disabled={currentPage >= totalPages - 1}
+                  >
+                    Next &rarr;
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

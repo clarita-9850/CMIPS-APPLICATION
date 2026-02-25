@@ -1,0 +1,225 @@
+/**
+ * Shared styles for all UIM-converted React pages.
+ */
+
+.uim-page {
+  min-height: 100%;
+  background-color: white;
+  padding-bottom: 2rem;
+}
+
+.uim-page .container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.uim-page .page-title {
+  color: #153554;
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  padding-top: 1rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 3px solid #153554;
+}
+
+.uim-cluster {
+  background: white;
+  border: 1px solid #d0d3d6;
+  border-radius: 4px;
+  margin-bottom: 1.5rem;
+  overflow: hidden;
+}
+
+.uim-cluster-title {
+  background: #153554;
+  color: white;
+  padding: 0.6rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.uim-cluster-body {
+  padding: 1rem 1.25rem;
+}
+
+.uim-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 2rem;
+}
+
+.uim-form-grid.cols-1 { grid-template-columns: 1fr; }
+
+@media (max-width: 768px) {
+  .uim-form-grid { grid-template-columns: 1fr; }
+}
+
+.uim-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.uim-field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.uim-field input,
+.uim-field select {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #8a8d91;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: white;
+  color: #1a1a2e;
+  transition: border-color 0.15s;
+}
+
+.uim-field input:focus,
+.uim-field select:focus {
+  outline: none;
+  border-color: #153554;
+  box-shadow: 0 0 0 2px rgba(21, 53, 84, 0.15);
+}
+
+.uim-field input[readonly],
+.uim-field input:disabled {
+  background: #f4f5f6;
+  color: #666;
+  cursor: default;
+}
+
+.uim-field-value {
+  font-size: 0.9rem;
+  color: #1a1a2e;
+  padding: 0.3rem 0;
+}
+
+.uim-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.uim-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 0 0.25rem;
+}
+
+.uim-action-bar.center { justify-content: center; }
+.uim-action-bar.left   { justify-content: flex-start; }
+
+.uim-btn {
+  padding: 0.5rem 1.25rem;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s, opacity 0.2s;
+  white-space: nowrap;
+}
+
+.uim-btn-primary   { background: #153554; color: white; }
+.uim-btn-primary:hover { background: #1e4a72; }
+
+.uim-btn-secondary {
+  background: #e8e9ea;
+  color: #1a1a2e;
+  border: 1px solid #8a8d91;
+}
+.uim-btn-secondary:hover { background: #d0d3d6; }
+
+.uim-btn-danger { background: #c0392b; color: white; }
+
+.uim-btn-link {
+  background: none;
+  border: none;
+  color: #153554;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+  font-family: inherit;
+}
+.uim-btn-link:hover { color: #1e4a72; }
+
+.uim-table-wrapper {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.uim-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.uim-table th {
+  background: #153554;
+  color: white;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.uim-table td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #d0d3d6;
+  vertical-align: middle;
+}
+
+.uim-table tr:nth-child(even) td { background: #f4f5f6; }
+.uim-table tr:hover td { background: rgba(21, 53, 84, 0.05); }
+
+.uim-table .link-cell button,
+.uim-table .link-cell a {
+  color: #153554;
+  text-decoration: underline;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.uim-table .empty-row td {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 1.5rem;
+}
+
+.uim-pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.uim-info-banner {
+  background-color: #e8f4fd;
+  border: 1px solid #7db8e8;
+  border-left: 4px solid #153554;
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  color: #153554;
+  font-size: 0.9rem;
+}
+
+.uim-action-bar.left {
+  justify-content: flex-start;
+}

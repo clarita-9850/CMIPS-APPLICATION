@@ -68,6 +68,8 @@ keycloak:
   resource: ${KEYCLOAK_CLIENT_ID:cmips-backend}
   credentials:
     secret: ${KEYCLOAK_CLIENT_SECRET:X6282J5tQzu2tzqLcglKmjhwfidB0vh9}
+  permission-cache:
+    ttl-minutes: ${KEYCLOAK_PERMISSION_CACHE_TTL_MINUTES:5}
   policy-enforcer-config:
     enforcement-mode: ENFORCING  # Changed to ENFORCING for strict authorization
     user-managed-access: {}

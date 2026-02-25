@@ -1,11 +1,25 @@
-FROM eclipse-temurin:17-jre
+## Multi-stage build for API Gateway
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /app
+
+COPY pom.xml .
+RUN mvn -B dependency:resolve dependency:resolve-plugins
+
+COPY src ./src
+RUN mvn -B -DskipTests -Dmaven.test.skip=true clean package
+
+# Runtime stage
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 
 # Install curl for healthcheck
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Copy pre-built JAR (built locally to avoid Maven Central network issues)
-COPY target/api-gateway-1.0.0.jar app.jar
+COPY --from=build /app/target/api-gateway-1.0.0.jar app.jar
 EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
+
 ENTRYPOINT ["java", "-jar", "app.jar"]
 

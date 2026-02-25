@@ -7,6 +7,8 @@ import NotificationCenter from '@/components/NotificationCenter';
 import apiClient from '@/lib/api';
 import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
 import { isFieldVisible } from '@/hooks/useFieldAuthorization';
+import CmipsDashboardLayout from '@/components/structure/CmipsDashboardLayout';
+import { canAccessDashboard, MAIN_DASHBOARD_URL } from '@/lib/roleDashboardMapping';
 
 type Recipient = {
   id: number;
@@ -60,8 +62,14 @@ export default function ProviderDashboard() {
 
   useEffect(() => {
     if (!mounted || authLoading) return;
-    if (!user || (user.role !== 'PROVIDER' && !user.roles?.includes('PROVIDER'))) {
+    if (!user) {
       window.location.href = '/login';
+      return;
+    }
+    const roles = user.roles || [];
+    const hasAccess = canAccessDashboard(roles, 'PROVIDER');
+    if (!hasAccess) {
+      window.location.href = MAIN_DASHBOARD_URL;
       return;
     }
     fetchDashboardData();
@@ -147,8 +155,29 @@ export default function ProviderDashboard() {
     );
   }
 
+  const handleSubmitTimesheet = async (id: number) => {
+    try {
+      await apiClient.post(`/timesheets/${id}/submit`);
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error submitting timesheet:', err);
+      alert('Failed to submit timesheet');
+    }
+  };
+
+  const providerShortcuts = [
+    { id: 'evv-checkin', label: 'EVV Check-In', icon: '📍', href: '/provider/evv-checkin' },
+    { id: 'timesheets', label: 'My Timesheets', icon: '📋', href: '/provider/timesheets' },
+    { id: 'payments', label: 'Payments', icon: '💰', href: '/provider/payments' },
+    { id: 'profile', label: 'My Profile', icon: '👤', href: '/provider/profile' },
+  ];
+
   return (
-    <div>
+    <CmipsDashboardLayout
+      title="My Workspace: Welcome to CMIPS"
+      subtitle={`Provider Dashboard - ${user?.name || user?.username || 'User'}`}
+      shortcuts={providerShortcuts}
+    >
       {/* Notification Center */}
       <div className="mb-3 d-flex justify-content-end">
         <NotificationCenter userId={user?.username || ''} />
@@ -217,7 +246,7 @@ export default function ProviderDashboard() {
 
         {/* My Recipients */}
         <div className="card mb-4">
-          <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>📋 MY RECIPIENTS</h2>
           </div>
           <div className="card-body">
@@ -254,7 +283,7 @@ export default function ProviderDashboard() {
         {/* Pending Actions */}
         {pendingActions.length > 0 && (
           <div className="card mb-4">
-            <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+            <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
               <h2 className="card-title mb-0" style={{ color: 'white' }}>⏰ PENDING ACTIONS</h2>
             </div>
             <div className="card-body">
@@ -275,7 +304,7 @@ export default function ProviderDashboard() {
 
         {/* My Timesheets */}
         <div className="card">
-          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>📊 MY TIMESHEETS</h2>
             {allowedActions.length > 0 && (
               <small className="text-white-50">
@@ -355,17 +384,7 @@ export default function ProviderDashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </CmipsDashboardLayout>
   );
-
-  async function handleSubmitTimesheet(id: number) {
-    try {
-      await apiClient.post(`/timesheets/${id}/submit`);
-      fetchDashboardData();
-    } catch (err) {
-      console.error('Error submitting timesheet:', err);
-      alert('Failed to submit timesheet');
-    }
-  }
 }
 

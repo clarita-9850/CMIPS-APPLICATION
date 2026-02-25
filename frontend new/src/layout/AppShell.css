@@ -1,0 +1,223 @@
+/**
+ * AppShell Layout Styles
+ * Uses CA Web Template classes and CDSS theme
+ */
+
+/* App Shell Container */
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Skip to Content Link - Accessibility */
+.skip-to-content {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: var(--cdss-blue);
+  color: white;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  z-index: 10000;
+  border-radius: 0 0 4px 0;
+  font-weight: 600;
+  transition: top 0.3s ease;
+}
+
+.skip-to-content:focus {
+  top: 0;
+}
+
+/* Main Content Layout */
+.app-shell-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Main Content Area */
+.app-shell-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 70px); /* Subtract top nav height */
+}
+
+/* Breadcrumbs Container */
+.breadcrumbs-container {
+  background: white;
+  padding: 0.75rem 2rem;
+  border-bottom: 1px solid #e9ecef;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.breadcrumb {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background: transparent;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumb-item a {
+  color: var(--cdss-blue);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.breadcrumb-item a:hover {
+  color: var(--cdss-blue-dark);
+  text-decoration: underline;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+  content: "/";
+  padding-right: 0.5rem;
+  color: #666;
+}
+
+/* Page Outlet - Container for routed pages */
+.page-outlet {
+  flex: 1;
+  padding: 0 2rem;
+  overflow-y: auto;
+}
+
+/* Footer */
+.app-shell-footer {
+  background-color: #e9ecef;
+  border-top: 1px solid #dee2e6;
+  padding: 2rem 0;
+  margin-top: auto;
+}
+
+.app-shell-footer .footer-content {
+  text-align: center;
+}
+
+.app-shell-footer .footer-text {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.app-shell-footer .footer-links {
+  font-size: 0.9rem;
+}
+
+.app-shell-footer .footer-links a {
+  color: var(--cdss-blue);
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.app-shell-footer .footer-links a:hover {
+  color: var(--cdss-blue-dark);
+  text-decoration: underline;
+}
+
+.app-shell-footer .separator {
+  margin: 0 0.75rem;
+  color: #999;
+}
+
+/* Mobile Hamburger Menu Toggle */
+.mobile-nav-toggle {
+  display: none;
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  width: 56px;
+  height: 56px;
+  background: var(--cdss-blue);
+  border: none;
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  z-index: 999;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.mobile-nav-toggle:hover {
+  background: var(--cdss-blue-dark);
+  transform: scale(1.05);
+}
+
+.mobile-nav-toggle:active {
+  transform: scale(0.95);
+}
+
+.hamburger-line {
+  display: block;
+  width: 24px;
+  height: 3px;
+  background: white;
+  border-radius: 2px;
+  transition: all 0.3s ease;
+}
+
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(1) {
+  transform: translateY(8px) rotate(45deg);
+}
+
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+
+.mobile-nav-toggle[aria-expanded="true"] .hamburger-line:nth-child(3) {
+  transform: translateY(-8px) rotate(-45deg);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .mobile-nav-toggle {
+    display: flex;
+  }
+
+  .breadcrumbs-container {
+    padding: 0.75rem 1rem;
+  }
+
+  .page-outlet {
+    padding: 1rem;
+  }
+
+  .app-shell-footer {
+    padding: 1.5rem 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .breadcrumbs-container {
+    font-size: 0.9rem;
+  }
+
+  .page-outlet {
+    padding: 0.75rem;
+  }
+
+  .app-shell-footer .footer-content {
+    font-size: 0.85rem;
+  }
+
+  .app-shell-footer .separator {
+    display: block;
+    margin: 0.5rem 0;
+  }
+}

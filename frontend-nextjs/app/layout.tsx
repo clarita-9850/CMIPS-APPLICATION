@@ -5,8 +5,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { CountyThemeProvider } from "@/contexts/CountyThemeContext";
 import { QueryClientProvider } from "./providers/QueryClientProvider";
 import I18nProvider from "./i18n-provider";
-import ConditionalHeader from "@/components/structure/ConditionalHeader";
-import ConditionalFooter from "@/components/structure/ConditionalFooter";
+import ConditionalLayout from "@/components/structure/ConditionalLayout";
 import Script from "next/script";
 
 const geistSans = Geist({
@@ -43,11 +42,7 @@ export default function RootLayout({
           <I18nProvider>
             <AuthProvider>
               <CountyThemeProvider>
-                <ConditionalHeader />
-                <main id="main-content" className="container" style={{ minHeight: 'calc(100vh - 300px)', padding: '2rem 0' }}>
-                  {children}
-                </main>
-                <ConditionalFooter />
+                <ConditionalLayout>{children}</ConditionalLayout>
               </CountyThemeProvider>
             </AuthProvider>
           </I18nProvider>

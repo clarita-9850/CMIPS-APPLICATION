@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.ProviderRecipientRelationship;
 import com.cmips.repository.ProviderRecipientRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,7 @@ public class ProviderRecipientController {
      * Get provider's assigned recipients
      */
     @GetMapping("/my-recipients")
+    @RequirePermission(resource = "Provider Assignment Resource", scope = "view")
     public ResponseEntity<List<ProviderRecipientRelationship>> getMyRecipients() {
         String providerId = getCurrentUserId();
         List<ProviderRecipientRelationship> recipients = 
@@ -33,6 +35,7 @@ public class ProviderRecipientController {
      * Get recipient's assigned providers
      */
     @GetMapping("/my-providers")
+    @RequirePermission(resource = "Provider Assignment Resource", scope = "view")
     public ResponseEntity<List<ProviderRecipientRelationship>> getMyProviders() {
         String recipientId = getCurrentUserId();
         List<ProviderRecipientRelationship> providers = 
@@ -44,6 +47,7 @@ public class ProviderRecipientController {
      * Get all relationships (for case workers)
      */
     @GetMapping("/all")
+    @RequirePermission(resource = "Provider Assignment Resource", scope = "view")
     public ResponseEntity<List<ProviderRecipientRelationship>> getAllRelationships() {
         List<ProviderRecipientRelationship> relationships = providerRecipientRepository.findAll();
         return ResponseEntity.ok(relationships);

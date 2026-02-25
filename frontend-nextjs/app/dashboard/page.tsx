@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { districtCountyService } from '@/lib/services/districtCounty.service';
 import { reportService, type ReportRequest } from '@/lib/services/report.service';
 import Alert, { type AlertType } from '@/components/Alert';
+import CmipsDashboardLayout from '@/components/structure/CmipsDashboardLayout';
 
 const DashboardPage = () => {
   const router = useRouter();
@@ -337,11 +338,23 @@ const DashboardPage = () => {
     );
   }
 
+  const analyticsShortcuts = [
+    { id: 'batch-jobs', label: 'Batch Jobs', icon: '⚙️', href: '/batch-jobs' },
+    { id: 'analytics', label: 'Analytics', icon: '📊', href: '/analytics' },
+    { id: 'visualization', label: 'Visualization', icon: '📈', href: '/visualization' },
+    { id: 'cases', label: 'Cases', icon: '📋', href: '/cases' },
+  ];
+
   return (
-    <div className="container">
-      <div className={styles.page}>
-        <section className={styles.hero}>
-          <h1 className={styles.heroTitle}>Advanced Timesheet Analytics Dashboard</h1>
+    <CmipsDashboardLayout
+      title="My Workspace: Welcome to CMIPS"
+      subtitle={`Advanced Timesheet Analytics - ${user?.name || user?.username || 'User'}`}
+      shortcuts={analyticsShortcuts}
+    >
+      <div className="container">
+        <div className={styles.page}>
+          <section className={styles.hero}>
+            <h1 className={styles.heroTitle}>Advanced Timesheet Analytics Dashboard</h1>
           <p className={styles.heroSubtitle}>
             Welcome {user?.name || user?.username}. Generate role-aware reports with pagination and exports.
           </p>
@@ -507,8 +520,9 @@ const DashboardPage = () => {
             </div>
           )}
         </section>
+        </div>
       </div>
-    </div>
+    </CmipsDashboardLayout>
   );
 };
 

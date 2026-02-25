@@ -1,0 +1,34 @@
+# Development Profile Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/scheduler_db
+    username: postgres
+    password: postgres
+
+  data:
+    redis:
+      host: localhost
+      port: 6380
+
+  jpa:
+    show-sql: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8085/realms/cmips
+
+cmips:
+  backend:
+    base-url: http://localhost:8081
+
+logging:
+  level:
+    com.ihss.scheduler: DEBUG
+    org.springframework.web: DEBUG
+
+# Disable security for development (optional - comment out for secured dev)
+# app:
+#   security:
+#     enabled: false

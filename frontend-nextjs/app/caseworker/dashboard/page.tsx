@@ -6,8 +6,10 @@ import { useRouter } from 'next/navigation';
 import WorkView from '@/components/WorkView';
 import NotificationCenter from '@/components/NotificationCenter';
 import apiClient from '@/lib/api';
-import { FieldAuthorizedValue, ActionButtons, ConditionalField } from '@/components/FieldAuthorizedValue';
+import { FieldAuthorizedValue, ActionButtons } from '@/components/FieldAuthorizedValue';
 import { isFieldVisible } from '@/hooks/useFieldAuthorization';
+import CmipsDashboardLayout from '@/components/structure/CmipsDashboardLayout';
+import { canAccessDashboard, MAIN_DASHBOARD_URL } from '@/lib/roleDashboardMapping';
 
 type Timesheet = {
   id: number;
@@ -86,12 +88,14 @@ export default function CaseWorkerDashboard() {
       console.log('📊 [Dashboard] Waiting for mount/auth...');
       return;
     }
-    if (!user || (user.role !== 'CASE_WORKER' && !user.roles?.includes('CASE_WORKER'))) {
-      console.log('📊 [Dashboard] ❌ Invalid user or role, redirecting to login');
-      console.log('📊 [Dashboard] user:', user);
-      console.log('📊 [Dashboard] user.role:', user?.role);
-      console.log('📊 [Dashboard] user.roles:', user?.roles);
+    if (!user) {
       window.location.href = '/login';
+      return;
+    }
+    const roles = user.roles || [];
+    const hasAccess = canAccessDashboard(roles, 'CASE_WORKER');
+    if (!hasAccess) {
+      window.location.href = MAIN_DASHBOARD_URL;
       return;
     }
     console.log('📊 [Dashboard] ✅ User authorized, fetching data');
@@ -185,6 +189,28 @@ export default function CaseWorkerDashboard() {
     }
   };
 
+  const handleApproveTimesheet = async (id: number) => {
+    try {
+      await apiClient.post(`/timesheets/${id}/approve`);
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error approving timesheet:', err);
+      alert('Failed to approve timesheet');
+    }
+  };
+
+  const handleRejectTimesheet = async (id: number) => {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    try {
+      await apiClient.post(`/timesheets/${id}/reject`, { reason });
+      fetchDashboardData();
+    } catch (err) {
+      console.error('Error rejecting timesheet:', err);
+      alert('Failed to reject timesheet');
+    }
+  };
+
   if (!mounted || loading || authLoading || !user) {
     return (
       <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
@@ -198,8 +224,89 @@ export default function CaseWorkerDashboard() {
     );
   }
 
+  const caseWorkerShortcuts = [
+    { id: 'new-referral', label: 'New Referral', icon: '🏠', href: '/recipients/new' },
+    { id: 'new-application', label: 'New Application', icon: '📋', href: '/new-application' },
+    { id: 'find-person', label: 'Find a Person', icon: '👤', href: '/recipients' },
+    { id: 'find-hearing-case', label: 'Find a State Hearing Case', icon: '⚖️', href: '#' },
+  ];
+
+  const modalContent = showViolationModal && selectedViolation ? (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }} role="dialog" aria-modal="true">
+      <div className="modal-dialog modal-lg">
+        <div className="modal-content">
+          <div className="modal-header" style={{ backgroundColor: '#153554', color: 'white' }}>
+            <h5 className="modal-title text-white">
+              Review Overtime Violation - {selectedViolation.providerName}
+            </h5>
+            <button type="button" className="btn-close btn-close-white" onClick={() => setShowViolationModal(false)} aria-label="Close"></button>
+          </div>
+          <div className="modal-body">
+            <div className="row mb-4">
+              <div className="col-md-6">
+                <h6>Violation Details</h6>
+                <table className="table table-sm table-borderless">
+                  <tbody>
+                    <tr><th>Provider:</th><td>{selectedViolation.providerName} ({selectedViolation.providerNumber})</td></tr>
+                    <tr><th>Violation Number:</th><td><span className={`badge ${selectedViolation.violationNumber >= 3 ? 'bg-danger' : 'bg-warning text-dark'}`}>#{selectedViolation.violationNumber}</span></td></tr>
+                    <tr><th>Type:</th><td>{getViolationTypeName(selectedViolation.violationType)}</td></tr>
+                    <tr><th>Service Period:</th><td>{String(selectedViolation.serviceMonth)}/{String(selectedViolation.serviceYear)}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div className="col-md-6">
+                <h6>Hours Summary</h6>
+                <table className="table table-sm table-borderless">
+                  <tbody>
+                    <tr><th>Hours Worked:</th><td className="text-danger fw-bold">{selectedViolation.hoursWorked}</td></tr>
+                    <tr><th>Maximum Allowed:</th><td>{selectedViolation.maximumAllowed}</td></tr>
+                    <tr><th>Overage:</th><td className="text-danger fw-bold">{(selectedViolation.hoursWorked - selectedViolation.maximumAllowed).toFixed(2)} hours</td></tr>
+                    <tr><th>Review Due:</th><td>{selectedViolation.countyReviewDueDate ? new Date(selectedViolation.countyReviewDueDate).toLocaleDateString() : '-'}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {selectedViolation.violationNumber >= 3 && (
+              <div className="alert alert-danger">
+                <strong>Warning:</strong> This is Violation #{selectedViolation.violationNumber}. If upheld, the provider will be {selectedViolation.violationNumber === 3 ? 'suspended for 90 days' : 'suspended for 365 days and must re-enroll'}.
+              </div>
+            )}
+            {selectedViolation.violationNumber === 2 && (
+              <div className="alert alert-info">
+                <strong>Note:</strong> This is Violation #2. If upheld, the provider will have 14 days to complete optional training.
+              </div>
+            )}
+            <div className="mb-3">
+              <label className="form-label fw-bold">Review Outcome *</label>
+              <select className="form-select" value={reviewOutcome} onChange={(e) => setReviewOutcome(e.target.value)}>
+                <option value="">Select Outcome...</option>
+                <option value="UPHELD">Uphold Violation</option>
+                <option value="OVERRIDE">Request Override (Supervisor Review)</option>
+              </select>
+            </div>
+            <div className="mb-3">
+              <label className="form-label fw-bold">Comments * (Required)</label>
+              <textarea className="form-control" rows={4} value={reviewComments} onChange={(e) => setReviewComments(e.target.value)} placeholder="Enter detailed comments..." maxLength={1000} />
+              <small className="text-muted">{reviewComments.length}/1000 characters</small>
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="btn btn-secondary" onClick={() => setShowViolationModal(false)}>Cancel</button>
+            <button type="button" className={`btn ${reviewOutcome === 'UPHELD' ? 'btn-danger' : 'btn-primary'}`} onClick={handleViolationReview} disabled={!reviewOutcome || !reviewComments}>
+              {reviewOutcome === 'UPHELD' ? 'Uphold Violation' : 'Submit Review'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   return (
-    <div>
+    <CmipsDashboardLayout
+      title="My Workspace: Welcome to CMIPS"
+      subtitle={`Case Worker Dashboard - ${user?.name || user?.username || 'User'}`}
+      shortcuts={caseWorkerShortcuts}
+    >
       {/* Notification Center */}
       <div className="mb-3 d-flex justify-content-end">
         <NotificationCenter userId={user?.username || ''} />
@@ -212,7 +319,7 @@ export default function CaseWorkerDashboard() {
           <div className="col-lg-3 col-md-6 mb-3">
             <div className="card text-center">
               <div className="card-body">
-                <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: 'var(--color-p2, #046b99)' }}>{stats.totalCases}</div>
+                <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#153554' }}>{stats.totalCases}</div>
                 <p className="text-muted small mb-0">CASES</p>
               </div>
             </div>
@@ -253,7 +360,7 @@ export default function CaseWorkerDashboard() {
 
         {/* Priority Actions */}
         <div className="card mb-4">
-          <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>🚨 PRIORITY ACTIONS</h2>
           </div>
           <div className="card-body">
@@ -273,7 +380,7 @@ export default function CaseWorkerDashboard() {
 
         {/* Pending Timesheets */}
         <div className="card">
-          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>📊 PENDING TIMESHEETS</h2>
             {allowedActions.length > 0 && (
               <small className="text-white-50">
@@ -366,7 +473,7 @@ export default function CaseWorkerDashboard() {
 
         {/* Overtime Violations Work Queue */}
         <div className="card mb-4">
-          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
+          <div className="card-header d-flex justify-content-between align-items-center" style={{ backgroundColor: '#153554', color: 'white' }}>
             <h2 className="card-title mb-0" style={{ color: 'white' }}>⚠️ OVERTIME VIOLATIONS - COUNTY REVIEW</h2>
             <span className="badge bg-light text-dark">{overtimeViolations.length} Pending</span>
           </div>
@@ -405,7 +512,7 @@ export default function CaseWorkerDashboard() {
                           </span>
                         </td>
                         <td>{getViolationTypeName(violation.violationType)}</td>
-                        <td>{violation.serviceMonth}/{violation.serviceYear}</td>
+                        <td>{String(violation.serviceMonth)}/{String(violation.serviceYear)}</td>
                         <td className="text-danger fw-bold">{violation.hoursWorked}</td>
                         <td>{violation.maximumAllowed}</td>
                         <td>
@@ -446,152 +553,7 @@ export default function CaseWorkerDashboard() {
         </div>
       </div>
 
-      {/* Violation Review Modal */}
-      {showViolationModal && selectedViolation && (
-        <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-                <h5 className="modal-title text-white">
-                  Review Overtime Violation - {selectedViolation.providerName}
-                </h5>
-                <button type="button" className="btn-close btn-close-white" onClick={() => setShowViolationModal(false)}></button>
-              </div>
-              <div className="modal-body">
-                <div className="row mb-4">
-                  <div className="col-md-6">
-                    <h6>Violation Details</h6>
-                    <table className="table table-sm table-borderless">
-                      <tbody>
-                        <tr>
-                          <th>Provider:</th>
-                          <td>{selectedViolation.providerName} ({selectedViolation.providerNumber})</td>
-                        </tr>
-                        <tr>
-                          <th>Violation Number:</th>
-                          <td>
-                            <span className={`badge ${selectedViolation.violationNumber >= 3 ? 'bg-danger' : 'bg-warning text-dark'}`}>
-                              #{selectedViolation.violationNumber}
-                            </span>
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Type:</th>
-                          <td>{getViolationTypeName(selectedViolation.violationType)}</td>
-                        </tr>
-                        <tr>
-                          <th>Service Period:</th>
-                          <td>{selectedViolation.serviceMonth}/{selectedViolation.serviceYear}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="col-md-6">
-                    <h6>Hours Summary</h6>
-                    <table className="table table-sm table-borderless">
-                      <tbody>
-                        <tr>
-                          <th>Hours Worked:</th>
-                          <td className="text-danger fw-bold">{selectedViolation.hoursWorked}</td>
-                        </tr>
-                        <tr>
-                          <th>Maximum Allowed:</th>
-                          <td>{selectedViolation.maximumAllowed}</td>
-                        </tr>
-                        <tr>
-                          <th>Overage:</th>
-                          <td className="text-danger fw-bold">
-                            {(selectedViolation.hoursWorked - selectedViolation.maximumAllowed).toFixed(2)} hours
-                          </td>
-                        </tr>
-                        <tr>
-                          <th>Review Due:</th>
-                          <td>{selectedViolation.countyReviewDueDate ? new Date(selectedViolation.countyReviewDueDate).toLocaleDateString() : '-'}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {selectedViolation.violationNumber >= 3 && (
-                  <div className="alert alert-danger">
-                    <strong>Warning:</strong> This is Violation #{selectedViolation.violationNumber}.
-                    If upheld, the provider will be {selectedViolation.violationNumber === 3 ? 'suspended for 90 days' : 'suspended for 365 days and must re-enroll'}.
-                  </div>
-                )}
-
-                {selectedViolation.violationNumber === 2 && (
-                  <div className="alert alert-info">
-                    <strong>Note:</strong> This is Violation #2. If upheld, the provider will have 14 days to complete optional training.
-                    If training is completed, the violation will be removed. Training option is only available once.
-                  </div>
-                )}
-
-                <div className="mb-3">
-                  <label className="form-label fw-bold">Review Outcome *</label>
-                  <select
-                    className="form-select"
-                    value={reviewOutcome}
-                    onChange={(e) => setReviewOutcome(e.target.value)}
-                  >
-                    <option value="">Select Outcome...</option>
-                    <option value="UPHELD">Uphold Violation</option>
-                    <option value="OVERRIDE">Request Override (Supervisor Review)</option>
-                  </select>
-                </div>
-
-                <div className="mb-3">
-                  <label className="form-label fw-bold">Comments * (Required)</label>
-                  <textarea
-                    className="form-control"
-                    rows={4}
-                    value={reviewComments}
-                    onChange={(e) => setReviewComments(e.target.value)}
-                    placeholder="Enter detailed comments explaining your review decision (max 1000 characters)..."
-                    maxLength={1000}
-                  />
-                  <small className="text-muted">{reviewComments.length}/1000 characters</small>
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowViolationModal(false)}>
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${reviewOutcome === 'UPHELD' ? 'btn-danger' : 'btn-primary'}`}
-                  onClick={handleViolationReview}
-                  disabled={!reviewOutcome || !reviewComments}
-                >
-                  {reviewOutcome === 'UPHELD' ? 'Uphold Violation' : 'Submit Review'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      {modalContent}
+    </CmipsDashboardLayout>
   );
-
-  async function handleApproveTimesheet(id: number) {
-    try {
-      await apiClient.post(`/timesheets/${id}/approve`);
-      fetchDashboardData();
-    } catch (err) {
-      console.error('Error approving timesheet:', err);
-      alert('Failed to approve timesheet');
-    }
-  }
-
-  async function handleRejectTimesheet(id: number) {
-    const reason = prompt('Enter rejection reason:');
-    if (!reason) return;
-    try {
-      await apiClient.post(`/timesheets/${id}/reject`, { reason });
-      fetchDashboardData();
-    } catch (err) {
-      console.error('Error rejecting timesheet:', err);
-      alert('Failed to reject timesheet');
-    }
-  }
 }

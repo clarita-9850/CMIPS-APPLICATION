@@ -57,7 +57,7 @@ public class GenericResourceController {
      * Generic READ endpoint - works for any resource type
      */
     @GetMapping("/{resourceType}")
-    @RequirePermission(resource = "#{@resourceType} Resource", scope = "read", message = "You don't have permission to read this resource")
+    @RequirePermission(resource = "#{@resourceType} Resource", scope = "view", message = "You don't have permission to read this resource")
     public ResponseEntity<?> getResources(@PathVariable String resourceType) {
         
         logger.info("Getting {} resources", resourceType);
@@ -139,7 +139,7 @@ public class GenericResourceController {
      * Useful for dynamic UI rendering
      */
     @GetMapping("/{resourceType}/scopes")
-    @RequirePermission(resource = "#{@resourceType} Resource", scope = "read", message = "You don't have permission to read this resource")
+    @RequirePermission(resource = "#{@resourceType} Resource", scope = "view", message = "You don't have permission to read this resource")
     public ResponseEntity<?> getGrantedScopes(@PathVariable String resourceType) {
         
         logger.info("Getting granted scopes for {} resource", resourceType);

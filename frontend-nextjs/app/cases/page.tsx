@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from 'react-i18next';
+import Breadcrumb from '@/components/Breadcrumb';
+import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
+import styles from './cases.module.css';
 
-type CaseEntity = {
+interface CaseEntity {
   id: number;
   caseNumber: string;
   caseStatus: string;
@@ -21,23 +24,43 @@ type CaseEntity = {
   assessmentType: string;
   healthCareCertStatus: string;
   healthCareCertDueDate: string;
-};
+}
+
+interface SearchParams {
+  caseNumber: string;
+  cin: string;
+  countyCode: string;
+  status: string;
+  caseOwnerId: string;
+}
+
+interface Stats {
+  total: number;
+  pending: number;
+  eligible: number;
+  dueForReassessment: number;
+}
 
 export default function CaseManagementPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const router = useRouter();
-  const [mounted, setMounted] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState<CaseEntity[]>([]);
   const [filteredCases, setFilteredCases] = useState<CaseEntity[]>([]);
-  const [searchParams, setSearchParams] = useState({
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [pageSize] = useState(50);
+  const [searchParams, setSearchParams] = useState<SearchParams>({
     caseNumber: '',
     cin: '',
     countyCode: '',
     status: '',
     caseOwnerId: ''
   });
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     total: 0,
     pending: 0,
     eligible: 0,
@@ -45,34 +68,41 @@ export default function CaseManagementPage() {
   });
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      window.location.href = '/login';
-      return;
+    if (!authLoading && !user) {
+      router.replace('/login');
     }
-    fetchCases();
-  }, [user, authLoading]);
+  }, [authLoading, user, router]);
 
-  const fetchCases = async () => {
+  const fetchCases = useCallback(async (page: number = 0) => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/cases');
-      const caseData = response.data || [];
+      // Filter by user's county if available
+      const countyCode = user?.county || '';
+      const response = await apiClient.get(`/cases?page=${page}&size=${pageSize}${countyCode ? `&countyCode=${countyCode}` : ''}`);
+      const data = response.data;
+
+      // Handle both paginated and non-paginated responses
+      const caseData = data.content || data || [];
       setCases(caseData);
       setFilteredCases(caseData);
+      setTotalPages(data.totalPages || Math.ceil(caseData.length / pageSize) || 1);
+      setTotalElements(data.totalElements || caseData.length || 0);
+      setCurrentPage(data.currentPage || page || 0);
 
-      // Calculate statistics
+      // Calculate statistics - estimate from total based on current page ratios
+      const pendingCount = caseData.filter((c: CaseEntity) => c.caseStatus === 'PENDING').length;
+      const eligibleCount = caseData.filter((c: CaseEntity) => c.caseStatus === 'ELIGIBLE').length;
+      const dueForReassessmentCount = caseData.filter((c: CaseEntity) =>
+        c.healthCareCertDueDate && new Date(c.healthCareCertDueDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      ).length;
+      const pageTotal = caseData.length || 1;
+      const total = data.totalElements || caseData.length || 0;
+
       setStats({
-        total: caseData.length,
-        pending: caseData.filter((c: CaseEntity) => c.caseStatus === 'PENDING').length,
-        eligible: caseData.filter((c: CaseEntity) => c.caseStatus === 'ELIGIBLE').length,
-        dueForReassessment: caseData.filter((c: CaseEntity) =>
-          c.healthCareCertDueDate && new Date(c.healthCareCertDueDate) <= new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        ).length
+        total: total,
+        pending: total > 0 ? Math.round((pendingCount / pageTotal) * total) : pendingCount,
+        eligible: total > 0 ? Math.round((eligibleCount / pageTotal) * total) : eligibleCount,
+        dueForReassessment: total > 0 ? Math.round((dueForReassessmentCount / pageTotal) * total) : dueForReassessmentCount
       });
     } catch (err) {
       console.error('Error fetching cases:', err);
@@ -81,7 +111,25 @@ export default function CaseManagementPage() {
     } finally {
       setLoading(false);
     }
+  }, [pageSize, user?.county]);
+
+  const handleNextPage = () => {
+    if (currentPage < totalPages - 1) {
+      fetchCases(currentPage + 1);
+    }
   };
+
+  const handlePrevPage = () => {
+    if (currentPage > 0) {
+      fetchCases(currentPage - 1);
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      fetchCases();
+    }
+  }, [user, fetchCases]);
 
   const handleSearch = async () => {
     try {
@@ -113,235 +161,255 @@ export default function CaseManagementPage() {
     setFilteredCases(cases);
   };
 
-  const getStatusBadgeClass = (status: string) => {
+  const getStatusBadgeClass = (status: string): string => {
     switch (status) {
-      case 'PENDING': return 'bg-warning text-dark';
-      case 'ELIGIBLE': return 'bg-success';
-      case 'PRESUMPTIVE_ELIGIBLE': return 'bg-info';
-      case 'ON_LEAVE': return 'bg-secondary';
-      case 'DENIED': return 'bg-danger';
-      case 'TERMINATED': return 'bg-dark';
-      case 'APPLICATION_WITHDRAWN': return 'bg-secondary';
-      default: return 'bg-secondary';
+      case 'PENDING': return styles.badgePending;
+      case 'ELIGIBLE': return styles.badgeEligible;
+      case 'PRESUMPTIVE_ELIGIBLE': return styles.badgePresumptive;
+      case 'ON_LEAVE': return styles.badgeOnLeave;
+      case 'DENIED': return styles.badgeDenied;
+      case 'TERMINATED': return styles.badgeTerminated;
+      case 'APPLICATION_WITHDRAWN': return styles.badgeDefault;
+      default: return styles.badgeDefault;
     }
   };
 
-  if (!mounted || loading || authLoading || !user) {
+  if (authLoading || !user) {
     return (
-      <div className="min-h-screen d-flex align-items-center justify-content-center" style={{ backgroundColor: 'var(--gray-50, #fafafa)' }}>
-        <div className="text-center card p-5">
-          <div className="spinner-border text-primary mb-3" role="status">
-            <span className="visually-hidden">Loading...</span>
+      <div className={styles.pageContainer}>
+        <div className="container">
+          <div className={styles.loadingContainer}>
+            <div className={styles.spinner}></div>
           </div>
-          <p className="text-muted mb-0">Loading Case Management...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container-fluid py-4">
-      {/* Header */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h1 className="h3 mb-0">Case Management</h1>
-        <button
-          className="btn btn-primary"
-          onClick={() => router.push('/cases/new')}
-        >
-          <i className="bi bi-plus-lg me-2"></i>New Case
-        </button>
-      </div>
+    <div className={styles.pageContainer}>
+      <div className="container">
+        <Breadcrumb path={['Home']} currentPage="Case Management" />
 
-      {/* Statistics Cards */}
-      <div className="row mb-4">
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: 'var(--color-p2, #046b99)' }}>{stats.total}</div>
-              <p className="text-muted small mb-0">TOTAL CASES</p>
+        <div className={styles.content}>
+          {/* Header */}
+          <div className={styles.header}>
+            <div className={styles.headerTitle}>
+              <h1>Case Management</h1>
+              <p>Search, view, and manage IHSS cases</p>
             </div>
-          </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#ffc107' }}>{stats.pending}</div>
-              <p className="text-muted small mb-0">PENDING</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#198754' }}>{stats.eligible}</div>
-              <p className="text-muted small mb-0">ELIGIBLE</p>
-            </div>
-          </div>
-        </div>
-        <div className="col-lg-3 col-md-6 mb-3">
-          <div className="card text-center h-100">
-            <div className="card-body">
-              <div className="fw-bold mb-2" style={{ fontSize: '2.5rem', color: '#dc3545' }}>{stats.dueForReassessment}</div>
-              <p className="text-muted small mb-0">DUE FOR REASSESSMENT</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Search Panel */}
-      <div className="card mb-4">
-        <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-          <h5 className="mb-0">Search Cases</h5>
-        </div>
-        <div className="card-body">
-          <div className="row g-3">
-            <div className="col-md-3">
-              <label className="form-label">Case Number</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.caseNumber}
-                onChange={(e) => setSearchParams({ ...searchParams, caseNumber: e.target.value })}
-                placeholder="Enter case number"
-              />
-            </div>
-            <div className="col-md-3">
-              <label className="form-label">CIN</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.cin}
-                onChange={(e) => setSearchParams({ ...searchParams, cin: e.target.value })}
-                placeholder="Enter CIN"
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label">County Code</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.countyCode}
-                onChange={(e) => setSearchParams({ ...searchParams, countyCode: e.target.value })}
-                placeholder="e.g., 19"
-              />
-            </div>
-            <div className="col-md-2">
-              <label className="form-label">Status</label>
-              <select
-                className="form-select"
-                value={searchParams.status}
-                onChange={(e) => setSearchParams({ ...searchParams, status: e.target.value })}
-              >
-                <option value="">All Statuses</option>
-                <option value="PENDING">Pending</option>
-                <option value="ELIGIBLE">Eligible</option>
-                <option value="PRESUMPTIVE_ELIGIBLE">Presumptive Eligible</option>
-                <option value="ON_LEAVE">On Leave</option>
-                <option value="DENIED">Denied</option>
-                <option value="TERMINATED">Terminated</option>
-                <option value="APPLICATION_WITHDRAWN">Application Withdrawn</option>
-              </select>
-            </div>
-            <div className="col-md-2">
-              <label className="form-label">Case Owner</label>
-              <input
-                type="text"
-                className="form-control"
-                value={searchParams.caseOwnerId}
-                onChange={(e) => setSearchParams({ ...searchParams, caseOwnerId: e.target.value })}
-                placeholder="Owner ID"
-              />
-            </div>
-          </div>
-          <div className="mt-3">
-            <button className="btn btn-primary me-2" onClick={handleSearch}>
-              <i className="bi bi-search me-2"></i>Search
-            </button>
-            <button className="btn btn-outline-secondary" onClick={handleClearSearch}>
-              <i className="bi bi-x-lg me-2"></i>Clear
+            <button
+              className="btn btn-primary"
+              onClick={() => router.push('/cases/new')}
+            >
+              <span className="ca-gov-icon-plus-line" aria-hidden="true"></span>
+              New Case
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* Cases Table */}
-      <div className="card">
-        <div className="card-header" style={{ backgroundColor: 'var(--color-p2, #046b99)', color: 'white' }}>
-          <h5 className="mb-0">Cases ({filteredCases.length})</h5>
-        </div>
-        <div className="card-body">
-          {filteredCases.length === 0 ? (
-            <p className="text-center text-muted py-4">No cases found</p>
-          ) : (
-            <div className="table-responsive">
-              <table className="table table-striped table-hover">
-                <thead>
-                  <tr>
-                    <th>Case Number</th>
-                    <th>CIN</th>
-                    <th>Type</th>
-                    <th>Status</th>
-                    <th>County</th>
-                    <th>Case Owner</th>
-                    <th>Authorized Hours</th>
-                    <th>Assessment</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredCases.map((caseEntity) => (
-                    <tr key={caseEntity.id}>
-                      <td>
-                        <a
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); router.push(`/cases/${caseEntity.id}`); }}
-                          className="text-primary fw-bold text-decoration-none"
-                        >
-                          {caseEntity.caseNumber || '-'}
-                        </a>
-                      </td>
-                      <td>{caseEntity.cin || '-'}</td>
-                      <td>{caseEntity.caseType || '-'}</td>
-                      <td>
-                        <span className={`badge ${getStatusBadgeClass(caseEntity.caseStatus)}`}>
-                          {caseEntity.caseStatus?.replace(/_/g, ' ') || '-'}
-                        </span>
-                      </td>
-                      <td>{caseEntity.countyCode || '-'}</td>
-                      <td>{caseEntity.caseOwnerId || '-'}</td>
-                      <td>{caseEntity.authorizedHoursMonthly ? `${caseEntity.authorizedHoursMonthly}/mo` : '-'}</td>
-                      <td>{caseEntity.assessmentType?.replace(/_/g, ' ') || '-'}</td>
-                      <td>
-                        <div className="btn-group btn-group-sm">
-                          <button
-                            className="btn btn-outline-primary"
-                            onClick={() => router.push(`/cases/${caseEntity.id}`)}
-                            title="View"
-                          >
-                            <i className="bi bi-eye"></i>
-                          </button>
-                          <button
-                            className="btn btn-outline-secondary"
-                            onClick={() => router.push(`/cases/${caseEntity.id}/edit`)}
-                            title="Edit"
-                          >
-                            <i className="bi bi-pencil"></i>
-                          </button>
-                          <button
-                            className="btn btn-outline-info"
-                            onClick={() => router.push(`/cases/${caseEntity.id}/notes`)}
-                            title="Notes"
-                          >
-                            <i className="bi bi-sticky"></i>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Statistics Cards */}
+          <div className={styles.statsGrid}>
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.primary}`}>{stats.total}</div>
+              <div className={styles.statLabel}>Total Cases</div>
             </div>
-          )}
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.warning}`}>{stats.pending}</div>
+              <div className={styles.statLabel}>Pending</div>
+            </div>
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.success}`}>{stats.eligible}</div>
+              <div className={styles.statLabel}>Eligible</div>
+            </div>
+            <div className={styles.statCard}>
+              <div className={`${styles.statValue} ${styles.danger}`}>{stats.dueForReassessment}</div>
+              <div className={styles.statLabel}>Due for Reassessment</div>
+            </div>
+          </div>
+
+          {/* Search Panel */}
+          <div className={styles.searchPanel}>
+            <div className={styles.searchHeader}>
+              <h3>Search Cases</h3>
+            </div>
+            <div className={styles.searchBody}>
+              <div className={styles.searchGrid}>
+                <div className={styles.searchField}>
+                  <label>Case Number</label>
+                  <input
+                    type="text"
+                    value={searchParams.caseNumber}
+                    onChange={(e) => setSearchParams({ ...searchParams, caseNumber: e.target.value })}
+                    placeholder="Enter case number"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>CIN</label>
+                  <input
+                    type="text"
+                    value={searchParams.cin}
+                    onChange={(e) => setSearchParams({ ...searchParams, cin: e.target.value })}
+                    placeholder="Enter CIN"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>County Code</label>
+                  <input
+                    type="text"
+                    value={searchParams.countyCode}
+                    onChange={(e) => setSearchParams({ ...searchParams, countyCode: e.target.value })}
+                    placeholder="e.g., 19"
+                  />
+                </div>
+                <div className={styles.searchField}>
+                  <label>Status</label>
+                  <select
+                    value={searchParams.status}
+                    onChange={(e) => setSearchParams({ ...searchParams, status: e.target.value })}
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="PENDING">Pending</option>
+                    <option value="ELIGIBLE">Eligible</option>
+                    <option value="PRESUMPTIVE_ELIGIBLE">Presumptive Eligible</option>
+                    <option value="ON_LEAVE">On Leave</option>
+                    <option value="DENIED">Denied</option>
+                    <option value="TERMINATED">Terminated</option>
+                    <option value="APPLICATION_WITHDRAWN">Application Withdrawn</option>
+                  </select>
+                </div>
+                <div className={styles.searchField}>
+                  <label>Case Owner</label>
+                  <input
+                    type="text"
+                    value={searchParams.caseOwnerId}
+                    onChange={(e) => setSearchParams({ ...searchParams, caseOwnerId: e.target.value })}
+                    placeholder="Owner ID"
+                  />
+                </div>
+              </div>
+              <div className={styles.searchActions}>
+                <button className="btn btn-primary" onClick={handleSearch} disabled={loading}>
+                  <span className="ca-gov-icon-search" aria-hidden="true"></span>
+                  {loading ? 'Searching...' : 'Search'}
+                </button>
+                <button className="btn btn-secondary" onClick={handleClearSearch}>
+                  <span className="ca-gov-icon-close-line" aria-hidden="true"></span>
+                  Clear
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Table */}
+          <div className={styles.resultsPanel}>
+            <div className={styles.resultsHeader}>
+              <h3>Cases</h3>
+              <span className={styles.resultsCount}>{filteredCases.length} results</span>
+            </div>
+            <div className={styles.resultsBody}>
+              {loading ? (
+                <div className={styles.loadingContainer}>
+                  <div className={styles.spinner}></div>
+                </div>
+              ) : filteredCases.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <div className={styles.emptyIcon}>📁</div>
+                  <h4>No cases found</h4>
+                  <p>Try adjusting your search criteria or create a new case.</p>
+                </div>
+              ) : (
+                <div className={styles.tableWrapper}>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>Case Number</th>
+                        <th>CIN</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>County</th>
+                        <th>Case Owner</th>
+                        <th>Authorized Hours</th>
+                        <th>Assessment</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCases.map((caseEntity) => (
+                        <tr key={caseEntity.id}>
+                          <td>
+                            <span
+                              className={styles.caseLink}
+                              onClick={() => router.push(`/cases/${caseEntity.id}`)}
+                            >
+                              {caseEntity.caseNumber || '-'}
+                            </span>
+                          </td>
+                          <td>{caseEntity.cin || '-'}</td>
+                          <td>{caseEntity.caseType || '-'}</td>
+                          <td>
+                            <span className={`${styles.badge} ${getStatusBadgeClass(caseEntity.caseStatus)}`}>
+                              {caseEntity.caseStatus?.replace(/_/g, ' ') || '-'}
+                            </span>
+                          </td>
+                          <td>{caseEntity.countyCode || '-'}</td>
+                          <td>{caseEntity.caseOwnerId || '-'}</td>
+                          <td>{caseEntity.authorizedHoursMonthly ? `${caseEntity.authorizedHoursMonthly}/mo` : '-'}</td>
+                          <td>{caseEntity.assessmentType?.replace(/_/g, ' ') || '-'}</td>
+                          <td>
+                            <div className={styles.actionButtons}>
+                              <button
+                                className={styles.actionBtn}
+                                onClick={() => router.push(`/cases/${caseEntity.id}`)}
+                                title="View"
+                              >
+                                <span className="ca-gov-icon-user" aria-hidden="true"></span>
+                              </button>
+                              <button
+                                className={styles.actionBtn}
+                                onClick={() => router.push(`/cases/${caseEntity.id}/edit`)}
+                                title="Edit"
+                              >
+                                <span className="ca-gov-icon-edit" aria-hidden="true"></span>
+                              </button>
+                              <button
+                                className={styles.actionBtn}
+                                onClick={() => router.push(`/cases/${caseEntity.id}/notes`)}
+                                title="Notes"
+                              >
+                                <span className="ca-gov-icon-file-text" aria-hidden="true"></span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className={styles.pagination}>
+                  <button
+                    className={styles.paginationBtn}
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 0}
+                  >
+                    &larr; Previous
+                  </button>
+                  <span className={styles.pageInfo}>
+                    Page {currentPage + 1} of {totalPages} ({totalElements} total)
+                  </span>
+                  <button
+                    className={styles.paginationBtn}
+                    onClick={handleNextPage}
+                    disabled={currentPage >= totalPages - 1}
+                  >
+                    Next &rarr;
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

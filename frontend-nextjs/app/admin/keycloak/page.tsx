@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
+import { canAccessDashboard, MAIN_DASHBOARD_URL } from '@/lib/roleDashboardMapping';
 import FieldMaskingTab from '@/app/supervisor/dashboard/components/FieldMaskingTab';
 
 const API_BASE_URL = '/admin/keycloak';
@@ -218,8 +219,14 @@ export default function AdminKeycloakPageComponent() {
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user || (user.role !== 'ADMIN' && !user.roles?.includes('ADMIN'))) {
+    if (!user) {
       window.location.href = '/login';
+      return;
+    }
+    const roles = user.roles || [];
+    const hasAccess = canAccessDashboard(roles, 'ADMIN');
+    if (!hasAccess) {
+      window.location.href = MAIN_DASHBOARD_URL;
       return;
     }
   }, [user, authLoading]);

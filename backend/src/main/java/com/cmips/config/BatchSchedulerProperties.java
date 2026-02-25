@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * Configuration properties for the Batch Scheduler integration.
- * Defines how this Trial app connects to and interacts with the Scheduler app.
+ * Defines how this CMIPS backend connects to and interacts with the Scheduler app.
  */
 @ConfigurationProperties(prefix = "batch-scheduler")
 @Data

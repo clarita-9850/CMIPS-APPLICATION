@@ -22,7 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 /**
- * Spring Batch Configuration for Trial Application with Virtual Threads
+ * Spring Batch Configuration for CMIPS Backend with Virtual Threads
  *
  * Virtual Thread Benefits (Java 21+):
  * ┌─────────────────────────────────────────────────────────────────────┐

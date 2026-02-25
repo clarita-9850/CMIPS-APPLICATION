@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.Timesheet;
 import com.cmips.entity.TimesheetStatus;
 import com.cmips.repository.TimesheetRepository;
@@ -32,6 +33,7 @@ public class AnalyticsController {
      * Get real-time metrics for dashboard
      */
     @GetMapping("/realtime-metrics")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getRealTimeMetrics(
             @RequestParam(required = false) String districtId,
             @RequestParam(required = false) String county,
@@ -144,6 +146,7 @@ public class AnalyticsController {
      * Get filter options
      */
     @GetMapping("/filters")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getFilterOptions() {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -192,6 +195,7 @@ public class AnalyticsController {
      * Returns locations (county codes) that match what's in the database
      */
     @GetMapping("/adhoc-filters")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getAdhocFilterOptions() {
         Map<String, Object> response = new HashMap<>();
         try {
@@ -245,6 +249,7 @@ public class AnalyticsController {
      * Get adhoc statistics
      */
     @GetMapping("/adhoc-stats")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getAdhocStats(
             @RequestParam(required = false) String county,
             @RequestParam(required = false) String department,
@@ -303,6 +308,7 @@ public class AnalyticsController {
      * Get adhoc data rows
      */
     @GetMapping("/adhoc-data")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getAdhocData(
             @RequestParam(required = false) String county,
             @RequestParam(required = false) String department,
@@ -378,6 +384,7 @@ public class AnalyticsController {
      * Get demographic data by gender
      */
     @GetMapping("/demographics/gender")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getDemographicsByGender(
             @RequestParam(required = false) String county) {
         Map<String, Object> response = new HashMap<>();
@@ -403,6 +410,7 @@ public class AnalyticsController {
      * Get demographic data by ethnicity
      */
     @GetMapping("/demographics/ethnicity")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getDemographicsByEthnicity(
             @RequestParam(required = false) String districtId) {
         Map<String, Object> response = new HashMap<>();
@@ -428,6 +436,7 @@ public class AnalyticsController {
      * Get demographic data by age
      */
     @GetMapping("/demographics/age")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getDemographicsByAge(
             @RequestParam(required = false) String county) {
         Map<String, Object> response = new HashMap<>();
@@ -453,6 +462,7 @@ public class AnalyticsController {
      * Health check for analytics endpoint
      */
     @GetMapping("/health")
+    @RequirePermission(resource = "Quality Assurance Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> health = new HashMap<>();
         health.put("status", "UP");

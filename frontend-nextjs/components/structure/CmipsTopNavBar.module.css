@@ -1,0 +1,225 @@
+.topNavContainer {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.unifiedHeader {
+  background-color: #153554;
+  color: #fff;
+  padding: 0.75rem 0;
+  border-bottom: 3px solid #0d2a3a;
+  background: linear-gradient(135deg, #153554 0%, #1a4060 100%);
+}
+
+.container {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0 2rem;
+}
+
+.unifiedHeaderContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cdssLogo {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+.cdssText {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cdssLabel {
+  font-size: 0.75rem;
+  color: #ccc;
+  font-weight: 400;
+}
+
+.cdssSubtitle {
+  font-size: 0.9rem;
+  color: white;
+  font-weight: 500;
+  display: block;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+}
+
+.appBarContent {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  cursor: default;
+}
+
+.userIcon {
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.userName {
+  font-weight: 500;
+  color: #fff;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  color: #666;
+}
+
+.appBarLink {
+  color: #fff;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.appBarLink:hover {
+  color: #7BB0DA;
+  text-decoration: underline;
+}
+
+.logoutLink {
+  color: #fff;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: color 0.2s;
+}
+
+.logoutLink:hover {
+  color: #7BB0DA;
+  text-decoration: underline;
+}
+
+.workspaceTabsContainer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+  padding: 0 1.5rem;
+}
+
+.workspaceTabs {
+  display: flex;
+  gap: 0;
+  flex: 1;
+}
+
+.workspaceTab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #495057;
+  transition: all 0.2s;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.workspaceTab:hover {
+  background-color: #e9ecef;
+  color: #153554;
+}
+
+.workspaceTab.active {
+  color: #153554;
+  border-bottom-color: #153554;
+  background-color: #fff;
+  font-weight: 600;
+}
+
+.caseSearchContainer {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.caseSearchForm {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.caseSearchLabel {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #495057;
+  margin: 0;
+}
+
+.caseSearchInput {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 200px;
+  transition: border-color 0.2s;
+}
+
+.caseSearchInput:focus {
+  outline: none;
+  border-color: #153554;
+  box-shadow: 0 0 0 2px rgba(21, 53, 84, 0.1);
+}
+
+.caseSearchButton {
+  padding: 0.4rem 1rem;
+  background-color: #153554;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.caseSearchButton:hover {
+  background-color: #0d2a3a;
+}

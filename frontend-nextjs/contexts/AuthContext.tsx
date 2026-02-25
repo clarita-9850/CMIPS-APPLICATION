@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import apiClient from '@/lib/api';
+import { collectRolesFromJwt, getDashboardForRoles, DASHBOARD_URLS, type DashboardType } from '@/lib/roleDashboardMapping';
 
 const AuthContext = createContext<any>(null);
 
@@ -52,6 +53,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🔐 [AuthContext] ✅ Valid auth found, setting user');
       setToken(storedToken);
       const parsedUser = JSON.parse(storedUser);
+      
+      // Recompute primary role from roles array (all Keycloak roles mapped to dashboard)
+      const roles: string[] = parsedUser.roles || [];
+      const primaryRole = getDashboardForRoles(roles) as string;
+      if (primaryRole !== parsedUser.role) {
+        parsedUser.role = primaryRole;
+        localStorage.setItem('user', JSON.stringify(parsedUser));
+      }
       
       // If county is not in stored user, try to extract from token
       if (!parsedUser.county) {
@@ -143,14 +152,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🔍 [AUTH] realm_access:', decoded.realm_access);
       console.log('🔍 [AUTH] realm_access.groups:', decoded.realm_access?.groups);
       
-      const roles: string[] = decoded.realm_access?.roles || [];
-
-      let primaryRole = 'USER';
-      if (roles.includes('ADMIN')) primaryRole = 'ADMIN';
-      else if (roles.includes('SUPERVISOR')) primaryRole = 'SUPERVISOR';
-      else if (roles.includes('CASE_WORKER')) primaryRole = 'CASE_WORKER';
-      else if (roles.includes('PROVIDER')) primaryRole = 'PROVIDER';
-      else if (roles.includes('RECIPIENT')) primaryRole = 'RECIPIENT';
+      // Collect all roles from realm + client (resource_access)
+      const roles = collectRolesFromJwt(decoded as Record<string, unknown>);
+      const primaryRole = getDashboardForRoles(roles) as DashboardType;
 
       // Extract county from JWT token
       // First check for groups (CTA, CTB, CTC are Keycloak groups)

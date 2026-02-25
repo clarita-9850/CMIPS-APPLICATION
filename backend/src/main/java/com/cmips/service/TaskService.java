@@ -98,6 +98,38 @@ public class TaskService {
         return queueCounts;
     }
 
+    // Reserved tasks
+    public List<Task> getReservedTasks(String reservedBy) {
+        return taskRepository.findByReservedBy(reservedBy);
+    }
+
+    public List<Task> getReservedTasksByStatus(String reservedBy, Task.TaskStatus status) {
+        return taskRepository.findByReservedByAndStatus(reservedBy, status);
+    }
+
+    // Deferred tasks
+    public List<Task> getDeferredTasks(String deferredBy) {
+        return taskRepository.findByDeferredBy(deferredBy);
+    }
+
+    public List<Task> getDeferredTasksByStatus(String deferredBy, Task.TaskStatus status) {
+        return taskRepository.findByDeferredByAndStatus(deferredBy, status);
+    }
+
+    // Search
+    public List<Task> getTasksByCaseNumber(String caseNumber) {
+        return taskRepository.findByCaseNumber(caseNumber);
+    }
+
+    public List<Task> searchTasks(String keyword) {
+        return taskRepository.searchByKeyword(keyword);
+    }
+
+    // Queue task count by status
+    public Long getQueueTaskCountByStatus(String queueName, Task.TaskStatus status) {
+        return taskRepository.countByWorkQueueAndStatus(queueName, status);
+    }
+
     /**
      * Get tasks from queues that a user is subscribed to
      */

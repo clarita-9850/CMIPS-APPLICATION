@@ -1,12 +1,12 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.ReferralEntity;
 import com.cmips.entity.ReferralEntity.*;
 import com.cmips.service.ReferralService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -39,7 +39,7 @@ public class ReferralController {
      * Create a new referral
      */
     @PostMapping
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "create")
     public ResponseEntity<?> createReferral(@RequestBody ReferralEntity referral) {
         try {
             String userId = getCurrentUserId();
@@ -56,7 +56,7 @@ public class ReferralController {
      * Create an external agency referral
      */
     @PostMapping("/external")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "create")
     public ResponseEntity<?> createExternalReferral(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -86,7 +86,7 @@ public class ReferralController {
      * Update referral status
      */
     @PatchMapping("/{referralId}/status")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "edit")
     public ResponseEntity<?> updateStatus(@PathVariable String referralId,
                                            @RequestBody Map<String, String> request) {
         try {
@@ -106,7 +106,7 @@ public class ReferralController {
      * Assign referral to worker
      */
     @PatchMapping("/{referralId}/assign")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "assign")
     public ResponseEntity<?> assignToWorker(@PathVariable String referralId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -127,7 +127,7 @@ public class ReferralController {
      * Set follow-up date
      */
     @PatchMapping("/{referralId}/follow-up")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "edit")
     public ResponseEntity<?> setFollowUp(@PathVariable String referralId,
                                           @RequestBody Map<String, String> request) {
         try {
@@ -147,7 +147,7 @@ public class ReferralController {
      * Update referral priority
      */
     @PatchMapping("/{referralId}/priority")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "edit")
     public ResponseEntity<?> updatePriority(@PathVariable String referralId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -169,7 +169,7 @@ public class ReferralController {
      * Close referral
      */
     @PostMapping("/{referralId}/close")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "close")
     public ResponseEntity<?> closeReferral(@PathVariable String referralId,
                                             @RequestBody Map<String, String> request) {
         try {
@@ -190,7 +190,7 @@ public class ReferralController {
      * Reopen closed referral (within 30 days)
      */
     @PostMapping("/{referralId}/reopen")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "reopen")
     public ResponseEntity<?> reopenReferral(@PathVariable String referralId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -212,7 +212,7 @@ public class ReferralController {
      * Convert referral to application
      */
     @PostMapping("/{referralId}/convert")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "convert")
     public ResponseEntity<?> convertToApplication(@PathVariable String referralId,
                                                    @RequestBody Map<String, Object> request) {
         try {
@@ -234,7 +234,7 @@ public class ReferralController {
      * Link referral to existing recipient
      */
     @PostMapping("/{referralId}/link-recipient")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "edit")
     public ResponseEntity<?> linkToRecipient(@PathVariable String referralId,
                                               @RequestBody Map<String, Object> request) {
         try {
@@ -256,7 +256,7 @@ public class ReferralController {
      * Get referral by ID
      */
     @GetMapping("/{referralId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getReferral(@PathVariable String referralId) {
         try {
             ReferralEntity referral = referralService.getReferralById(referralId);
@@ -271,7 +271,7 @@ public class ReferralController {
      * Get all referrals (with optional filters)
      */
     @GetMapping
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getReferrals(
             @RequestParam(required = false) String countyCode,
             @RequestParam(required = false) String status,
@@ -303,7 +303,7 @@ public class ReferralController {
      * Get open referrals
      */
     @GetMapping("/open")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getOpenReferrals(@RequestParam(required = false) String countyCode) {
         try {
             List<ReferralEntity> referrals;
@@ -323,7 +323,7 @@ public class ReferralController {
      * Get urgent referrals
      */
     @GetMapping("/urgent")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getUrgentReferrals(@RequestParam(required = false) String countyCode) {
         try {
             List<ReferralEntity> referrals;
@@ -343,7 +343,7 @@ public class ReferralController {
      * Get referrals needing follow-up
      */
     @GetMapping("/follow-up")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getReferralsNeedingFollowUp(@RequestParam(required = false) String countyCode) {
         try {
             List<ReferralEntity> referrals;
@@ -363,7 +363,7 @@ public class ReferralController {
      * Search referrals with multiple criteria
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> searchReferrals(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String countyCode,
@@ -395,7 +395,7 @@ public class ReferralController {
      * Get referral statistics by county
      */
     @GetMapping("/stats/{countyCode}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Referral Resource", scope = "view")
     public ResponseEntity<?> getReferralStats(@PathVariable String countyCode) {
         try {
             Map<String, Object> stats = new HashMap<>();

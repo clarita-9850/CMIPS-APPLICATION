@@ -1,7 +1,9 @@
 package com.cmips.controller;
 
 import com.cmips.entity.Task;
+import com.cmips.repository.WorkQueueRepository;
 import com.cmips.service.TaskService;
+import com.cmips.service.TaskLifecycleService;
 import com.cmips.service.WorkQueueSubscriptionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,7 +24,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for TaskController
- * 
+ *
  * Tests cover:
  * - CRUD operations
  * - Task status management
@@ -37,7 +39,13 @@ class TaskControllerTest {
     private TaskService taskService;
 
     @Mock
+    private TaskLifecycleService lifecycleService;
+
+    @Mock
     private WorkQueueSubscriptionService subscriptionService;
+
+    @Mock
+    private WorkQueueRepository workQueueRepository;
 
     @InjectMocks
     private TaskController taskController;
@@ -48,48 +56,6 @@ class TaskControllerTest {
     @BeforeEach
     void setUp() {
         // Setup can be added here if needed
-    }
-
-    @Test
-    @DisplayName("Should get user tasks successfully")
-    void testGetUserTasks_Success() {
-        // Arrange
-        List<Task> mockTasks = createMockTasks(2);
-        when(taskService.getUserTasks(TEST_USERNAME)).thenReturn(mockTasks);
-
-        // Act
-        ResponseEntity<List<Task>> response = taskController.getUserTasks(TEST_USERNAME, false);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().size());
-        verify(taskService, times(1)).getUserTasks(TEST_USERNAME);
-    }
-
-    @Test
-    @DisplayName("Should get user tasks with subscribed queues")
-    void testGetUserTasks_WithSubscribedQueues() {
-        // Arrange
-        List<Task> userTasks = createMockTasks(2);
-        List<Task> queueTasks = createMockTasks(1);
-        List<String> subscribedQueues = Arrays.asList(TEST_QUEUE);
-
-        when(taskService.getUserTasks(TEST_USERNAME)).thenReturn(userTasks);
-        when(subscriptionService.getUserQueues(TEST_USERNAME)).thenReturn(subscribedQueues);
-        when(taskService.getTasksFromSubscribedQueues(TEST_USERNAME, subscribedQueues))
-                .thenReturn(queueTasks);
-
-        // Act
-        ResponseEntity<List<Task>> response = taskController.getUserTasks(TEST_USERNAME, true);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        verify(taskService, times(1)).getUserTasks(TEST_USERNAME);
-        verify(subscriptionService, times(1)).getUserQueues(TEST_USERNAME);
     }
 
     @Test
@@ -153,12 +119,12 @@ class TaskControllerTest {
     void testGetTaskCounts_Success() {
         // Arrange
         Long openCount = 5L;
-        Long inProgressCount = 3L;
+        Long reservedCount = 3L;
         Long closedCount = 2L;
 
         when(taskService.getUserTaskCount(TEST_USERNAME)).thenReturn(openCount);
-        when(taskService.getUserTaskCountByStatus(TEST_USERNAME, Task.TaskStatus.IN_PROGRESS))
-                .thenReturn(inProgressCount);
+        when(taskService.getUserTaskCountByStatus(TEST_USERNAME, Task.TaskStatus.RESERVED))
+                .thenReturn(reservedCount);
         when(taskService.getUserTaskCountByStatus(TEST_USERNAME, Task.TaskStatus.CLOSED))
                 .thenReturn(closedCount);
 
@@ -170,7 +136,7 @@ class TaskControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(openCount, response.getBody().get("open"));
-        assertEquals(inProgressCount, response.getBody().get("inProgress"));
+        assertEquals(reservedCount, response.getBody().get("reserved"));
         assertEquals(closedCount, response.getBody().get("closed"));
     }
 
@@ -219,10 +185,10 @@ class TaskControllerTest {
     void testUpdateTaskStatus_Success() {
         // Arrange
         Long taskId = 1L;
-        Map<String, String> request = Map.of("status", "IN_PROGRESS");
+        Map<String, String> request = Map.of("status", "RESERVED");
         Task updatedTask = createMockTask(taskId);
-        updatedTask.setStatus(Task.TaskStatus.IN_PROGRESS);
-        when(taskService.updateTaskStatus(taskId, Task.TaskStatus.IN_PROGRESS))
+        updatedTask.setStatus(Task.TaskStatus.RESERVED);
+        when(taskService.updateTaskStatus(taskId, Task.TaskStatus.RESERVED))
                 .thenReturn(updatedTask);
 
         // Act
@@ -232,8 +198,8 @@ class TaskControllerTest {
         assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
-        assertEquals(Task.TaskStatus.IN_PROGRESS, response.getBody().getStatus());
-        verify(taskService, times(1)).updateTaskStatus(taskId, Task.TaskStatus.IN_PROGRESS);
+        assertEquals(Task.TaskStatus.RESERVED, response.getBody().getStatus());
+        verify(taskService, times(1)).updateTaskStatus(taskId, Task.TaskStatus.RESERVED);
     }
 
     @Test
@@ -250,43 +216,6 @@ class TaskControllerTest {
         assertNotNull(response);
         assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
         verify(taskService, times(1)).deleteTask(taskId);
-    }
-
-    @Test
-    @DisplayName("Should get queue tasks successfully")
-    void testGetQueueTasks_Success() {
-        // Arrange
-        List<Task> mockTasks = createMockTasks(3);
-        when(taskService.getQueueTasks(TEST_QUEUE)).thenReturn(mockTasks);
-
-        // Act
-        ResponseEntity<List<Task>> response = taskController.getQueueTasks(TEST_QUEUE);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(3, response.getBody().size());
-        verify(taskService, times(1)).getQueueTasks(TEST_QUEUE);
-    }
-
-    @Test
-    @DisplayName("Should get queue tasks by role successfully")
-    void testGetQueueTasksByRole_Success() {
-        // Arrange
-        String role = "CASE_WORKER";
-        List<Task> mockTasks = createMockTasks(2);
-        when(taskService.getQueueTasksByRole(TEST_QUEUE, role)).thenReturn(mockTasks);
-
-        // Act
-        ResponseEntity<List<Task>> response = taskController.getQueueTasksByRole(TEST_QUEUE, role);
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().size());
-        verify(taskService, times(1)).getQueueTasksByRole(TEST_QUEUE, role);
     }
 
     @Test
@@ -335,10 +264,3 @@ class TaskControllerTest {
         return tasks;
     }
 }
-
-
-
-
-
-
-

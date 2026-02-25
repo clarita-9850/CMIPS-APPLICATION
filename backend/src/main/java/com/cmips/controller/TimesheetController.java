@@ -3,6 +3,7 @@ package com.cmips.controller;
 import com.cmips.dto.TimesheetCreateRequest;
 import com.cmips.dto.TimesheetResponse;
 import com.cmips.dto.TimesheetUpdateRequest;
+import com.cmips.model.UserRole;
 import com.cmips.service.FieldLevelAuthorizationService;
 import com.cmips.service.KeycloakAuthorizationService;
 import com.cmips.service.TimesheetService;
@@ -21,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -84,21 +84,20 @@ public class TimesheetController {
     }
 
     @PostMapping("/{id}/submit")
+    @RequirePermission(resource = "Timesheet Resource", scope = "submit", message = "You don't have permission to submit timesheets")
     public ResponseEntity<?> submitTimesheet(@PathVariable Long id, HttpServletRequest httpRequest) {
         try {
             String userId = getCurrentUserId();
-            Set<String> roles = getCurrentUserRoles();
-
-            if (!keycloakAuthzService.hasRole(roles, "PROVIDER")) {
-                logger.warn("Access denied for timesheet submission for user {} with roles {}", userId, roles);
-                return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body("{\"error\":\"Access denied\",\"message\":\"You don't have permission to submit timesheets\"}");
-            }
 
             return timesheetService.submitTimesheet(id, userId)
                 .map(response -> {
+                    // Apply read filtering to the response
+                    Map<String, Object> responseMap = convertTimesheetResponseToMap(response);
+                    Map<String, Object> filteredResponseMap = fieldLevelAuthzService.filterFields(
+                        responseMap, "Timesheet Resource", "read");
+
                     logger.info("Timesheet {} submitted successfully", id);
-                    return ResponseEntity.ok(response);
+                    return ResponseEntity.ok(filteredResponseMap);
                 })
                 .orElse(ResponseEntity.notFound().build());
 
@@ -282,25 +281,30 @@ public class TimesheetController {
     }
 
     @GetMapping
-    @RequirePermission(resource = "Timesheet Resource", scope = "read", message = "You don't have permission to read timesheets")
+    @RequirePermission(resource = "Timesheet Resource", scope = "view", message = "You don't have permission to read timesheets")
     public ResponseEntity<?> getTimesheets(Pageable pageable, HttpServletRequest httpRequest) {
         try {
             String userId = getCurrentUserId();
-            Set<String> roles = getCurrentUserRoles();
+            Set<UserRole> userRoles = keycloakAuthzService.extractUserRoles();
             Page<TimesheetResponse> timesheets;
 
-            if (keycloakAuthzService.hasRole(roles, "PROVIDER")) {
-                timesheets = timesheetService.getTimesheetsByUserId(userId, pageable);
-                logger.info("Provider {} requested their timesheets. Found {} timesheets.", userId, timesheets.getTotalElements());
-            } else if (keycloakAuthzService.hasRole(roles, "RECIPIENT")) {
-                // Recipients should see timesheets submitted to them (or all submitted for now)
+            // Data scoping based on user role (which timesheets to return)
+            if (keycloakAuthzService.hasRole(userRoles, UserRole.ADMIN)
+                || keycloakAuthzService.hasRole(userRoles, UserRole.SUPERVISOR)
+                || keycloakAuthzService.hasRole(userRoles, UserRole.CASE_WORKER)) {
+                // Staff roles see all timesheets
+                timesheets = timesheetService.getAllTimesheets(pageable);
+                logger.info("Staff user {} requested all timesheets. Found {} timesheets.", userId, timesheets.getTotalElements());
+            } else if (keycloakAuthzService.hasRole(userRoles, UserRole.RECIPIENT)) {
+                // Recipients see timesheets submitted to them
                 timesheets = timesheetService.getSubmittedTimesheets(pageable);
                 logger.info("Recipient {} requested submitted timesheets. Found {} timesheets.", userId, timesheets.getTotalElements());
-            } else if (keycloakAuthzService.hasRole(roles, "CASE_WORKER") || keycloakAuthzService.hasRole(roles, "SUPERVISOR")) {
-                timesheets = timesheetService.getAllTimesheets(pageable);
-                logger.info("Case Worker/Supervisor {} requested all timesheets. Found {} timesheets.", userId, timesheets.getTotalElements());
+            } else if (keycloakAuthzService.hasRole(userRoles, UserRole.PROVIDER)) {
+                // Providers see only their own timesheets
+                timesheets = timesheetService.getTimesheetsByUserId(userId, pageable);
+                logger.info("Provider {} requested their timesheets. Found {} timesheets.", userId, timesheets.getTotalElements());
             } else {
-                logger.warn("Access denied for timesheet read for user {} with roles {}", userId, roles);
+                logger.warn("Access denied for timesheet read for user {} with roles {}", userId, userRoles);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                     .body("{\"error\":\"Access denied\",\"message\":\"You don't have permission to read timesheets\"}");
             }
@@ -346,7 +350,7 @@ public class TimesheetController {
     }
     
     @GetMapping("/actions")
-    @RequirePermission(resource = "Timesheet Resource", scope = "read", message = "You don't have permission to read timesheets")
+    @RequirePermission(resource = "Timesheet Resource", scope = "view", message = "You don't have permission to read timesheets")
     public ResponseEntity<?> getAllowedActions() {
         try {
             // Get allowed actions for the current user from Keycloak attributes
@@ -400,19 +404,6 @@ public class TimesheetController {
         return null;
     }
 
-    private Set<String> getCurrentUserRoles() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof Jwt) {
-            Jwt jwt = (Jwt) authentication.getPrincipal();
-            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
-            if (realmAccess != null && realmAccess.containsKey("roles")) {
-                @SuppressWarnings("unchecked")
-                List<String> rolesList = (List<String>) realmAccess.get("roles");
-                return new HashSet<>(rolesList);
-            }
-        }
-        return Set.of();
-    }
 
     /**
      * Converts TimesheetResponse to Map for field filtering

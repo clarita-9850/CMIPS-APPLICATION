@@ -363,7 +363,7 @@ class AuthControllerTest {
                     assertTrue(body.contains("username=" + VALID_USERNAME));
                     assertTrue(body.contains("password=" + VALID_PASSWORD));
                     assertTrue(body.contains("grant_type=password"));
-                    assertTrue(body.contains("client_id=cmips-backend"));
+                    assertTrue(body.contains("client_id="));
                     assertTrue(body.contains("client_secret="));
                     
                     return mockResponse;

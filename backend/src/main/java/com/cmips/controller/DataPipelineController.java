@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.model.*;
 import com.cmips.service.FieldMaskingService;
 import com.cmips.service.FieldVisibilityService;
@@ -65,6 +66,7 @@ public class DataPipelineController {
      * Enhanced 5-Stage Data Processing Pipeline
      */
     @PostMapping("/extract-enhanced")
+    @RequirePermission(resource = "Batch Job Resource", scope = "trigger")
     public ResponseEntity<Map<String, Object>> extractDataEnhanced(@RequestBody PipelineExtractionRequest request, HttpServletRequest httpRequest) {
         Map<String, Object> response = new HashMap<>();
         
@@ -175,6 +177,7 @@ public class DataPipelineController {
      * Get field masking rules for a user role
      */
     @GetMapping("/masking-rules/{userRole}")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getMaskingRules(@PathVariable String userRole) {
         Map<String, Object> response = new HashMap<>();
         
@@ -205,6 +208,7 @@ public class DataPipelineController {
      * Update field masking rules for a user role
      */
     @PostMapping("/masking-rules/{userRole}")
+    @RequirePermission(resource = "Batch Job Resource", scope = "trigger")
     public ResponseEntity<Map<String, Object>> updateMaskingRules(
             @PathVariable String userRole, 
             @RequestBody List<FieldMaskingRule> rules) {
@@ -237,6 +241,7 @@ public class DataPipelineController {
      * Get available user roles
      */
     @GetMapping("/user-roles")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getUserRoles() {
         Map<String, Object> response = new HashMap<>();
         
@@ -265,6 +270,7 @@ public class DataPipelineController {
      * Get available counties for access control
      */
     @GetMapping("/counties")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getAvailableCounties() {
         Map<String, Object> response = new HashMap<>();
         
@@ -293,6 +299,7 @@ public class DataPipelineController {
      * Get available report types
      */
     @GetMapping("/report-types")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getReportTypes() {
         Map<String, Object> response = new HashMap<>();
         
@@ -325,6 +332,7 @@ public class DataPipelineController {
      * Generate report with field masking
      */
     @PostMapping("/generate-report")
+    @RequirePermission(resource = "Batch Job Resource", scope = "trigger")
     public ResponseEntity<Map<String, Object>> generateReport(@RequestBody Map<String, Object> request, HttpServletRequest httpRequest) {
         Map<String, Object> response = new HashMap<>();
         
@@ -595,6 +603,7 @@ public class DataPipelineController {
      * Get pipeline status
      */
     @GetMapping("/status")
+    @RequirePermission(resource = "Batch Job Resource", scope = "status")
     public ResponseEntity<Map<String, Object>> getPipelineStatus() {
         Map<String, Object> response = new HashMap<>();
         
@@ -655,6 +664,7 @@ public class DataPipelineController {
      * Get field visibility information for a specific role
      */
     @GetMapping("/field-visibility/{userRole}")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getFieldVisibility(@PathVariable String userRole) {
         Map<String, Object> response = new HashMap<>();
         
@@ -674,6 +684,7 @@ public class DataPipelineController {
      * Get all available fields across all roles
      */
     @GetMapping("/available-fields")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> getAvailableFields() {
         Map<String, Object> response = new HashMap<>();
         
@@ -694,6 +705,7 @@ public class DataPipelineController {
      * Compare multiple roles
      */
     @PostMapping("/compare-roles")
+    @RequirePermission(resource = "Batch Job Resource", scope = "view")
     public ResponseEntity<Map<String, Object>> compareRoles(@RequestBody Map<String, Object> request, HttpServletRequest httpRequest) {
         Map<String, Object> response = new HashMap<>();
         

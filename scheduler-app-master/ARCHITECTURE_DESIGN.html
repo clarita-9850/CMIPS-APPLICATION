@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch Job Scheduler - Architecture & Workflow Design (Spring Batch)</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary: #046B99;
+            --primary-dark: #034766;
+            --accent: #FDB81E;
+            --success: #28A745;
+            --warning: #FFC107;
+            --info: #17A2B8;
+            --danger: #DC3545;
+            --purple: #6F42C1;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .nav-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .nav-brand-icon {
+            background: rgba(255,255,255,0.2);
+            padding: 0.5rem;
+            border-radius: 8px;
+        }
+
+        .nav h1 {
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .nav-badge {
+            background: var(--accent);
+            color: var(--gray-800);
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .nav-links a {
+            color: rgba(255,255,255,0.85);
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.15);
+            color: white;
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 6rem 2rem 4rem;
+        }
+
+        /* Section Styles */
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            padding-bottom: 1.25rem;
+            border-bottom: 2px solid var(--gray-100);
+        }
+
+        .section-number {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            box-shadow: 0 2px 8px rgba(4, 107, 153, 0.3);
+        }
+
+        .section-title {
+            font-size: 1.75rem;
+            color: var(--gray-800);
+            font-weight: 600;
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #0891B2 100%);
+            color: white;
+            padding: 4rem;
+            border-radius: 20px;
+            margin-bottom: 3rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 60%;
+            height: 200%;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.1) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .hero h1 {
+            font-size: 2.75rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+            position: relative;
+        }
+
+        .hero-subtitle {
+            font-size: 1.3rem;
+            opacity: 0.95;
+            max-width: 800px;
+            margin: 0 auto 1.5rem;
+            position: relative;
+        }
+
+        .hero-tech-badges {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+            position: relative;
+        }
+
+        .tech-badge {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 0.5rem 1.25rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+
+        .hero-meta {
+            margin-top: 2.5rem;
+            display: flex;
+            justify-content: center;
+            gap: 3rem;
+            font-size: 0.9rem;
+            opacity: 0.8;
+            position: relative;
+        }
+
+        /* Key Principle Box */
+        .principle-box {
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 2px solid #10B981;
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .principle-box h3 {
+            color: #065F46;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+        }
+
+        .principle-box .principle-grid {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            gap: 2rem;
+            align-items: center;
+            margin-top: 1.5rem;
+        }
+
+        .principle-item {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .principle-item h4 {
+            color: var(--primary);
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .principle-item p {
+            color: var(--gray-600);
+            font-size: 0.95rem;
+        }
+
+        .principle-arrow {
+            font-size: 2rem;
+            color: #10B981;
+        }
+
+        /* Diagram Container */
+        .diagram-container {
+            background: linear-gradient(180deg, var(--gray-50) 0%, white 100%);
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            padding: 2rem;
+            margin: 1.5rem 0;
+            overflow-x: auto;
+        }
+
+        .diagram-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .diagram-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--accent) 0%, var(--warning) 100%);
+            border-radius: 2px;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.75rem;
+            border: 1px solid var(--gray-200);
+            transition: all 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+        }
+
+        .card.scheduler::before { background: linear-gradient(90deg, var(--primary) 0%, var(--info) 100%); }
+        .card.cmips::before { background: linear-gradient(90deg, var(--success) 0%, #10B981 100%); }
+        .card.spring-batch::before { background: linear-gradient(90deg, var(--purple) 0%, #8B5CF6 100%); }
+        .card.shared::before { background: linear-gradient(90deg, var(--accent) 0%, var(--warning) 100%); }
+
+        .card:hover {
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .card.scheduler .card-icon { background: #E0F2FE; }
+        .card.cmips .card-icon { background: #D1FAE5; }
+        .card.spring-batch .card-icon { background: #EDE9FE; }
+
+        .card h4 {
+            font-size: 1.15rem;
+            color: var(--gray-800);
+            margin-bottom: 1rem;
+        }
+
+        .card ul {
+            list-style: none;
+            font-size: 0.95rem;
+        }
+
+        .card ul li {
+            padding: 0.5rem 0;
+            color: var(--gray-600);
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .card ul li::before {
+            content: '✓';
+            color: var(--success);
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        /* Comparison Table */
+        .comparison-container {
+            margin: 2rem 0;
+        }
+
+        .comparison-header {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .comparison-header > div {
+            text-align: center;
+            font-weight: 600;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+
+        .comparison-header .header-feature { background: var(--gray-100); }
+        .comparison-header .header-before { background: #FEE2E2; color: #991B1B; }
+        .comparison-header .header-after { background: #D1FAE5; color: #065F46; }
+
+        .comparison-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem 0;
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        .comparison-row > div {
+            padding: 0.5rem 1rem;
+        }
+
+        .comparison-row .feature { font-weight: 500; color: var(--gray-700); }
+        .comparison-row .before { color: var(--gray-500); font-size: 0.9rem; }
+        .comparison-row .after { color: var(--gray-700); font-size: 0.9rem; }
+
+        /* Tables */
+        .table-container {
+            overflow-x: auto;
+            margin: 1.5rem 0;
+            border-radius: 12px;
+            border: 1px solid var(--gray-200);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 1rem 1.25rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-100);
+        }
+
+        th {
+            background: var(--gray-50);
+            font-weight: 600;
+            color: var(--gray-700);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: var(--gray-50);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.3rem 0.85rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            gap: 0.35rem;
+        }
+
+        .badge-primary { background: #DBEAFE; color: #1E40AF; }
+        .badge-success { background: #D1FAE5; color: #065F46; }
+        .badge-warning { background: #FEF3C7; color: #92400E; }
+        .badge-danger { background: #FEE2E2; color: #991B1B; }
+        .badge-info { background: #E0E7FF; color: #3730A3; }
+        .badge-purple { background: #EDE9FE; color: #5B21B6; }
+        .badge-gray { background: var(--gray-100); color: var(--gray-600); }
+
+        /* Spring Batch Specific */
+        .spring-batch-section {
+            background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+            border: 1px solid #C4B5FD;
+            border-radius: 16px;
+            padding: 2rem;
+            margin: 2rem 0;
+        }
+
+        .spring-batch-section h3 {
+            color: #5B21B6;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .spring-batch-tables {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .sb-table-item {
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            border-left: 3px solid var(--purple);
+        }
+
+        .sb-table-item code {
+            font-size: 0.85rem;
+            color: var(--purple);
+            font-weight: 600;
+        }
+
+        .sb-table-item p {
+            font-size: 0.85rem;
+            color: var(--gray-600);
+            margin-top: 0.25rem;
+        }
+
+        /* Workflow Steps */
+        .workflow-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+
+        .workflow-step {
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .step-number {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+            box-shadow: 0 2px 6px rgba(4, 107, 153, 0.3);
+        }
+
+        .step-content {
+            flex: 1;
+            background: var(--gray-50);
+            padding: 1.25rem 1.5rem;
+            border-radius: 10px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .step-content h5 {
+            color: var(--gray-800);
+            margin-bottom: 0.35rem;
+            font-size: 1rem;
+        }
+
+        .step-content p {
+            color: var(--gray-600);
+            font-size: 0.9rem;
+        }
+
+        .step-content code {
+            background: white;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--purple);
+        }
+
+        /* Callout Boxes */
+        .callout {
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin: 1.5rem 0;
+            display: flex;
+            gap: 1rem;
+            align-items: flex-start;
+        }
+
+        .callout-icon {
+            font-size: 1.5rem;
+            flex-shrink: 0;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+        }
+
+        .callout.info {
+            background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+            border: 1px solid #93C5FD;
+        }
+        .callout.info .callout-icon { background: #BFDBFE; }
+
+        .callout.warning {
+            background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
+            border: 1px solid #FCD34D;
+        }
+        .callout.warning .callout-icon { background: #FDE68A; }
+
+        .callout.success {
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 1px solid #6EE7B7;
+        }
+        .callout.success .callout-icon { background: #A7F3D0; }
+
+        .callout.purple {
+            background: linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%);
+            border: 1px solid #C4B5FD;
+        }
+        .callout.purple .callout-icon { background: #DDD6FE; }
+
+        .callout-content h4 {
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: var(--gray-800);
+        }
+
+        .callout-content p {
+            font-size: 0.95rem;
+            color: var(--gray-600);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 0.25rem;
+            border-bottom: 2px solid var(--gray-200);
+            margin-bottom: 1.5rem;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 0.875rem 1.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--gray-500);
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            transition: all 0.2s;
+            white-space: nowrap;
+            border-radius: 8px 8px 0 0;
+        }
+
+        .tab:hover {
+            color: var(--primary);
+            background: var(--gray-50);
+        }
+
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+            background: var(--gray-50);
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Code Blocks */
+        .code-block {
+            background: var(--gray-800);
+            color: #E5E7EB;
+            padding: 1.5rem;
+            border-radius: 10px;
+            font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            line-height: 1.7;
+        }
+
+        .code-block .comment { color: #6B7280; }
+        .code-block .keyword { color: #F472B6; }
+        .code-block .string { color: #34D399; }
+        .code-block .method { color: #60A5FA; }
+        .code-block .annotation { color: #FBBF24; }
+
+        /* API Endpoint Styling */
+        .endpoint-group {
+            margin: 1.5rem 0;
+        }
+
+        .endpoint-group-header {
+            background: var(--gray-100);
+            padding: 0.75rem 1.25rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            border-radius: 8px 8px 0 0;
+            border: 1px solid var(--gray-200);
+            border-bottom: none;
+        }
+
+        .endpoint-item {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--gray-200);
+            border-top: none;
+            gap: 1rem;
+        }
+
+        .endpoint-item:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+
+        .endpoint-method {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+            min-width: 55px;
+            text-align: center;
+        }
+
+        .endpoint-method.get { background: #DBEAFE; color: #1E40AF; }
+        .endpoint-method.post { background: #D1FAE5; color: #065F46; }
+        .endpoint-method.put { background: #FEF3C7; color: #92400E; }
+        .endpoint-method.delete { background: #FEE2E2; color: #991B1B; }
+
+        .endpoint-path {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--gray-700);
+            flex: 1;
+        }
+
+        .endpoint-desc {
+            color: var(--gray-500);
+            font-size: 0.875rem;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--gray-500);
+            font-size: 0.9rem;
+        }
+
+        .footer-brand {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero {
+                padding: 2.5rem 1.5rem;
+            }
+
+            .hero h1 {
+                font-size: 1.75rem;
+            }
+
+            .section {
+                padding: 1.5rem;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .principle-box .principle-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .principle-arrow {
+                transform: rotate(90deg);
+            }
+
+            .comparison-header,
+            .comparison-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Mermaid overrides */
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="nav-content">
+            <div class="nav-brand">
+                <div class="nav-brand-icon">
+                    <svg width="24" height="24" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
+                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="16" y1="2" x2="16" y2="6"></line>
+                        <line x1="8" y1="2" x2="8" y2="6"></line>
+                        <line x1="3" y1="10" x2="21" y2="10"></line>
+                    </svg>
+                </div>
+                <h1>Batch Scheduler Architecture</h1>
+                <span class="nav-badge">Spring Batch</span>
+            </div>
+            <div class="nav-links">
+                <a href="#overview">Overview</a>
+                <a href="#architecture">Architecture</a>
+                <a href="#integration">Integration</a>
+                <a href="#workflows">Workflows</a>
+                <a href="#spring-batch">Spring Batch</a>
+                <a href="#api">API Spec</a>
+                <a href="#database">Database</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Hero Section -->
+        <div class="hero">
+            <h1>Batch Job Scheduler Admin Application</h1>
+            <p class="hero-subtitle">
+                A dedicated scheduling and management UI that orchestrates job execution
+                in the CMIPS application powered by <strong>Spring Batch</strong>
+            </p>
+            <div class="hero-tech-badges">
+                <div class="tech-badge">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    Spring Batch 5.x
+                </div>
+                <div class="tech-badge">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle></svg>
+                    Java 21
+                </div>
+                <div class="tech-badge">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    Next.js 14
+                </div>
+                <div class="tech-badge">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>
+                    PostgreSQL
+                </div>
+                <div class="tech-badge">
+                    <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    Keycloak
+                </div>
+            </div>
+            <div class="hero-meta">
+                <span>Version 2.0</span>
+                <span>December 2024</span>
+                <span>Architecture & Workflow Design</span>
+            </div>
+        </div>
+
+        <!-- Key Principle -->
+        <div class="principle-box">
+            <h3>
+                <svg width="28" height="28" fill="none" stroke="#065F46" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                </svg>
+                Core Design Principle
+            </h3>
+            <div class="principle-grid">
+                <div class="principle-item">
+                    <h4>Scheduler App = The Brain</h4>
+                    <p>Decides <strong>WHEN</strong> jobs run, <strong>WHAT</strong> depends on what, and <strong>WHO</strong> can manage them</p>
+                </div>
+                <div class="principle-arrow">→</div>
+                <div class="principle-item">
+                    <h4>Spring Batch App = The Muscle</h4>
+                    <p>Executes jobs using <strong>Spring Batch</strong> framework with built-in reliability and monitoring</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 1: System Overview -->
+        <section id="overview" class="section">
+            <div class="section-header">
+                <div class="section-number">1</div>
+                <h2 class="section-title">System Overview</h2>
+            </div>
+
+            <p style="margin-bottom: 1.5rem; color: var(--gray-600); font-size: 1.05rem;">
+                The architecture separates <strong>scheduling concerns</strong> from <strong>execution concerns</strong>.
+                The Scheduler app manages when and what to run, while the CMIPS app uses Spring Batch for reliable execution.
+            </p>
+
+            <!-- Before vs After Comparison -->
+            <h3 style="margin: 2rem 0 1rem; color: var(--gray-700);">Architecture Evolution</h3>
+
+            <div class="comparison-container">
+                <div class="comparison-header">
+                    <div class="header-feature">Component</div>
+                    <div class="header-before">Before (Custom)</div>
+                    <div class="header-after">After (Spring Batch)</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Job Execution</div>
+                    <div class="before">Custom executor with virtual threads</div>
+                    <div class="after">Spring Batch JobLauncher + Steps</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Job Metadata</div>
+                    <div class="before">Custom report_jobs table</div>
+                    <div class="after">Spring Batch tables (BATCH_JOB_*)</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Retry/Restart</div>
+                    <div class="before">Custom retry logic</div>
+                    <div class="after">Built-in Spring Batch retry/skip/restart</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Chunk Processing</div>
+                    <div class="before">Custom chunking code</div>
+                    <div class="after">Spring Batch ItemReader/Processor/Writer</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Scheduling</div>
+                    <div class="before">Custom cron in CMIPS app</div>
+                    <div class="after">Scheduler app owns all scheduling</div>
+                </div>
+                <div class="comparison-row">
+                    <div class="feature">Dependencies (DAG)</div>
+                    <div class="before">Custom dependency handler</div>
+                    <div class="after">Scheduler app owns all dependencies</div>
+                </div>
+            </div>
+
+            <div class="callout info">
+                <div class="callout-icon">💡</div>
+                <div class="callout-content">
+                    <h4>Why Spring Batch?</h4>
+                    <p>Spring Batch provides enterprise-grade batch processing with built-in restart capability,
+                       skip/retry logic, chunk-based processing, and comprehensive job metadata tracking.
+                       It's battle-tested in production at scale.</p>
+                </div>
+            </div>
+
+            <div class="cards-grid">
+                <div class="card scheduler">
+                    <div class="card-icon">🧠</div>
+                    <h4>Scheduler App Responsibilities</h4>
+                    <ul>
+                        <li>Job Definition Management (CRUD)</li>
+                        <li>Cron Schedule Evaluation</li>
+                        <li>Job Dependency Graph (DAG)</li>
+                        <li>Calendar/Blackout Date Management</li>
+                        <li>Job Status Control (hold/ice/resume)</li>
+                        <li>Trigger Jobs via REST API</li>
+                        <li>Monitor Execution Status</li>
+                        <li>Audit Trail for Configuration Changes</li>
+                    </ul>
+                </div>
+                <div class="card cmips">
+                    <div class="card-icon">💪</div>
+                    <h4>Spring Batch App Responsibilities</h4>
+                    <ul>
+                        <li>Expose REST API for Job Triggers</li>
+                        <li>Execute Jobs via Spring Batch</li>
+                        <li>Handle Chunk-based Processing</li>
+                        <li>Manage Retries and Restarts</li>
+                        <li>Track Execution in Spring Batch Tables</li>
+                        <li>Publish Real-time Events (Redis)</li>
+                        <li>Generate Reports and Store Results</li>
+                        <li>Notify on Completion/Failure</li>
+                    </ul>
+                </div>
+                <div class="card spring-batch">
+                    <div class="card-icon">🍃</div>
+                    <h4>Spring Batch Provides</h4>
+                    <ul>
+                        <li>JobLauncher for starting jobs</li>
+                        <li>JobRepository for metadata persistence</li>
+                        <li>JobExplorer for querying job status</li>
+                        <li>Step execution with ItemReader/Writer</li>
+                        <li>Chunk-oriented processing</li>
+                        <li>Built-in retry and skip policies</li>
+                        <li>Restartability from last checkpoint</li>
+                        <li>Listeners for lifecycle events</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: High-Level Architecture -->
+        <section id="architecture" class="section">
+            <div class="section-header">
+                <div class="section-number">2</div>
+                <h2 class="section-title">High-Level Architecture</h2>
+            </div>
+
+            <div class="diagram-container">
+                <div class="diagram-title">Complete System Architecture</div>
+                <div class="mermaid">
+graph TB
+    subgraph ADMIN["ADMIN USER"]
+        USER[👤 Admin User]
+    end
+
+    subgraph SCHEDULER["SCHEDULER APP (Brain)"]
+        direction TB
+        SF["Next.js Frontend<br/>Port 3002"]
+        SB["Spring Boot Backend<br/>Port 8084"]
+
+        subgraph SB_SERVICES["Backend Services"]
+            CRON_SVC["Cron Evaluator<br/>(Quartz)"]
+            DEP_SVC["Dependency<br/>Manager (DAG)"]
+            TRIGGER_SVC["Job Trigger<br/>Service"]
+            MONITOR_SVC["Status Monitor<br/>Service"]
+        end
+
+        SF --> SB
+        SB --> SB_SERVICES
+    end
+
+    subgraph TRIAL["TRIAL APP (Muscle) - Spring Batch"]
+        direction TB
+        TAPI["REST API Controller"]
+
+        subgraph SPRING_BATCH["Spring Batch Core"]
+            LAUNCHER["JobLauncher"]
+            REPO["JobRepository"]
+            EXPLORER["JobExplorer"]
+        end
+
+        subgraph JOBS["Batch Jobs"]
+            JOB1["Report Job"]
+            JOB2["Data Sync Job"]
+            JOB3["ETL Job"]
+        end
+
+        TAPI --> LAUNCHER
+        LAUNCHER --> JOBS
+        JOBS --> REPO
+        EXPLORER --> REPO
+    end
+
+    subgraph INFRA["INFRASTRUCTURE"]
+        PG[("PostgreSQL<br/>Port 5432")]
+        RD[("Redis<br/>Port 6380")]
+        KC["Keycloak<br/>Port 8085"]
+    end
+
+    USER --> SF
+    SF -.->|Auth| KC
+    SB -.->|Auth| KC
+    TAPI -.->|Auth| KC
+
+    SB -->|"Read/Write<br/>Job Definitions"| PG
+    SB -->|"Subscribe<br/>Events"| RD
+    TRIGGER_SVC -->|"POST /api/batch/trigger"| TAPI
+    MONITOR_SVC -->|"GET /api/batch/status"| EXPLORER
+
+    REPO -->|"Write<br/>BATCH_* tables"| PG
+    JOBS -->|"Publish<br/>Events"| RD
+
+    style SCHEDULER fill:#E0F2FE,stroke:#0369A1,stroke-width:2px
+    style TRIAL fill:#D1FAE5,stroke:#065F46,stroke-width:2px
+    style SPRING_BATCH fill:#EDE9FE,stroke:#7C3AED,stroke-width:2px
+    style INFRA fill:#FEF3C7,stroke:#D97706,stroke-width:2px
+                </div>
+            </div>
+
+            <div class="callout purple">
+                <div class="callout-icon">🍃</div>
+                <div class="callout-content">
+                    <h4>Spring Batch Integration</h4>
+                    <p>The CMIPS app wraps Spring Batch with a REST API layer. The Scheduler never directly interacts
+                       with Spring Batch components - it always goes through the CMIPS app's API endpoints.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Integration Points -->
+        <section id="integration" class="section">
+            <div class="section-header">
+                <div class="section-number">3</div>
+                <h2 class="section-title">Integration Points</h2>
+            </div>
+
+            <p style="margin-bottom: 2rem; color: var(--gray-600);">
+                The Scheduler and CMIPS apps communicate through three distinct integration channels:
+            </p>
+
+            <div class="diagram-container">
+                <div class="diagram-title">Integration Architecture</div>
+                <div class="mermaid">
+flowchart LR
+    subgraph SCHED["SCHEDULER APP"]
+        S1["Job Config<br/>Service"]
+        S2["Cron Evaluator"]
+        S3["Dependency<br/>Manager"]
+        S4["Trigger<br/>Service"]
+        S5["Monitor<br/>Service"]
+    end
+
+    subgraph SCHEDULER_DB["Scheduler Tables"]
+        T1[("job_definition")]
+        T2[("job_dependency")]
+        T3[("job_calendar")]
+        T4[("scheduler_audit")]
+    end
+
+    subgraph TRIAL_API["TRIAL APP REST API"]
+        A1["/api/batch/trigger"]
+        A2["/api/batch/jobs/status"]
+        A3["/api/batch/jobs/cancel"]
+        A4["/api/batch/jobs/restart"]
+    end
+
+    subgraph SPRING_BATCH_DB["Spring Batch Tables"]
+        B1[("BATCH_JOB_INSTANCE")]
+        B2[("BATCH_JOB_EXECUTION")]
+        B3[("BATCH_STEP_EXECUTION")]
+    end
+
+    subgraph REDIS["REDIS"]
+        E1["batch:events:*"]
+    end
+
+    S1 -->|WRITE| T1
+    S1 -->|WRITE| T2
+    S1 -->|WRITE| T3
+    S3 -->|READ| T2
+    S2 -->|READ| T1
+
+    S4 ==>|"HTTP POST"| A1
+    S5 ==>|"HTTP GET"| A2
+    S4 ==>|"HTTP POST"| A3
+
+    A1 -.->|Write| B1
+    A1 -.->|Write| B2
+    A2 -.->|Read| B2
+    A2 -.->|Read| B3
+
+    A1 -->|PUBLISH| E1
+    S5 -->|SUBSCRIBE| E1
+
+    style SCHED fill:#E0F2FE,stroke:#0369A1
+    style SCHEDULER_DB fill:#DBEAFE,stroke:#3B82F6
+    style TRIAL_API fill:#D1FAE5,stroke:#10B981
+    style SPRING_BATCH_DB fill:#EDE9FE,stroke:#8B5CF6
+    style REDIS fill:#FEE2E2,stroke:#EF4444
+                </div>
+            </div>
+
+            <!-- Integration Point 1 -->
+            <div style="margin-top: 2rem;">
+                <h3 style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <span style="background: #DBEAFE; padding: 0.5rem; border-radius: 8px;">🗄️</span>
+                    Integration Point 1: Scheduler Database (PostgreSQL)
+                </h3>
+                <p style="color: var(--gray-600); margin-bottom: 1rem;">
+                    The Scheduler app has its own tables for job configuration. These are <strong>separate</strong> from Spring Batch tables.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Table</th>
+                                <th>Owner</th>
+                                <th>Purpose</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>job_definition</code></td>
+                                <td><span class="badge badge-primary">Scheduler</span></td>
+                                <td>Job configurations, cron expressions, parameters</td>
+                            </tr>
+                            <tr>
+                                <td><code>job_dependency</code></td>
+                                <td><span class="badge badge-primary">Scheduler</span></td>
+                                <td>Parent-child job relationships (DAG)</td>
+                            </tr>
+                            <tr>
+                                <td><code>job_calendar</code></td>
+                                <td><span class="badge badge-primary">Scheduler</span></td>
+                                <td>Blackout dates and run calendars</td>
+                            </tr>
+                            <tr>
+                                <td><code>scheduler_audit_log</code></td>
+                                <td><span class="badge badge-primary">Scheduler</span></td>
+                                <td>Configuration change audit trail</td>
+                            </tr>
+                            <tr>
+                                <td><code>job_execution_mapping</code></td>
+                                <td><span class="badge badge-primary">Scheduler</span></td>
+                                <td>Links job_definition to Spring Batch execution IDs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Integration Point 2 -->
+            <div style="margin-top: 2.5rem;">
+                <h3 style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <span style="background: #D1FAE5; padding: 0.5rem; border-radius: 8px;">🔗</span>
+                    Integration Point 2: REST API (Scheduler → CMIPS)
+                </h3>
+                <p style="color: var(--gray-600); margin-bottom: 1rem;">
+                    The Scheduler triggers and monitors jobs through CMIPS app's REST API, which wraps Spring Batch.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Endpoint</th>
+                                <th>Method</th>
+                                <th>Spring Batch Action</th>
+                                <th>Response</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>/api/batch/trigger</code></td>
+                                <td><span class="badge badge-success">POST</span></td>
+                                <td>JobLauncher.run(job, params)</td>
+                                <td>executionId, status</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/batch/jobs/{id}/status</code></td>
+                                <td><span class="badge badge-info">GET</span></td>
+                                <td>JobExplorer.getJobExecution(id)</td>
+                                <td>status, progress, exitCode</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/batch/jobs/{id}/stop</code></td>
+                                <td><span class="badge badge-danger">POST</span></td>
+                                <td>JobOperator.stop(executionId)</td>
+                                <td>stopped confirmation</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/batch/jobs/{id}/restart</code></td>
+                                <td><span class="badge badge-warning">POST</span></td>
+                                <td>JobOperator.restart(executionId)</td>
+                                <td>new executionId</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/batch/jobs/{id}/abandon</code></td>
+                                <td><span class="badge badge-danger">POST</span></td>
+                                <td>JobOperator.abandon(executionId)</td>
+                                <td>abandoned confirmation</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/batch/executions</code></td>
+                                <td><span class="badge badge-info">GET</span></td>
+                                <td>JobExplorer.findRunningJobExecutions()</td>
+                                <td>list of running jobs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Integration Point 3 -->
+            <div style="margin-top: 2.5rem;">
+                <h3 style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+                    <span style="background: #FEE2E2; padding: 0.5rem; border-radius: 8px;">📡</span>
+                    Integration Point 3: Redis Pub/Sub (CMIPS → Scheduler)
+                </h3>
+                <p style="color: var(--gray-600); margin-bottom: 1rem;">
+                    CMIPS app publishes job lifecycle events via Spring Batch listeners. Scheduler subscribes for real-time UI updates.
+                </p>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Event Channel</th>
+                                <th>Spring Batch Listener</th>
+                                <th>Payload</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>batch:events:job-started</code></td>
+                                <td>JobExecutionListener.beforeJob()</td>
+                                <td>executionId, jobName, startTime</td>
+                            </tr>
+                            <tr>
+                                <td><code>batch:events:step-progress</code></td>
+                                <td>ChunkListener.afterChunk()</td>
+                                <td>executionId, stepName, readCount, writeCount</td>
+                            </tr>
+                            <tr>
+                                <td><code>batch:events:job-completed</code></td>
+                                <td>JobExecutionListener.afterJob()</td>
+                                <td>executionId, status, exitCode, endTime</td>
+                            </tr>
+                            <tr>
+                                <td><code>batch:events:job-failed</code></td>
+                                <td>JobExecutionListener.afterJob()</td>
+                                <td>executionId, exitCode, errorMessage</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Detailed Workflows -->
+        <section id="workflows" class="section">
+            <div class="section-header">
+                <div class="section-number">4</div>
+                <h2 class="section-title">Detailed Workflows</h2>
+            </div>
+
+            <!-- Workflow Tabs -->
+            <div class="tabs">
+                <div class="tab active" onclick="showTab('wf1')">Scheduled Execution</div>
+                <div class="tab" onclick="showTab('wf2')">Manual Trigger</div>
+                <div class="tab" onclick="showTab('wf3')">Dependency Chain</div>
+                <div class="tab" onclick="showTab('wf4')">Job Stop/Restart</div>
+                <div class="tab" onclick="showTab('wf5')">Status Monitoring</div>
+            </div>
+
+            <!-- Workflow 1: Scheduled Execution -->
+            <div id="wf1" class="tab-content active">
+                <h3 style="margin-bottom: 1rem;">Workflow 1: Scheduled Job Execution</h3>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                    The Scheduler app evaluates cron expressions and triggers jobs in CMIPS app via REST API.
+                    <strong>All scheduling logic lives in the Scheduler</strong> - CMIPS app just executes when told.
+                </p>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Scheduled Execution Sequence</div>
+                    <div class="mermaid">
+sequenceDiagram
+    participant QUARTZ as Scheduler: Quartz
+    participant SDB as Scheduler DB
+    participant TRIGGER as Scheduler: Trigger Service
+    participant TRIAL as CMIPS: REST API
+    participant LAUNCHER as Spring Batch: JobLauncher
+    participant REPO as Spring Batch: JobRepository
+    participant REDIS as Redis Pub/Sub
+    participant UI as Scheduler: UI
+
+    Note over QUARTZ: Every minute, evaluate cron expressions
+
+    QUARTZ->>SDB: Query job_definition<br/>(status=ACTIVE, cron matches)
+    SDB-->>QUARTZ: Jobs due: [Job A, Job B]
+
+    QUARTZ->>SDB: Check job_calendar for blackout dates
+    SDB-->>QUARTZ: Job A blocked today, Job B OK
+
+    QUARTZ->>TRIGGER: Trigger Job B
+
+    TRIGGER->>SDB: Check dependencies for Job B
+    SDB-->>TRIGGER: No pending dependencies
+
+    TRIGGER->>TRIAL: POST /api/batch/trigger<br/>{jobName: "JobB", params: {...}}
+
+    TRIAL->>LAUNCHER: jobLauncher.run(jobB, params)
+    LAUNCHER->>REPO: Create JobExecution
+    REPO-->>LAUNCHER: executionId: 12345
+
+    LAUNCHER-->>TRIAL: JobExecution started
+    TRIAL-->>TRIGGER: 202 Accepted<br/>{executionId: 12345}
+
+    TRIGGER->>SDB: INSERT job_execution_mapping<br/>(jobDefId, executionId)
+
+    Note over LAUNCHER: Spring Batch executes job steps
+
+    LAUNCHER->>REDIS: PUBLISH job-started<br/>{executionId: 12345}
+    REDIS-->>UI: Real-time update
+
+    loop Each Chunk
+        LAUNCHER->>REPO: Update StepExecution
+        LAUNCHER->>REDIS: PUBLISH step-progress
+        REDIS-->>UI: Update progress bar
+    end
+
+    LAUNCHER->>REPO: Update JobExecution (COMPLETED)
+    LAUNCHER->>REDIS: PUBLISH job-completed
+    REDIS-->>UI: Show success
+
+    UI->>TRIGGER: Job B completed, check dependents
+    TRIGGER->>SDB: Query job_dependency WHERE parent=JobB
+    SDB-->>TRIGGER: Dependent: Job C
+
+    Note over TRIGGER: Trigger Job C (repeat flow)
+                    </div>
+                </div>
+
+                <div class="workflow-steps">
+                    <div class="workflow-step">
+                        <div class="step-number">1</div>
+                        <div class="step-content">
+                            <h5>Cron Evaluation (Scheduler)</h5>
+                            <p>Quartz scheduler in the Scheduler app evaluates cron expressions every minute against <code>job_definition</code> table.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">2</div>
+                        <div class="step-content">
+                            <h5>Blackout Check (Scheduler)</h5>
+                            <p>Check <code>job_calendar</code> to see if today is a blackout date for any due jobs.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">3</div>
+                        <div class="step-content">
+                            <h5>Dependency Check (Scheduler)</h5>
+                            <p>Query <code>job_dependency</code> to ensure all parent jobs have completed successfully.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">4</div>
+                        <div class="step-content">
+                            <h5>Trigger via REST (Scheduler → CMIPS)</h5>
+                            <p>Call <code>POST /api/batch/trigger</code> with job name and parameters.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">5</div>
+                        <div class="step-content">
+                            <h5>Spring Batch Execution (CMIPS)</h5>
+                            <p>CMIPS app uses <code>JobLauncher.run()</code> to start the job. Spring Batch handles all execution details.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">6</div>
+                        <div class="step-content">
+                            <h5>Real-time Events (CMIPS → Scheduler)</h5>
+                            <p>Spring Batch listeners publish events to Redis. Scheduler UI receives real-time updates.</p>
+                        </div>
+                    </div>
+                    <div class="workflow-step">
+                        <div class="step-number">7</div>
+                        <div class="step-content">
+                            <h5>Trigger Dependents (Scheduler)</h5>
+                            <p>On job completion, Scheduler checks for dependent jobs and triggers them.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow 2: Manual Trigger -->
+            <div id="wf2" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Workflow 2: Manual Job Trigger</h3>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                    Admin clicks "Run Now" in the Scheduler UI to immediately trigger a job.
+                </p>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Manual Trigger Sequence</div>
+                    <div class="mermaid">
+sequenceDiagram
+    participant ADMIN as Admin User
+    participant UI as Scheduler: Frontend
+    participant API as Scheduler: Backend
+    participant SDB as Scheduler DB
+    participant TRIAL as CMIPS: REST API
+    participant LAUNCHER as Spring Batch: JobLauncher
+
+    ADMIN->>UI: Click "Run Now" on Job X
+    UI->>API: POST /api/scheduler/trigger/{jobDefId}
+
+    API->>SDB: Get job_definition WHERE id=X
+    SDB-->>API: Job config + parameters
+
+    API->>SDB: Check job status != ON_HOLD
+    API->>SDB: Check no running instance
+
+    API->>TRIAL: POST /api/batch/trigger<br/>{jobName, params, triggeredBy: "admin"}
+
+    TRIAL->>LAUNCHER: jobLauncher.run(job, params)
+    LAUNCHER-->>TRIAL: executionId: 67890
+
+    TRIAL-->>API: 202 Accepted {executionId}
+
+    API->>SDB: INSERT job_execution_mapping
+    API->>SDB: INSERT scheduler_audit_log<br/>(action: MANUAL_TRIGGER)
+
+    API-->>UI: Success {executionId}
+    UI-->>ADMIN: Toast: "Job triggered successfully"
+
+    Note over LAUNCHER: Job executes via Spring Batch...
+                    </div>
+                </div>
+
+                <div class="callout info">
+                    <div class="callout-icon">💡</div>
+                    <div class="callout-content">
+                        <h4>Parameter Override</h4>
+                        <p>When triggering manually, admins can optionally override default job parameters.
+                           These overrides are passed to Spring Batch's JobParameters.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow 3: Dependency Chain -->
+            <div id="wf3" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Workflow 3: Dependency Chain Execution</h3>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                    The Scheduler app owns all dependency logic. When a job completes, Scheduler checks for dependents and triggers them.
+                </p>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Example Dependency Graph</div>
+                    <div class="mermaid">
+graph TD
+    A["Daily Extract<br/>(Job A)"] --> B["Transform A<br/>(Job B)"]
+    A --> C["Transform B<br/>(Job C)"]
+
+    B --> D["Aggregate<br/>(Job D)"]
+    C --> D
+
+    D --> E["Generate Report<br/>(Job E)"]
+    D --> F["Send Notifications<br/>(Job F)"]
+
+    style A fill:#4CAF50,color:#fff
+    style B fill:#2196F3,color:#fff
+    style C fill:#2196F3,color:#fff
+    style D fill:#FF9800,color:#fff
+    style E fill:#9C27B0,color:#fff
+    style F fill:#9C27B0,color:#fff
+                    </div>
+                </div>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Dependency Resolution Flow</div>
+                    <div class="mermaid">
+sequenceDiagram
+    participant REDIS as Redis Events
+    participant DEP as Scheduler: Dependency Manager
+    participant SDB as Scheduler DB
+    participant TRIGGER as Scheduler: Trigger Service
+    participant TRIAL as CMIPS API
+
+    REDIS->>DEP: Event: Job A COMPLETED
+
+    DEP->>SDB: SELECT FROM job_dependency<br/>WHERE parent_job_id = 'A'
+    SDB-->>DEP: Dependents: [Job B, Job C]
+
+    DEP->>SDB: SELECT FROM job_execution_mapping<br/>WHERE job_def_id = 'A' ORDER BY created DESC
+    SDB-->>DEP: Latest execution: COMPLETED
+
+    loop For each dependent
+        DEP->>SDB: Check if dependent already running
+        DEP->>SDB: Check dependency condition (ON_SUCCESS)
+
+        alt All conditions met
+            DEP->>TRIGGER: Trigger Job B
+            TRIGGER->>TRIAL: POST /api/batch/trigger
+        else Conditions not met
+            DEP->>DEP: Skip Job B (log reason)
+        end
+    end
+
+    Note over DEP: Job B and C run in parallel
+
+    REDIS->>DEP: Event: Job B COMPLETED
+    REDIS->>DEP: Event: Job C COMPLETED
+
+    DEP->>SDB: Check Job D dependencies
+    Note over DEP: Both B and C done? Yes!
+
+    DEP->>TRIGGER: Trigger Job D
+    TRIGGER->>TRIAL: POST /api/batch/trigger
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Dependency Condition</th>
+                                <th>Trigger When Parent...</th>
+                                <th>Use Case</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><span class="badge badge-success">ON_SUCCESS</span></td>
+                                <td>Completes with COMPLETED status</td>
+                                <td>Normal processing chain</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-danger">ON_FAILURE</span></td>
+                                <td>Completes with FAILED status</td>
+                                <td>Error notification job</td>
+                            </tr>
+                            <tr>
+                                <td><span class="badge badge-info">ON_COMPLETION</span></td>
+                                <td>Completes with any status</td>
+                                <td>Cleanup job that always runs</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="callout warning">
+                    <div class="callout-icon">⚠️</div>
+                    <div class="callout-content">
+                        <h4>Multiple Parent Dependencies</h4>
+                        <p>If a job depends on multiple parents (like Job D depending on B and C),
+                           Scheduler waits for ALL parents to complete before triggering the dependent job.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow 4: Stop/Restart -->
+            <div id="wf4" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Workflow 4: Job Stop and Restart</h3>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                    Spring Batch provides built-in stop and restart capabilities. The Scheduler UI exposes these through the CMIPS API.
+                </p>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Stop and Restart Flow</div>
+                    <div class="mermaid">
+sequenceDiagram
+    participant ADMIN as Admin
+    participant UI as Scheduler UI
+    participant API as Scheduler API
+    participant TRIAL as CMIPS API
+    participant OP as Spring Batch: JobOperator
+    participant REPO as JobRepository
+
+    Note over ADMIN,REPO: STOPPING A JOB
+
+    ADMIN->>UI: Click "Stop" on running job
+    UI->>API: POST /api/scheduler/jobs/{id}/stop
+    API->>TRIAL: POST /api/batch/jobs/{execId}/stop
+    TRIAL->>OP: jobOperator.stop(execId)
+
+    OP->>REPO: Set status = STOPPING
+    Note over OP: Job checks stop flag at chunk boundaries
+    OP->>REPO: Set status = STOPPED
+
+    TRIAL-->>API: 200 OK (stopped)
+    API-->>UI: Job stopped
+    UI-->>ADMIN: Toast: "Job stopped"
+
+    Note over ADMIN,REPO: RESTARTING A JOB
+
+    ADMIN->>UI: Click "Restart" on stopped job
+    UI->>API: POST /api/scheduler/jobs/{id}/restart
+    API->>TRIAL: POST /api/batch/jobs/{execId}/restart
+    TRIAL->>OP: jobOperator.restart(execId)
+
+    OP->>REPO: Create new JobExecution<br/>(continues from last checkpoint)
+    OP-->>TRIAL: new executionId: 99999
+
+    TRIAL-->>API: 202 Accepted {newExecutionId}
+    API->>API: Update job_execution_mapping
+    API-->>UI: Job restarted
+    UI-->>ADMIN: Toast: "Job restarted"
+
+    Note over OP: Job resumes from where it stopped
+                    </div>
+                </div>
+
+                <div class="callout success">
+                    <div class="callout-icon">✅</div>
+                    <div class="callout-content">
+                        <h4>Spring Batch Restartability</h4>
+                        <p>Spring Batch tracks the last successful commit point. When restarted, the job
+                           continues from where it left off - no need to reprocess already-completed chunks.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Workflow 5: Monitoring -->
+            <div id="wf5" class="tab-content">
+                <h3 style="margin-bottom: 1rem;">Workflow 5: Real-time Status Monitoring</h3>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">
+                    The Scheduler UI receives real-time updates via Redis pub/sub and can also poll for detailed status.
+                </p>
+
+                <div class="diagram-container">
+                    <div class="diagram-title">Monitoring Architecture</div>
+                    <div class="mermaid">
+flowchart TB
+    subgraph TRIAL["TRIAL APP"]
+        JOB["Running Job"]
+        LISTENER["Spring Batch<br/>Listeners"]
+        API["REST API"]
+        EXPLORER["JobExplorer"]
+    end
+
+    subgraph REDIS["REDIS"]
+        CHANNEL["batch:events:*"]
+    end
+
+    subgraph SCHEDULER["SCHEDULER APP"]
+        SSE["SSE Endpoint"]
+        MONITOR["Monitor Service"]
+        FRONTEND["React Frontend"]
+    end
+
+    JOB -->|lifecycle events| LISTENER
+    LISTENER -->|PUBLISH| CHANNEL
+    CHANNEL -->|SUBSCRIBE| SSE
+    SSE -->|Server-Sent Events| FRONTEND
+
+    FRONTEND -->|Poll every 10s| MONITOR
+    MONITOR -->|GET /status| API
+    API -->|query| EXPLORER
+
+    style TRIAL fill:#D1FAE5,stroke:#10B981
+    style REDIS fill:#FEE2E2,stroke:#EF4444
+    style SCHEDULER fill:#E0F2FE,stroke:#0369A1
+                    </div>
+                </div>
+
+                <div class="cards-grid">
+                    <div class="card">
+                        <h4>Real-time Updates (Push)</h4>
+                        <ul>
+                            <li>Job started/completed/failed events</li>
+                            <li>Chunk progress updates</li>
+                            <li>Error notifications</li>
+                            <li>Instant UI updates via SSE</li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h4>Detailed Status (Poll)</h4>
+                        <ul>
+                            <li>Full JobExecution details</li>
+                            <li>Step-by-step execution info</li>
+                            <li>Read/write/skip counts</li>
+                            <li>Exception stack traces</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 5: Spring Batch Details -->
+        <section id="spring-batch" class="section">
+            <div class="section-header">
+                <div class="section-number">5</div>
+                <h2 class="section-title">Spring Batch Integration Details</h2>
+            </div>
+
+            <div class="spring-batch-section">
+                <h3>
+                    <svg width="24" height="24" fill="#5B21B6" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+                    Spring Batch Metadata Tables
+                </h3>
+                <p style="color: #5B21B6; margin-bottom: 1rem;">
+                    Spring Batch creates and manages these tables automatically. The Scheduler app reads from them for monitoring.
+                </p>
+                <div class="spring-batch-tables">
+                    <div class="sb-table-item">
+                        <code>BATCH_JOB_INSTANCE</code>
+                        <p>Unique job + parameters combination</p>
+                    </div>
+                    <div class="sb-table-item">
+                        <code>BATCH_JOB_EXECUTION</code>
+                        <p>Each run of a job instance</p>
+                    </div>
+                    <div class="sb-table-item">
+                        <code>BATCH_JOB_EXECUTION_PARAMS</code>
+                        <p>Parameters for each execution</p>
+                    </div>
+                    <div class="sb-table-item">
+                        <code>BATCH_STEP_EXECUTION</code>
+                        <p>Each step's execution details</p>
+                    </div>
+                    <div class="sb-table-item">
+                        <code>BATCH_STEP_EXECUTION_CONTEXT</code>
+                        <p>Step execution state (for restart)</p>
+                    </div>
+                    <div class="sb-table-item">
+                        <code>BATCH_JOB_EXECUTION_CONTEXT</code>
+                        <p>Job execution state</p>
+                    </div>
+                </div>
+            </div>
+
+            <h3 style="margin: 2rem 0 1rem;">Spring Batch App: Job Structure</h3>
+
+            <div class="diagram-container">
+                <div class="diagram-title">Typical Spring Batch Job Configuration</div>
+                <div class="mermaid">
+graph LR
+    subgraph JOB["Report Generation Job"]
+        S1["Step 1:<br/>Extract Data"]
+        S2["Step 2:<br/>Transform"]
+        S3["Step 3:<br/>Write Report"]
+        S4["Step 4:<br/>Notify"]
+
+        S1 --> S2 --> S3 --> S4
+    end
+
+    subgraph S1_DETAIL["Step 1 Detail"]
+        R1["JdbcCursorItemReader"]
+        P1["DataProcessor"]
+        W1["StagingTableWriter"]
+    end
+
+    S1 -.-> S1_DETAIL
+
+    style JOB fill:#EDE9FE,stroke:#8B5CF6
+    style S1_DETAIL fill:#F5F3FF,stroke:#C4B5FD
+                </div>
+            </div>
+
+            <div class="code-block">
+<span class="annotation">@Configuration</span>
+<span class="keyword">public class</span> <span class="method">ReportJobConfig</span> {
+
+    <span class="annotation">@Bean</span>
+    <span class="keyword">public</span> Job <span class="method">reportGenerationJob</span>(JobRepository jobRepository,
+                                       Step extractStep,
+                                       Step transformStep,
+                                       Step writeReportStep) {
+        <span class="keyword">return new</span> JobBuilder(<span class="string">"reportGenerationJob"</span>, jobRepository)
+            .incrementer(<span class="keyword">new</span> RunIdIncrementer())
+            .listener(<span class="method">redisPublishingJobListener()</span>) <span class="comment">// Publishes events</span>
+            .start(extractStep)
+            .next(transformStep)
+            .next(writeReportStep)
+            .build();
+    }
+
+    <span class="annotation">@Bean</span>
+    <span class="keyword">public</span> Step <span class="method">extractStep</span>(JobRepository jobRepository,
+                           PlatformTransactionManager txManager) {
+        <span class="keyword">return new</span> StepBuilder(<span class="string">"extractStep"</span>, jobRepository)
+            .&lt;InputRecord, ProcessedRecord&gt;<span class="method">chunk</span>(1000, txManager)
+            .reader(<span class="method">jdbcReader()</span>)
+            .processor(<span class="method">recordProcessor()</span>)
+            .writer(<span class="method">stagingWriter()</span>)
+            .listener(<span class="method">chunkProgressListener()</span>) <span class="comment">// Progress updates</span>
+            .faultTolerant()
+            .retryLimit(3)
+            .retry(TransientDataAccessException.<span class="keyword">class</span>)
+            .skipLimit(100)
+            .skip(ValidationException.<span class="keyword">class</span>)
+            .build();
+    }
+}
+            </div>
+
+            <div class="callout purple">
+                <div class="callout-icon">🍃</div>
+                <div class="callout-content">
+                    <h4>Key Spring Batch Components Used</h4>
+                    <p>
+                        <strong>JobLauncher:</strong> Entry point for running jobs<br/>
+                        <strong>JobOperator:</strong> Stop, restart, abandon operations<br/>
+                        <strong>JobExplorer:</strong> Read-only access to job metadata<br/>
+                        <strong>JobRepository:</strong> Persistence for job/step execution data
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: API Specification -->
+        <section id="api" class="section">
+            <div class="section-header">
+                <div class="section-number">6</div>
+                <h2 class="section-title">API Specification</h2>
+            </div>
+
+            <h3 style="margin-bottom: 1.5rem;">Scheduler Backend APIs (Port 8084)</h3>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Job Definition Management</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/jobs</span>
+                    <span class="endpoint-desc">List all job definitions</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs</span>
+                    <span class="endpoint-desc">Create new job definition</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}</span>
+                    <span class="endpoint-desc">Get job definition by ID</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method put">PUT</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}</span>
+                    <span class="endpoint-desc">Update job definition</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method delete">DELETE</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}</span>
+                    <span class="endpoint-desc">Soft delete job definition</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Job Status Control</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}/hold</span>
+                    <span class="endpoint-desc">Put job on HOLD (blocks dependents)</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}/ice</span>
+                    <span class="endpoint-desc">Put job on ICE (skip, dependents proceed)</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}/resume</span>
+                    <span class="endpoint-desc">Resume job to ACTIVE</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Job Execution</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/trigger/{jobDefId}</span>
+                    <span class="endpoint-desc">Trigger immediate job execution</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{executionId}/stop</span>
+                    <span class="endpoint-desc">Stop a running job</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{executionId}/restart</span>
+                    <span class="endpoint-desc">Restart a stopped/failed job</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Dependency Management</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/dependencies/graph</span>
+                    <span class="endpoint-desc">Get full dependency graph</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/scheduler/jobs/{id}/dependencies</span>
+                    <span class="endpoint-desc">Add job dependency</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method delete">DELETE</span>
+                    <span class="endpoint-path">/api/scheduler/dependencies/{depId}</span>
+                    <span class="endpoint-desc">Remove dependency</span>
+                </div>
+            </div>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Monitoring</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/monitor/dashboard</span>
+                    <span class="endpoint-desc">Dashboard statistics</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/monitor/running</span>
+                    <span class="endpoint-desc">Currently running jobs</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/monitor/history</span>
+                    <span class="endpoint-desc">Execution history</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/scheduler/events</span>
+                    <span class="endpoint-desc">SSE endpoint for real-time events</span>
+                </div>
+            </div>
+
+            <h3 style="margin: 2.5rem 0 1.5rem;">Spring Batch App APIs (Port 8081)</h3>
+
+            <div class="endpoint-group">
+                <div class="endpoint-group-header">Job Execution (Called by Scheduler)</div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/batch/trigger</span>
+                    <span class="endpoint-desc">Trigger job → JobLauncher.run()</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/batch/jobs/{executionId}/status</span>
+                    <span class="endpoint-desc">Get status → JobExplorer</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/batch/jobs/{executionId}/stop</span>
+                    <span class="endpoint-desc">Stop job → JobOperator.stop()</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/batch/jobs/{executionId}/restart</span>
+                    <span class="endpoint-desc">Restart job → JobOperator.restart()</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method post">POST</span>
+                    <span class="endpoint-path">/api/batch/jobs/{executionId}/abandon</span>
+                    <span class="endpoint-desc">Abandon job → JobOperator.abandon()</span>
+                </div>
+                <div class="endpoint-item">
+                    <span class="endpoint-method get">GET</span>
+                    <span class="endpoint-path">/api/batch/executions/running</span>
+                    <span class="endpoint-desc">List running → JobExplorer.findRunning()</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 7: Database Schema -->
+        <section id="database" class="section">
+            <div class="section-header">
+                <div class="section-number">7</div>
+                <h2 class="section-title">Database Schema</h2>
+            </div>
+
+            <div class="diagram-container">
+                <div class="diagram-title">Database Architecture</div>
+                <div class="mermaid">
+erDiagram
+    JOB_DEFINITION ||--o{ JOB_DEPENDENCY : "has dependents"
+    JOB_DEFINITION ||--o{ JOB_CALENDAR_LINK : "linked to"
+    JOB_CALENDAR ||--o{ JOB_CALENDAR_LINK : "used by"
+    JOB_CALENDAR ||--o{ CALENDAR_DATE : "has dates"
+    JOB_DEFINITION ||--o{ JOB_EXECUTION_MAPPING : "executions"
+    JOB_DEFINITION ||--o{ SCHEDULER_AUDIT : "changes"
+
+    JOB_DEFINITION {
+        bigint id PK
+        string job_name UK
+        string job_type
+        string cron_expression
+        string timezone
+        string status
+        boolean enabled
+        int priority
+        jsonb job_parameters
+        timestamp created_at
+    }
+
+    JOB_DEPENDENCY {
+        bigint id PK
+        bigint parent_job_id FK
+        bigint child_job_id FK
+        string condition
+        boolean enabled
+    }
+
+    JOB_CALENDAR {
+        bigint id PK
+        string name UK
+        string type
+        boolean enabled
+    }
+
+    JOB_EXECUTION_MAPPING {
+        bigint id PK
+        bigint job_def_id FK
+        bigint spring_batch_execution_id
+        string trigger_type
+        timestamp triggered_at
+    }
+
+    SCHEDULER_AUDIT {
+        bigint id PK
+        string action
+        bigint entity_id
+        jsonb old_value
+        jsonb new_value
+        string performed_by
+        timestamp performed_at
+    }
+                </div>
+            </div>
+
+            <div class="cards-grid">
+                <div class="card scheduler">
+                    <h4>Scheduler App Tables</h4>
+                    <ul>
+                        <li><code>job_definition</code> - Job configs & schedules</li>
+                        <li><code>job_dependency</code> - DAG relationships</li>
+                        <li><code>job_calendar</code> - Blackout calendars</li>
+                        <li><code>calendar_date</code> - Specific dates</li>
+                        <li><code>job_calendar_link</code> - Job ↔ Calendar links</li>
+                        <li><code>job_execution_mapping</code> - Links to Spring Batch</li>
+                        <li><code>scheduler_audit</code> - Config change log</li>
+                    </ul>
+                </div>
+                <div class="card spring-batch">
+                    <h4>Spring Batch Tables (Auto-created)</h4>
+                    <ul>
+                        <li><code>BATCH_JOB_INSTANCE</code></li>
+                        <li><code>BATCH_JOB_EXECUTION</code></li>
+                        <li><code>BATCH_JOB_EXECUTION_PARAMS</code></li>
+                        <li><code>BATCH_JOB_EXECUTION_CONTEXT</code></li>
+                        <li><code>BATCH_STEP_EXECUTION</code></li>
+                        <li><code>BATCH_STEP_EXECUTION_CONTEXT</code></li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="callout info">
+                <div class="callout-icon">💡</div>
+                <div class="callout-content">
+                    <h4>Key Table: job_execution_mapping</h4>
+                    <p>This table bridges our Scheduler's job definitions to Spring Batch's execution IDs.
+                       It allows us to track which Spring Batch execution corresponds to which scheduled trigger.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 8: Summary -->
+        <section class="section" style="background: linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%); border: 2px solid #86EFAC;">
+            <div class="section-header">
+                <div class="section-number" style="background: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);">✓</div>
+                <h2 class="section-title">Summary: What Triggers What</h2>
+            </div>
+
+            <div class="table-container" style="border-color: #86EFAC;">
+                <table>
+                    <thead style="background: #DCFCE7;">
+                        <tr>
+                            <th>Trigger</th>
+                            <th>Who Does It</th>
+                            <th>How</th>
+                            <th>Result</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Cron time matches</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>Quartz evaluates cron</td>
+                            <td>Calls CMIPS REST API</td>
+                        </tr>
+                        <tr>
+                            <td>Admin clicks "Run Now"</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>UI → Backend → REST</td>
+                            <td>Calls CMIPS REST API</td>
+                        </tr>
+                        <tr>
+                            <td>Job triggered via REST</td>
+                            <td><span class="badge badge-success">CMIPS</span></td>
+                            <td>JobLauncher.run()</td>
+                            <td>Spring Batch executes</td>
+                        </tr>
+                        <tr>
+                            <td>Job completes</td>
+                            <td><span class="badge badge-success">CMIPS</span></td>
+                            <td>Redis publish</td>
+                            <td>Scheduler receives event</td>
+                        </tr>
+                        <tr>
+                            <td>Parent job done</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>Dependency manager</td>
+                            <td>Triggers dependent jobs</td>
+                        </tr>
+                        <tr>
+                            <td>Admin stops job</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>REST → JobOperator</td>
+                            <td>Spring Batch stops</td>
+                        </tr>
+                        <tr>
+                            <td>Admin restarts job</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>REST → JobOperator</td>
+                            <td>Spring Batch restarts</td>
+                        </tr>
+                        <tr>
+                            <td>Config changed</td>
+                            <td><span class="badge badge-primary">Scheduler</span></td>
+                            <td>Direct DB write</td>
+                            <td>Next cron uses new config</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p class="footer-brand">Batch Job Scheduler Architecture Document</p>
+            <p>Version 2.0 (Spring Batch) | December 2024</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem;">Scheduler = Brain | CMIPS + Spring Batch = Muscle</p>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'base',
+            themeVariables: {
+                primaryColor: '#E0F2FE',
+                primaryTextColor: '#1E40AF',
+                primaryBorderColor: '#3B82F6',
+                lineColor: '#64748B',
+                secondaryColor: '#D1FAE5',
+                tertiaryColor: '#EDE9FE',
+                fontFamily: 'Segoe UI, system-ui, sans-serif',
+                fontSize: '14px'
+            },
+            flowchart: {
+                curve: 'basis',
+                padding: 20,
+                htmlLabels: true
+            },
+            sequence: {
+                actorMargin: 50,
+                messageMargin: 40,
+                mirrorActors: false,
+                useMaxWidth: true
+            }
+        });
+
+        // Tab functionality
+        function showTab(tabId) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+
+            // Show selected tab content
+            document.getElementById(tabId).classList.add('active');
+
+            // Mark clicked tab as active
+            event.target.classList.add('active');
+        }
+
+        // Smooth scroll for navigation
+        document.querySelectorAll('.nav-links a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetId = this.getAttribute('href').substring(1);
+                const targetElement = document.getElementById(targetId);
+                if (targetElement) {
+                    const navHeight = document.querySelector('.nav').offsetHeight;
+                    const targetPosition = targetElement.offsetTop - navHeight - 20;
+                    window.scrollTo({ top: targetPosition, behavior: 'smooth' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

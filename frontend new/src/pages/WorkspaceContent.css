@@ -1,0 +1,135 @@
+/**
+ * Workspace Content Styles
+ */
+
+/* Spinner styles */
+.spinner-border {
+  width: 3rem;
+  height: 3rem;
+  border: 0.25em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border 0.75s linear infinite;
+  display: inline-block;
+  vertical-align: text-bottom;
+}
+
+@keyframes spinner-border {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Stats Row */
+.workspace-stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.workspace-stat-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  text-align: center;
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.15s;
+  border-left: 4px solid #153554;
+}
+
+.workspace-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.workspace-stat-card .stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #153554;
+  line-height: 1.2;
+}
+
+.workspace-stat-card .stat-label {
+  font-size: 0.8rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.25rem;
+}
+
+.workspace-stat-supervisor {
+  border-left-color: #e67e22;
+}
+
+.workspace-stat-supervisor .stat-number {
+  color: #e67e22;
+}
+
+/* Quick Actions */
+.workspace-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Two-column layout */
+.workspace-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 900px) {
+  .workspace-columns {
+    grid-template-columns: 1fr;
+  }
+  .workspace-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Main two-column layout: Tasks | Shortcuts */
+.workspace-main-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .workspace-main-columns {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Shortcuts list */
+.workspace-shortcuts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.workspace-shortcut-btn {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  background: #153554;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.workspace-shortcut-btn:hover {
+  background: #1e4a72;
+  transform: translateX(2px);
+}

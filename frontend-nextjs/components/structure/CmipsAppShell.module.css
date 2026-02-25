@@ -1,0 +1,123 @@
+.appShell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: relative;
+}
+
+.skipToContent {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #153554;
+  color: white;
+  padding: 0.5rem 1rem;
+  text-decoration: none;
+  z-index: 10000;
+  border-radius: 0 0 4px 0;
+  font-weight: 600;
+  transition: top 0.3s ease;
+}
+
+.skipToContent:focus {
+  top: 0;
+}
+
+.appShellContent {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.appShellMain {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background-color: #f8f9fa;
+  min-height: calc(100vh - 70px);
+  /* CMIPS CDSS theme - card headers and accents use CDSS blue */
+  --theme-primary: #153554;
+  --theme-secondary: #0d2a3a;
+  --color-p2: #153554;
+}
+
+.breadcrumbsContainer {
+  background: white;
+  padding: 0.75rem 2rem;
+  border-bottom: 1px solid #e9ecef;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.breadcrumb {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background: transparent;
+}
+
+.breadcrumbItem {
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumbItem a {
+  color: #153554;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.breadcrumbItem a:hover {
+  color: #0d2a3a;
+  text-decoration: underline;
+}
+
+.pageOutlet {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.appShellFooter {
+  background-color: #e9ecef;
+  border-top: 1px solid #dee2e6;
+  padding: 2rem 0;
+  margin-top: auto;
+}
+
+.footerContent {
+  text-align: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+.footerText {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.footerLinks {
+  font-size: 0.9rem;
+}
+
+.footerLinks a {
+  color: #153554;
+  text-decoration: none;
+  transition: color 0.3s ease;
+}
+
+.footerLinks a:hover {
+  color: #0d2a3a;
+  text-decoration: underline;
+}
+
+.separator {
+  margin: 0 0.75rem;
+  color: #999;
+}

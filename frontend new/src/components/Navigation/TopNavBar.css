@@ -1,0 +1,324 @@
+/**
+ * TopNavBar Styles
+ * Based on DSD Section 20 - Cúram 7.0 Navigational Elements
+ * Includes CDSS Header as default for all pages
+ */
+
+.top-nav-container {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Unified Header - CDSS Logo + Application Bar */
+.unified-header {
+  background-color: var(--cdss-blue, #153554);
+  color: var(--text-light, #fff);
+  padding: 0.75rem 0;
+  border-bottom: 3px solid var(--cdss-blue-dark, #0d2a3a);
+  background: linear-gradient(135deg, var(--cdss-blue, #153554) 0%, var(--cdss-blue-light, #1a4060) 100%);
+}
+
+.unified-header .container {
+  max-width: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0 2rem;
+}
+
+.unified-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+/* Left Side - CDSS Logo and Text */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cdss-logo {
+  height: 50px;
+  width: auto;
+  object-fit: contain;
+}
+
+.cdss-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.cdss-label {
+  font-size: 0.75rem;
+  color: #ccc;
+  font-weight: 400;
+}
+
+.cdss-subtitle {
+  font-size: 0.9rem;
+  color: white;
+  font-weight: 500;
+  display: block;
+}
+
+.cdss-link {
+  color: #fff;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: color 0.2s;
+}
+
+.cdss-link:hover {
+  color: var(--cdss-accent, #7BB0DA);
+  text-decoration: underline;
+}
+
+/* Right Side - Application Bar */
+.header-right {
+  display: flex;
+  align-items: center;
+}
+
+.app-bar-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  cursor: default;
+}
+
+.user-icon {
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #fff;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.separator {
+  color: #666;
+}
+
+.app-bar-link {
+  color: #fff;
+  text-decoration: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.app-bar-link:hover {
+  color: var(--cdss-accent, #7BB0DA);
+  text-decoration: underline;
+}
+
+.logout-link {
+  font-family: inherit;
+}
+
+/* Workspace Tabs Container */
+.workspace-tabs-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-secondary, #f8f9fa);
+  border-bottom: 2px solid var(--border-color, #dee2e6);
+  padding: 0 1.5rem;
+}
+
+/* Workspace Tabs - Horizontal tabs */
+.workspace-tabs {
+  display: flex;
+  gap: 0;
+  flex: 1;
+}
+
+.workspace-tab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #495057;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.workspace-tab:hover {
+  background-color: var(--bg-tertiary, #e9ecef);
+  color: var(--cdss-blue, #153554);
+}
+
+.workspace-tab.active {
+  color: var(--cdss-blue, #153554);
+  border-bottom-color: var(--cdss-blue, #153554);
+  background-color: var(--bg-primary, #fff);
+  font-weight: 600;
+}
+
+/* Case Search - Top right */
+.case-search-container {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.case-search-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.case-search-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #495057;
+  margin: 0;
+}
+
+.case-search-input {
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  width: 200px;
+  transition: border-color 0.2s;
+}
+
+.case-search-input:focus {
+  outline: none;
+  border-color: var(--color-p2, #153554);
+  box-shadow: 0 0 0 2px rgba(21, 53, 84, 0.1);
+}
+
+.case-search-button {
+  padding: 0.4rem 1rem;
+  background-color: var(--cdss-blue, #153554);
+  color: var(--text-light, white);
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.case-search-button:hover {
+  background-color: var(--cdss-blue-dark, #0d2a3a);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .cdss-logo {
+    height: 45px;
+  }
+
+  .cdss-link {
+    font-size: 0.9rem;
+  }
+
+  .app-bar-content {
+    gap: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .workspace-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  .case-search-input {
+    width: 150px;
+  }
+}
+
+@media (max-width: 768px) {
+  .unified-header {
+    padding: 0.5rem 0;
+  }
+
+  .unified-header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .header-left {
+    width: 100%;
+  }
+
+  .cdss-logo {
+    height: 40px;
+  }
+
+  .cdss-link {
+    font-size: 0.85rem;
+  }
+
+  .header-right {
+    width: 100%;
+  }
+
+  .app-bar-content {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .workspace-tabs-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 0;
+  }
+
+  .workspace-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .workspace-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .case-search-container {
+    padding: 0.75rem 1rem;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .case-search-form {
+    width: 100%;
+  }
+
+  .case-search-input {
+    flex: 1;
+    width: auto;
+  }
+}

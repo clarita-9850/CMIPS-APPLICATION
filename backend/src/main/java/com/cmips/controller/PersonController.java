@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.PersonEntity;
 import com.cmips.model.PersonDTO;
 import com.cmips.model.PersonSearchCriteria;
@@ -24,6 +25,7 @@ public class PersonController {
      * Requires CASE_WORKER role
      */
     @PostMapping("/search")
+    @RequirePermission(resource = "Recipient Resource", scope = "view")
     public ResponseEntity<PersonSearchResponse> searchPersons(@RequestBody PersonSearchCriteria criteria) {
         try {
             System.out.println("🔍 PersonController: Search request received");
@@ -63,6 +65,7 @@ public class PersonController {
      * Requires CASE_WORKER role
      */
     @GetMapping("/{id}")
+    @RequirePermission(resource = "Recipient Resource", scope = "view")
     public ResponseEntity<PersonDTO> getPersonById(@PathVariable Long id) {
         try {
             PersonDTO person = personService.getPersonById(id);
@@ -89,6 +92,7 @@ public class PersonController {
      * Requires CASE_WORKER role
      */
     @PostMapping
+    @RequirePermission(resource = "Recipient Resource", scope = "create")
     public ResponseEntity<PersonDTO> createPerson(@RequestBody PersonDTO personDTO) {
         try {
             String createdBy = getCurrentUsername();
@@ -119,6 +123,7 @@ public class PersonController {
      * Requires CASE_WORKER role
      */
     @PutMapping("/{id}")
+    @RequirePermission(resource = "Recipient Resource", scope = "edit")
     public ResponseEntity<PersonDTO> updatePerson(@PathVariable Long id, @RequestBody PersonDTO personDTO) {
         try {
             personService.updatePerson(id, personDTO);

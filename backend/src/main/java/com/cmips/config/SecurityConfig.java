@@ -55,9 +55,9 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").permitAll()
                 .requestMatchers("/api/auth/**").permitAll()  // Allow login endpoint without authentication
                 .requestMatchers("/api/esp/register/**").permitAll()  // Allow ESP self-service registration without authentication
-                .requestMatchers("/api/analytics/**").permitAll()  // Allow analytics endpoints for testing
-                .requestMatchers("/api/field-masking/**").permitAll()  // Allow field masking endpoints for testing
-                .requestMatchers("/api/bi/**").permitAll()  // Allow BI endpoints for testing
+                .requestMatchers("/api/analytics/**").authenticated()  // Analytics requires authentication
+                .requestMatchers("/api/field-masking/**").authenticated()  // Field masking requires authentication
+                .requestMatchers("/api/bi/**").authenticated()  // BI requires authentication
                 .requestMatchers("/api/admin/keycloak/**").hasRole("ADMIN")  // Require ADMIN role for admin endpoints
                 .anyRequest().authenticated()
             )

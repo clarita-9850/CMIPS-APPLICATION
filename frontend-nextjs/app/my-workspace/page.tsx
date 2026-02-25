@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import Breadcrumb from '@/components/Breadcrumb';
 import { useAuth } from '@/contexts/AuthContext';
+import { getVisibleShortcuts } from '@/lib/roleDashboardMapping';
 import styles from './my-workspace.module.css';
 import Link from 'next/link';
 
@@ -20,7 +21,9 @@ interface Task {
 export default function MyWorkspacePage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const roles = user?.roles || [];
+  const shortcuts = useMemo(() => getVisibleShortcuts(roles), [roles]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -223,30 +226,12 @@ export default function MyWorkspacePage() {
 
               <div className={styles.shortcutsContainer}>
                 <div className={styles.shortcutsList}>
-                  <Link href="#" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>📋</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.newReferral')}</span>
-                  </Link>
-                  <Link href="/new-application" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>📝</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.newApplication')}</span>
-                  </Link>
-                  <Link href="#" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>👤</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.findPerson')}</span>
-                  </Link>
-                  <Link href="#" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>⚖️</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.findHearingCase')}</span>
-                  </Link>
-                  <Link href="#" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>🏥</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.registerProvider')}</span>
-                  </Link>
-                  <Link href="#" className={styles.shortcutLink}>
-                    <span className={styles.shortcutIcon}>🔄</span>
-                    <span className={styles.shortcutText}>{t('myWorkspace.shortcuts.mergeSSN')}</span>
-                  </Link>
+                  {shortcuts.map((s) => (
+                    <Link key={s.id} href={s.href} className={styles.shortcutLink}>
+                      <span className={styles.shortcutIcon}>{s.icon}</span>
+                      <span className={styles.shortcutText}>{s.label}</span>
+                    </Link>
+                  ))}
                 </div>
               </div>
             </div>

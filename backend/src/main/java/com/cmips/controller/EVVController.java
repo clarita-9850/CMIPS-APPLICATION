@@ -1,5 +1,6 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.EVVRecord;
 import com.cmips.service.EVVService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,6 +26,7 @@ public class EVVController {
      * EVV Check-In
      */
     @PostMapping("/check-in")
+    @RequirePermission(resource = "Provider Resource", scope = "create")
     public ResponseEntity<EVVRecord> checkIn(@RequestBody Map<String, Object> request) {
         try {
             String providerId = getCurrentUserId();
@@ -46,6 +48,7 @@ public class EVVController {
      * EVV Check-Out
      */
     @PostMapping("/check-out/{evvId}")
+    @RequirePermission(resource = "Provider Resource", scope = "create")
     public ResponseEntity<EVVRecord> checkOut(@PathVariable Long evvId, @RequestBody Map<String, Object> request) {
         try {
             Double latitude = Double.parseDouble(request.get("latitude").toString());
@@ -64,6 +67,7 @@ public class EVVController {
      * Get provider's EVV records
      */
     @GetMapping("/my-records")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
     public ResponseEntity<List<EVVRecord>> getMyEVVRecords() {
         String providerId = getCurrentUserId();
         List<EVVRecord> records = evvService.getProviderEVVRecords(providerId);
@@ -74,6 +78,7 @@ public class EVVController {
      * Get active check-in
      */
     @GetMapping("/active-checkin")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
     public ResponseEntity<EVVRecord> getActiveCheckIn(@RequestParam String recipientId) {
         String providerId = getCurrentUserId();
         Optional<EVVRecord> activeCheckIn = evvService.getActiveCheckIn(providerId, recipientId);
@@ -85,6 +90,7 @@ public class EVVController {
      * Get EVV records for a timesheet
      */
     @GetMapping("/timesheet/{timesheetId}")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
     public ResponseEntity<List<EVVRecord>> getTimesheetEVVRecords(@PathVariable Long timesheetId) {
         List<EVVRecord> records = evvService.getTimesheetEVVRecords(timesheetId);
         return ResponseEntity.ok(records);

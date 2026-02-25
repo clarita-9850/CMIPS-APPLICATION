@@ -31,6 +31,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import com.cmips.model.UserRole;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.*;
@@ -147,7 +149,13 @@ class TimesheetControllerTest {
                 createMockTimesheetResponse(2L)
         ), pageable, 2);
 
-        when(keycloakAuthzService.hasRole(anySet(), eq("PROVIDER"))).thenReturn(true);
+        Set<UserRole> providerRoles = EnumSet.of(UserRole.PROVIDER);
+        when(keycloakAuthzService.extractUserRoles()).thenReturn(providerRoles);
+        when(keycloakAuthzService.hasRole(providerRoles, UserRole.ADMIN)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(providerRoles, UserRole.SUPERVISOR)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(providerRoles, UserRole.CASE_WORKER)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(providerRoles, UserRole.RECIPIENT)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(providerRoles, UserRole.PROVIDER)).thenReturn(true);
         when(timesheetService.getTimesheetsByUserId(eq(TEST_USER_ID), any(Pageable.class)))
                 .thenReturn(mockPage);
         when(fieldLevelAuthzService.filterFields(anyList(), eq("Timesheet Resource"), eq("read")))
@@ -172,9 +180,11 @@ class TimesheetControllerTest {
                 createMockTimesheetResponse(2L)
         ), pageable, 2);
 
-        when(keycloakAuthzService.hasRole(anySet(), eq("PROVIDER"))).thenReturn(false);
-        when(keycloakAuthzService.hasRole(anySet(), eq("RECIPIENT"))).thenReturn(false);
-        when(keycloakAuthzService.hasRole(anySet(), eq("CASE_WORKER"))).thenReturn(true);
+        Set<UserRole> caseWorkerRoles = EnumSet.of(UserRole.CASE_WORKER);
+        when(keycloakAuthzService.extractUserRoles()).thenReturn(caseWorkerRoles);
+        when(keycloakAuthzService.hasRole(caseWorkerRoles, UserRole.ADMIN)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(caseWorkerRoles, UserRole.SUPERVISOR)).thenReturn(false);
+        when(keycloakAuthzService.hasRole(caseWorkerRoles, UserRole.CASE_WORKER)).thenReturn(true);
         when(timesheetService.getAllTimesheets(any(Pageable.class))).thenReturn(mockPage);
         when(fieldLevelAuthzService.filterFields(anyList(), eq("Timesheet Resource"), eq("read")))
                 .thenReturn(createMockFilteredTimesheetsList());
@@ -196,9 +206,10 @@ class TimesheetControllerTest {
         TimesheetResponse mockResponse = createMockTimesheetResponse(timesheetId);
         mockResponse.setStatus(TimesheetStatus.SUBMITTED);
 
-        when(keycloakAuthzService.hasRole(anySet(), eq("PROVIDER"))).thenReturn(true);
         when(timesheetService.submitTimesheet(eq(timesheetId), eq(TEST_USER_ID)))
                 .thenReturn(Optional.of(mockResponse));
+        when(fieldLevelAuthzService.filterFields(anyMap(), eq("Timesheet Resource"), eq("read")))
+                .thenReturn(convertToMap(mockResponse));
 
         // Act
         ResponseEntity<?> response = timesheetController.submitTimesheet(timesheetId, null);
@@ -210,20 +221,21 @@ class TimesheetControllerTest {
     }
 
     @Test
-    @DisplayName("Should return Forbidden when user lacks submit permission")
-    void testSubmitTimesheet_Forbidden() {
+    @DisplayName("Should return NotFound when submitting non-existent timesheet")
+    void testSubmitTimesheet_NotFound() {
         // Arrange
-        Long timesheetId = 1L;
+        Long timesheetId = 999L;
 
-        when(keycloakAuthzService.hasRole(anySet(), eq("PROVIDER"))).thenReturn(false);
+        when(timesheetService.submitTimesheet(eq(timesheetId), eq(TEST_USER_ID)))
+                .thenReturn(Optional.empty());
 
         // Act
         ResponseEntity<?> response = timesheetController.submitTimesheet(timesheetId, null);
 
         // Assert
         assertNotNull(response);
-        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
-        verify(timesheetService, never()).submitTimesheet(anyLong(), anyString());
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        verify(timesheetService, times(1)).submitTimesheet(eq(timesheetId), eq(TEST_USER_ID));
     }
 
     @Test

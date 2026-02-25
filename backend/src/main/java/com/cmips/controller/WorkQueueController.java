@@ -1,7 +1,12 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
+import com.cmips.entity.Task;
+import com.cmips.entity.WorkQueue;
 import com.cmips.entity.WorkQueueSubscription;
-import com.cmips.service.WorkQueueCatalogService;
+import com.cmips.repository.WorkQueueRepository;
+import com.cmips.service.KeycloakPolicyEvaluationService;
+import com.cmips.service.TaskLifecycleService;
 import com.cmips.service.TaskService;
 import com.cmips.service.WorkQueueSubscriptionService;
 import com.cmips.service.KeycloakAdminService;
@@ -21,91 +26,202 @@ public class WorkQueueController {
 
     private static final Logger log = LoggerFactory.getLogger(WorkQueueController.class);
 
-    private final WorkQueueCatalogService catalogService;
+    private final WorkQueueRepository workQueueRepository;
     private final TaskService taskService;
+    private final TaskLifecycleService lifecycleService;
     private final WorkQueueSubscriptionService subscriptionService;
     private final KeycloakAdminService keycloakAdminService;
+    private final KeycloakPolicyEvaluationService policyEvaluationService;
 
-    public WorkQueueController(WorkQueueCatalogService catalogService,
+    public WorkQueueController(WorkQueueRepository workQueueRepository,
                                TaskService taskService,
+                               TaskLifecycleService lifecycleService,
                                WorkQueueSubscriptionService subscriptionService,
-                               KeycloakAdminService keycloakAdminService) {
-        this.catalogService = catalogService;
+                               KeycloakAdminService keycloakAdminService,
+                               KeycloakPolicyEvaluationService policyEvaluationService) {
+        this.workQueueRepository = workQueueRepository;
         this.taskService = taskService;
+        this.lifecycleService = lifecycleService;
         this.subscriptionService = subscriptionService;
         this.keycloakAdminService = keycloakAdminService;
+        this.policyEvaluationService = policyEvaluationService;
     }
-    
+
     /**
-     * Get all predefined work queues
-     * GET /api/work-queues/catalog
+     * List all active work queues
+     * GET /api/work-queues
      */
-    @GetMapping("/catalog")
-    public ResponseEntity<List<WorkQueueCatalogService.WorkQueueInfo>> getQueueCatalog() {
-        log.info("GET /api/work-queues/catalog - Request received");
-        try {
-            List<WorkQueueCatalogService.WorkQueueInfo> queues = catalogService.getAllQueues();
-            log.info("Returning {} queues", queues.size());
-            return ResponseEntity.ok(queues);
-        } catch (Exception e) {
-            log.error("Error getting queue catalog: {}", e.getMessage(), e);
-            return ResponseEntity.status(500)
-                .body(List.of());
-        }
+    @GetMapping
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<List<WorkQueue>> getAllQueues() {
+        List<WorkQueue> queues = workQueueRepository.findByActiveTrue();
+        return ResponseEntity.ok(queues);
     }
-    
+
     /**
-     * Get tasks for a specific queue
-     * GET /api/work-queues/{queueName}/tasks
+     * Get work queue by ID
+     * GET /api/work-queues/{id}
      */
-    @GetMapping("/{queueName}/tasks")
-    public ResponseEntity<List<com.cmips.entity.Task>> getQueueTasks(@PathVariable String queueName) {
-        try {
-            List<com.cmips.entity.Task> tasks = taskService.getQueueTasks(queueName);
-            return ResponseEntity.ok(tasks);
-        } catch (Exception e) {
-            log.error("Error getting tasks for queue {}: {}", queueName, e.getMessage(), e);
-            return ResponseEntity.status(500).body(List.of());
-        }
+    @GetMapping("/{id}")
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<WorkQueue> getQueueById(@PathVariable Long id) {
+        return workQueueRepository.findById(id)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
-    
+
     /**
-     * Get all queues with their task counts
+     * Get tasks in a specific queue
+     * GET /api/work-queues/{id}/tasks
+     * Supervisor-only queues require supervisor role.
+     */
+    @GetMapping("/{id}/tasks")
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<?> getQueueTasks(@PathVariable Long id) {
+        return workQueueRepository.findById(id)
+                .map(queue -> {
+                    if (queue.isSupervisorOnly()) {
+                        java.util.Set<String> roles = policyEvaluationService.getCurrentUserRoles();
+                        if (roles == null || !roles.stream().anyMatch(r -> "SUPERVISORROLE".equalsIgnoreCase(r) || "SUPERVISOR".equalsIgnoreCase(r))) {
+                            return ResponseEntity.status(403).body(Map.of("error", "Access denied", "message", "This queue is restricted to supervisors"));
+                        }
+                    }
+                    List<Task> tasks = taskService.getQueueTasks(queue.getName());
+                    return ResponseEntity.ok(tasks);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Reserve next N tasks from a queue
+     * POST /api/work-queues/{id}/reserve
+     * Body: { "count": 1, "username": "user1" }
+     * Supervisor-only queues require supervisor role.
+     */
+    @PostMapping("/{id}/reserve")
+    @RequirePermission(resource = "Work Queue Resource", scope = "reserve")
+    public ResponseEntity<?> reserveFromQueue(@PathVariable Long id,
+                                              @RequestBody Map<String, Object> request) {
+        return workQueueRepository.findById(id)
+                .map(queue -> {
+                    if (queue.isSupervisorOnly()) {
+                        java.util.Set<String> roles = policyEvaluationService.getCurrentUserRoles();
+                        if (roles == null || !roles.stream().anyMatch(r -> "SUPERVISORROLE".equalsIgnoreCase(r) || "SUPERVISOR".equalsIgnoreCase(r))) {
+                            return ResponseEntity.status(403).body(Map.of("error", "Access denied", "message", "This queue is restricted to supervisors"));
+                        }
+                    }
+                    String username = (String) request.get("username");
+                    int count = request.containsKey("count") ? ((Number) request.get("count")).intValue() : 1;
+
+                    if (username == null || username.isBlank()) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
+                    }
+
+                    List<Task> reserved = lifecycleService.reserveNextTasks(queue.getName(), username, count);
+                    return ResponseEntity.ok(Map.of(
+                            "success", true,
+                            "reserved", reserved.size(),
+                            "tasks", reserved
+                    ));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Get subscribers for a queue
+     * GET /api/work-queues/{id}/subscribers
+     */
+    @GetMapping("/{id}/subscribers")
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<List<WorkQueueSubscription>> getQueueSubscribers(@PathVariable Long id) {
+        return workQueueRepository.findById(id)
+                .map(queue -> {
+                    List<WorkQueueSubscription> subs = subscriptionService.getQueueSubscriptions(queue.getName());
+                    return ResponseEntity.ok(subs);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Subscribe a user to a queue
+     * POST /api/work-queues/{id}/subscribe
+     * Body: { "username": "user1", "subscribedBy": "admin" }
+     */
+    @PostMapping("/{id}/subscribe")
+    @RequirePermission(resource = "Work Queue Resource", scope = "subscribe")
+    public ResponseEntity<?> subscribeToQueue(@PathVariable Long id,
+                                              @RequestBody Map<String, String> request) {
+        return workQueueRepository.findById(id)
+                .map(queue -> {
+                    String username = request.get("username");
+                    String subscribedBy = request.get("subscribedBy");
+
+                    if (username == null) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
+                    }
+
+                    try {
+                        WorkQueueSubscription sub = subscriptionService.subscribeUserToQueue(
+                                username, queue.getName(), subscribedBy);
+                        return ResponseEntity.ok(Map.of("success", true, "subscription", sub));
+                    } catch (IllegalArgumentException e) {
+                        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+                    }
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Unsubscribe a user from a queue
+     * DELETE /api/work-queues/{id}/subscribe
+     */
+    @DeleteMapping("/{id}/subscribe")
+    @RequirePermission(resource = "Work Queue Resource", scope = "subscribe")
+    public ResponseEntity<?> unsubscribeFromQueue(@PathVariable Long id,
+                                                  @RequestBody Map<String, String> request) {
+        return workQueueRepository.findById(id)
+                .map(queue -> {
+                    String username = request.get("username");
+                    if (username == null) {
+                        return ResponseEntity.badRequest().body(Map.of("error", "username is required"));
+                    }
+                    subscriptionService.unsubscribeUserFromQueue(username, queue.getName());
+                    return ResponseEntity.ok(Map.of("success", true));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Get queue summary with task counts
      * GET /api/work-queues/summary
      */
     @GetMapping("/summary")
-    public ResponseEntity<Map<String, Object>> getQueuesSummary() {
-        try {
-            Map<String, Object> summary = new HashMap<>();
-            List<WorkQueueCatalogService.WorkQueueInfo> queues = catalogService.getAllQueues();
-            
-            for (WorkQueueCatalogService.WorkQueueInfo queue : queues) {
-                List<com.cmips.entity.Task> tasks = taskService.getQueueTasks(queue.getName());
-                Map<String, Object> queueData = new HashMap<>();
-                queueData.put("name", queue.getName());
-                queueData.put("displayName", queue.getDisplayName());
-                queueData.put("description", queue.getDescription());
-                queueData.put("supervisorOnly", queue.isSupervisorOnly());
-                queueData.put("taskCount", tasks.size());
-                queueData.put("tasks", tasks);
-                summary.put(queue.getName(), queueData);
-            }
-            
-            return ResponseEntity.ok(summary);
-        } catch (Exception e) {
-            log.error("Error getting queues summary: {}", e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of());
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<List<Map<String, Object>>> getQueuesSummary() {
+        List<WorkQueue> queues = workQueueRepository.findByActiveTrue();
+        List<Map<String, Object>> summary = new java.util.ArrayList<>();
+
+        for (WorkQueue queue : queues) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", queue.getId());
+            item.put("name", queue.getName());
+            item.put("displayName", queue.getDisplayName());
+            item.put("category", queue.getQueueCategory());
+            item.put("openTasks", taskService.getQueueTaskCountByStatus(queue.getName(), Task.TaskStatus.OPEN));
+            summary.add(item);
         }
+
+        return ResponseEntity.ok(summary);
     }
-    
+
     /**
-     * Get all users (for supervisor to add to queues)
+     * Get all users (for subscription management)
      * GET /api/work-queues/users
      */
     @GetMapping("/users")
+    @RequirePermission(resource = "Work Queue Resource", scope = "manage")
     public ResponseEntity<List<Map<String, Object>>> getAllUsers() {
         try {
-            log.info("Getting all users for queue subscription");
             List<Map<String, Object>> users = keycloakAdminService.getAllUsers();
             return ResponseEntity.ok(users);
         } catch (Exception e) {
@@ -113,101 +229,12 @@ public class WorkQueueController {
             return ResponseEntity.status(500).body(List.of());
         }
     }
-    
-    /**
-     * Subscribe a user to a work queue
-     * POST /api/work-queues/subscribe
-     */
-    @PostMapping("/subscribe")
-    public ResponseEntity<Map<String, Object>> subscribeUserToQueue(@RequestBody Map<String, String> request) {
-        try {
-            String username = request.get("username");
-            String workQueue = request.get("workQueue");
-            String subscribedBy = request.get("subscribedBy"); // Supervisor username
-            
-            if (username == null || workQueue == null) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("error", "username and workQueue are required"));
-            }
-            
-            WorkQueueSubscription subscription = subscriptionService.subscribeUserToQueue(
-                username, workQueue, subscribedBy
-            );
-            
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "User subscribed to queue successfully",
-                "subscription", subscription
-            ));
-        } catch (IllegalArgumentException e) {
-            log.error("Error subscribing user to queue: {}", e.getMessage());
-            return ResponseEntity.badRequest()
-                .body(Map.of("error", e.getMessage()));
-        } catch (Exception e) {
-            log.error("Error subscribing user to queue: {}", e.getMessage(), e);
-            return ResponseEntity.status(500)
-                .body(Map.of("error", "Failed to subscribe user to queue: " + e.getMessage()));
-        }
-    }
-    
-    /**
-     * Unsubscribe a user from a work queue
-     * DELETE /api/work-queues/unsubscribe
-     */
-    @DeleteMapping("/unsubscribe")
-    public ResponseEntity<Map<String, Object>> unsubscribeUserFromQueue(@RequestBody Map<String, String> request) {
-        try {
-            String username = request.get("username");
-            String workQueue = request.get("workQueue");
-            
-            if (username == null || workQueue == null) {
-                return ResponseEntity.badRequest()
-                    .body(Map.of("error", "username and workQueue are required"));
-            }
-            
-            subscriptionService.unsubscribeUserFromQueue(username, workQueue);
-            
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "User unsubscribed from queue successfully"
-            ));
-        } catch (Exception e) {
-            log.error("Error unsubscribing user from queue: {}", e.getMessage(), e);
-            return ResponseEntity.status(500)
-                .body(Map.of("error", "Failed to unsubscribe user from queue: " + e.getMessage()));
-        }
-    }
-    
-    /**
-     * Get all subscribers for a queue
-     * GET /api/work-queues/{queueName}/subscribers
-     */
-    @GetMapping("/{queueName}/subscribers")
-    public ResponseEntity<List<WorkQueueSubscription>> getQueueSubscribers(@PathVariable String queueName) {
-        try {
-            List<WorkQueueSubscription> subscribers = subscriptionService.getQueueSubscriptions(queueName);
-            return ResponseEntity.ok(subscribers);
-        } catch (Exception e) {
-            log.error("Error getting subscribers for queue {}: {}", queueName, e.getMessage(), e);
-            return ResponseEntity.status(500).body(List.of());
-        }
-    }
-    
-    /**
-     * Get full subscription details for a queue
-     * GET /api/work-queues/queue/{workQueue}/details
-     */
-    @GetMapping("/queue/{workQueue}/details")
-    public ResponseEntity<List<WorkQueueSubscription>> getQueueSubscriptionDetails(@PathVariable String workQueue) {
-        log.info("GET /api/work-queues/queue/{}/details - Request received", workQueue);
-        try {
-            List<WorkQueueSubscription> subscriptions = subscriptionService.getQueueSubscriptions(workQueue);
-            log.info("Returning {} subscriptions for queue {}", subscriptions.size(), workQueue);
-            return ResponseEntity.ok(subscriptions);
-        } catch (Exception e) {
-            log.error("Error getting queue subscriptions for {}: {}", workQueue, e.getMessage(), e);
-            return ResponseEntity.status(500).body(List.of());
-        }
+
+    // --- Legacy endpoints for backward compatibility ---
+
+    @GetMapping("/catalog")
+    @RequirePermission(resource = "Work Queue Resource", scope = "view")
+    public ResponseEntity<List<WorkQueue>> getQueueCatalog() {
+        return getAllQueues();
     }
 }
-

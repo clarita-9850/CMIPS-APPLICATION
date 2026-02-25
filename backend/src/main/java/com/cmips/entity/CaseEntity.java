@@ -171,6 +171,42 @@ public class CaseEntity {
     @Column(name = "advance_pay_rate")
     private Double advancePayRate;
 
+    // Withdrawal tracking (DSD Section 3.1)
+    @Column(name = "withdrawal_date")
+    private LocalDate withdrawalDate;
+
+    @Column(name = "withdrawal_reason", length = 10)
+    private String withdrawalReason;
+
+    // Leave tracking (DSD Section 3.2)
+    @Column(name = "leave_date")
+    private LocalDate leaveDate;
+
+    @Column(name = "leave_reason", length = 10)
+    private String leaveReason;
+
+    @Column(name = "resource_suspension_end_date")
+    private LocalDate resourceSuspensionEndDate;
+
+    // Rescind tracking (DSD Section 3.4)
+    @Column(name = "rescind_date")
+    private LocalDate rescindDate;
+
+    @Column(name = "rescind_reason", length = 10)
+    private String rescindReason;
+
+    // Previous status before lifecycle action (for rescind restore)
+    @Column(name = "previous_status")
+    @Enumerated(EnumType.STRING)
+    private CaseStatus previousStatus;
+
+    // Previous authorization dates (for rescind restore)
+    @Column(name = "previous_auth_start_date")
+    private LocalDate previousAuthStartDate;
+
+    @Column(name = "previous_auth_end_date")
+    private LocalDate previousAuthEndDate;
+
     // County Use Notes
     @Column(name = "county_use_notes", columnDefinition = "TEXT")
     private String countyUseNotes;
@@ -346,6 +382,30 @@ public class CaseEntity {
     public String getCountyUseNotes() { return countyUseNotes; }
     public void setCountyUseNotes(String countyUseNotes) { this.countyUseNotes = countyUseNotes; }
 
+    public LocalDate getWithdrawalDate() { return withdrawalDate; }
+    public void setWithdrawalDate(LocalDate withdrawalDate) { this.withdrawalDate = withdrawalDate; }
+    public String getWithdrawalReason() { return withdrawalReason; }
+    public void setWithdrawalReason(String withdrawalReason) { this.withdrawalReason = withdrawalReason; }
+
+    public LocalDate getLeaveDate() { return leaveDate; }
+    public void setLeaveDate(LocalDate leaveDate) { this.leaveDate = leaveDate; }
+    public String getLeaveReason() { return leaveReason; }
+    public void setLeaveReason(String leaveReason) { this.leaveReason = leaveReason; }
+    public LocalDate getResourceSuspensionEndDate() { return resourceSuspensionEndDate; }
+    public void setResourceSuspensionEndDate(LocalDate resourceSuspensionEndDate) { this.resourceSuspensionEndDate = resourceSuspensionEndDate; }
+
+    public LocalDate getRescindDate() { return rescindDate; }
+    public void setRescindDate(LocalDate rescindDate) { this.rescindDate = rescindDate; }
+    public String getRescindReason() { return rescindReason; }
+    public void setRescindReason(String rescindReason) { this.rescindReason = rescindReason; }
+
+    public CaseStatus getPreviousStatus() { return previousStatus; }
+    public void setPreviousStatus(CaseStatus previousStatus) { this.previousStatus = previousStatus; }
+    public LocalDate getPreviousAuthStartDate() { return previousAuthStartDate; }
+    public void setPreviousAuthStartDate(LocalDate previousAuthStartDate) { this.previousAuthStartDate = previousAuthStartDate; }
+    public LocalDate getPreviousAuthEndDate() { return previousAuthEndDate; }
+    public void setPreviousAuthEndDate(LocalDate previousAuthEndDate) { this.previousAuthEndDate = previousAuthEndDate; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -517,15 +577,18 @@ public class CaseEntity {
         }
     }
 
-    // Case Status Enum
+    // Case Status Enum - per DSD Section 6.1, Case Status Codes CS001-CS010
     public enum CaseStatus {
-        PENDING,
-        ELIGIBLE,
-        PRESUMPTIVE_ELIGIBLE,
-        ON_LEAVE,
-        DENIED,
-        TERMINATED,
-        APPLICATION_WITHDRAWN
+        PENDING,                // CS001 - Default status
+        ELIGIBLE,               // CS002
+        PRESUMPTIVE_ELIGIBLE,   // CS003
+        ON_LEAVE,               // CS004
+        TERMINATED,             // CS005
+        DENIED,                 // CS006
+        APPLICATION_WITHDRAWN,  // CS007
+        IN_PROGRESS,            // CS008 - Inter-County Transfer only
+        ACTIVE,                 // CS009 - Supervisor Workspace (Pending/Eligible/Presumptive Eligible/Leave)
+        INACTIVE                // CS010 - Supervisor Workspace (Terminated/Denied/Withdrawn)
     }
 
     // Case Type Enum

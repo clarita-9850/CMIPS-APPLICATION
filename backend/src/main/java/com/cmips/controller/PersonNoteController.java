@@ -1,12 +1,12 @@
 package com.cmips.controller;
 
+import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.PersonNoteEntity;
 import com.cmips.entity.PersonNoteEntity.*;
 import com.cmips.service.PersonNoteService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -38,7 +38,7 @@ public class PersonNoteController {
      * Create a note for a recipient
      */
     @PostMapping("/recipient/{recipientId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createRecipientNote(@PathVariable Long recipientId,
                                                   @RequestBody Map<String, String> request) {
         try {
@@ -62,7 +62,7 @@ public class PersonNoteController {
      * Create a note for a provider
      */
     @PostMapping("/provider/{providerId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createProviderNote(@PathVariable Long providerId,
                                                  @RequestBody Map<String, String> request) {
         try {
@@ -86,7 +86,7 @@ public class PersonNoteController {
      * Create a note for a referral
      */
     @PostMapping("/referral/{referralId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createReferralNote(@PathVariable String referralId,
                                                  @RequestBody Map<String, String> request) {
         try {
@@ -110,7 +110,7 @@ public class PersonNoteController {
      * Create a note for a case
      */
     @PostMapping("/case/{caseId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createCaseNote(@PathVariable Long caseId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -134,7 +134,7 @@ public class PersonNoteController {
      * Create a note with follow-up required
      */
     @PostMapping("/with-followup")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createNoteWithFollowUp(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -161,7 +161,7 @@ public class PersonNoteController {
      * Create a confidential note
      */
     @PostMapping("/confidential")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createConfidentialNote(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -185,7 +185,7 @@ public class PersonNoteController {
      * Create a supervisor-only note
      */
     @PostMapping("/supervisor-only")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "create")
     public ResponseEntity<?> createSupervisorNote(@RequestBody Map<String, Object> request) {
         try {
             String userId = getCurrentUserId();
@@ -211,7 +211,7 @@ public class PersonNoteController {
      * Update note content (within 24-hour window)
      */
     @PutMapping("/{noteId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "edit")
     public ResponseEntity<?> updateNote(@PathVariable String noteId,
                                          @RequestBody Map<String, String> request) {
         try {
@@ -231,7 +231,7 @@ public class PersonNoteController {
      * Complete follow-up
      */
     @PostMapping("/{noteId}/complete-followup")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "edit")
     public ResponseEntity<?> completeFollowUp(@PathVariable String noteId,
                                                @RequestBody Map<String, String> request) {
         try {
@@ -251,7 +251,7 @@ public class PersonNoteController {
      * Inactivate note
      */
     @PostMapping("/{noteId}/inactivate")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "edit")
     public ResponseEntity<?> inactivateNote(@PathVariable String noteId,
                                              @RequestBody Map<String, String> request) {
         try {
@@ -273,7 +273,7 @@ public class PersonNoteController {
      * Get note by ID
      */
     @GetMapping("/{noteId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getNoteById(@PathVariable String noteId) {
         try {
             PersonNoteEntity note = noteService.getNoteById(noteId);
@@ -288,7 +288,7 @@ public class PersonNoteController {
      * Get notes for a person
      */
     @GetMapping("/person/{personId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getPersonNotes(@PathVariable Long personId,
                                              @RequestParam(required = false) Boolean activeOnly) {
         try {
@@ -309,7 +309,7 @@ public class PersonNoteController {
      * Get notes for a referral
      */
     @GetMapping("/referral/{referralId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getReferralNotes(@PathVariable String referralId) {
         try {
             List<PersonNoteEntity> notes = noteService.getReferralNotes(referralId);
@@ -324,7 +324,7 @@ public class PersonNoteController {
      * Get notes for a case
      */
     @GetMapping("/case/{caseId}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getCaseNotes(@PathVariable Long caseId) {
         try {
             List<PersonNoteEntity> notes = noteService.getCaseNotes(caseId);
@@ -339,7 +339,7 @@ public class PersonNoteController {
      * Get notes needing follow-up
      */
     @GetMapping("/needs-followup")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getNotesNeedingFollowUp(@RequestParam(required = false) Long personId) {
         try {
             List<PersonNoteEntity> notes;
@@ -359,7 +359,7 @@ public class PersonNoteController {
      * Get notes by category
      */
     @GetMapping("/person/{personId}/category/{category}")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getNotesByCategory(@PathVariable Long personId,
                                                  @PathVariable String category) {
         try {
@@ -376,7 +376,7 @@ public class PersonNoteController {
      * Get recent notes
      */
     @GetMapping("/person/{personId}/recent")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getRecentNotes(@PathVariable Long personId,
                                              @RequestParam(defaultValue = "30") int days) {
         try {
@@ -392,7 +392,7 @@ public class PersonNoteController {
      * Search notes
      */
     @GetMapping("/search")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> searchNotes(@RequestParam Long personId,
                                           @RequestParam String searchTerm) {
         try {
@@ -408,7 +408,7 @@ public class PersonNoteController {
      * Get important notes
      */
     @GetMapping("/person/{personId}/important")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getImportantNotes(@PathVariable Long personId) {
         try {
             List<PersonNoteEntity> notes = noteService.getImportantNotes(personId);
@@ -423,7 +423,7 @@ public class PersonNoteController {
      * Get confidential notes (supervisor access required)
      */
     @GetMapping("/person/{personId}/confidential")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getConfidentialNotes(@PathVariable Long personId) {
         try {
             List<PersonNoteEntity> notes = noteService.getConfidentialNotes(personId);
@@ -438,7 +438,7 @@ public class PersonNoteController {
      * Get supervisor-only notes (supervisor access required)
      */
     @GetMapping("/person/{personId}/supervisor-only")
-    @PreAuthorize("hasAnyRole('supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> getSupervisorOnlyNotes(@PathVariable Long personId) {
         try {
             List<PersonNoteEntity> notes = noteService.getSupervisorOnlyNotes(personId);
@@ -453,7 +453,7 @@ public class PersonNoteController {
      * Count notes for a person
      */
     @GetMapping("/person/{personId}/count")
-    @PreAuthorize("hasAnyRole('caseworker', 'supervisor', 'admin')")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
     public ResponseEntity<?> countNotes(@PathVariable Long personId,
                                          @RequestParam(required = false) Boolean activeOnly) {
         try {

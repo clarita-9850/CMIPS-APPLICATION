@@ -1,0 +1,77 @@
+{
+  "app": {
+    "title": "工时表报告系统",
+    "description": "加利福尼亚州工时表报告系统"
+  },
+  "header": {
+    "skipToContent": "跳转到主要内容",
+    "officialWebsite": "官方网站",
+    "stateOfCalifornia": "加利福尼亚州",
+    "departmentName": "工时表报告系统",
+    "navigation": {
+      "home": "首页",
+      "dashboard": "仪表板",
+      "batchJobs": "批处理作业",
+      "analytics": "分析",
+      "fieldMasking": "字段掩码"
+    }
+  },
+  "banner": {
+    "title": "欢迎使用工时表报告系统",
+    "body": "通过实时分析和批处理功能管理和生成全面的工时表报告。",
+    "buttonText": "开始使用"
+  },
+  "cards": {
+    "title1": "实时报告",
+    "title2": "批处理",
+    "title3": "分析仪表板",
+    "body": "即时生成报告或为大型数据集安排批处理作业"
+  },
+  "progress": {
+    "getStarted": "立即开始",
+    "description": "开始生成报告并高效管理您的工时表数据。",
+    "steps": {
+      "step1": {
+        "title": "步骤 1",
+        "body": "选择报告类型和筛选器"
+      },
+      "step2": {
+        "title": "步骤 2",
+        "body": "配置字段掩码规则"
+      },
+      "step3": {
+        "title": "步骤 3",
+        "body": "生成并下载报告"
+      }
+    }
+  },
+  "dashboard": {
+    "title": "仪表板",
+    "subtitle": "您的工时表数据和报告概览",
+    "summary": {
+      "totalRecords": "总记录数",
+      "totalHours": "总小时数",
+      "pendingApprovals": "待批准",
+      "avgApprovalTime": "平均批准时间"
+    }
+  },
+  "batchJobs": {
+    "title": "批处理作业",
+    "subtitle": "管理和监控批处理报告生成作业",
+    "createJob": "创建新作业",
+    "status": {
+      "queued": "排队中",
+      "processing": "处理中",
+      "completed": "已完成",
+      "failed": "失败",
+      "cancelled": "已取消"
+    }
+  },
+  "footer": {
+    "copyright": "© 2024 加利福尼亚州",
+    "accessibility": "无障碍访问",
+    "privacy": "隐私政策",
+    "terms": "使用条款"
+  }
+}
+
