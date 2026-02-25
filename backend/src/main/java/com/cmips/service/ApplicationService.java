@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Service for Application Processing
@@ -29,21 +30,28 @@ public class ApplicationService {
     private static final int PROCESSING_DAYS = 45; // Federal requirement
 
     private final ApplicationRepository applicationRepository;
-    private final ReferralRepository referralRepository;
-    private final RecipientRepository recipientRepository;
-    private final CaseRepository caseRepository;
-    private final ReferralService referralService;
+    private final ReferralRepository    referralRepository;
+    private final RecipientRepository   recipientRepository;
+    private final CaseRepository        caseRepository;
+    private final ReferralService       referralService;
+    // External interface services (separate from SCI/CMOO106A)
+    private final SAWSService           sawsService;   // CMSD4XXB / SMDS4XXB
+    private final MEDSService           medsService;   // CMDS103C
 
     public ApplicationService(ApplicationRepository applicationRepository,
                               ReferralRepository referralRepository,
                               RecipientRepository recipientRepository,
                               CaseRepository caseRepository,
-                              ReferralService referralService) {
+                              ReferralService referralService,
+                              SAWSService sawsService,
+                              MEDSService medsService) {
         this.applicationRepository = applicationRepository;
-        this.referralRepository = referralRepository;
-        this.recipientRepository = recipientRepository;
-        this.caseRepository = caseRepository;
-        this.referralService = referralService;
+        this.referralRepository    = referralRepository;
+        this.recipientRepository   = recipientRepository;
+        this.caseRepository        = caseRepository;
+        this.referralService       = referralService;
+        this.sawsService           = sawsService;
+        this.medsService           = medsService;
     }
 
     // ==================== CREATE APPLICATION ====================
@@ -225,9 +233,15 @@ public class ApplicationService {
 
         if (recipient != null) { recipient.setCin(selectedCin); recipientRepository.save(recipient); }
 
-        // BR 13: active Medi-Cal → send IH18 Pending Application to MEDS
         if (mediCalActive) {
-            log.info("[BR13] MEDS IH18 Pending Application: CIN={}, application={}", selectedCin, applicationId);
+            // BR-13: Send IH18 Pending Application to MEDS via CMDS103C (separate from SCI/CMOO106A)
+            medsService.sendIH18PendingApplication(applicationId, selectedCin, "IHSS_APPLICATION");
+
+            // BR-16: Send S8 Notification to SAWS via SMDS4XXB when aid code is NOT 10, 20, or 60
+            String aidCode = String.valueOf(mediCalData.getOrDefault("aidCode", ""));
+            if (!aidCode.isBlank() && !Set.of("10", "20", "60").contains(aidCode)) {
+                sawsService.sendS8Notification(applicationId, selectedCin, aidCode);
+            }
         }
         applicationRepository.save(application);
         log.info("CIN selected: application={}, CIN={}, mediCalActive={}", applicationId, selectedCin, mediCalActive);
@@ -257,8 +271,21 @@ public class ApplicationService {
                 "message", "Client Index Number search is required.");
         }
 
-        // EM-185 / BR 9: clearance was done, no active Medi-Cal → send S1 to SAWS
-        log.info("[BR9] S1 IHSS Referral for Medi-Cal Determination: application={}", applicationId);
+        // EM-185 / BR-9: clearance was done, no active Medi-Cal → send S1 to SAWS via CMSD4XXB
+        // Note: S1 goes to SAWS (CMSD4XXB), NOT through SCI (CMOO106A) — these are separate interfaces
+        RecipientEntity recipient = application.getRecipientId() != null
+                ? recipientRepository.findById(application.getRecipientId()).orElse(null)
+                : null;
+        sawsService.sendS1Referral(
+            applicationId,
+            application.getCin(),
+            recipient != null ? recipient.getLastName()                                   : "",
+            recipient != null ? recipient.getFirstName()                                  : "",
+            recipient != null && recipient.getDateOfBirth() != null
+                    ? recipient.getDateOfBirth().toString()                                : "",
+            recipient != null ? recipient.getGender()                                     : "",
+            application.getCountyCode()
+        );
         application.setMediCalStatus("PENDING_SAWS");
         application.setUpdatedBy(userId);
         applicationRepository.save(application);
