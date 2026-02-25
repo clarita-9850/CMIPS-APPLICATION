@@ -111,22 +111,43 @@ public class ApplicationController {
     }
 
     /**
-     * Select CIN match (when multiple matches found)
+     * Select CIN match with demographic comparison (Scenarios 4, 5, 6 / BR 1, BR 13, EM-202)
+     * Body: { cin, lastName, firstName, gender, dob, aidCode, eligibilityStatus, mediCalActive, effectiveDate }
      */
     @PostMapping("/{applicationId}/select-cin")
     @RequirePermission(resource = "Application Resource", scope = "edit")
     public ResponseEntity<?> selectCINMatch(@PathVariable String applicationId,
-                                             @RequestBody Map<String, String> request) {
+                                             @RequestBody Map<String, Object> request) {
         try {
-            String userId = getCurrentUserId();
-            String selectedCin = request.get("cin");
+            String userId      = getCurrentUserId();
+            String selectedCin = (String) request.get("cin");
 
-            ApplicationEntity updated = applicationService.selectCINMatch(applicationId, selectedCin, userId);
+            // Use the demographic-aware version
+            Map<String, Object> result = applicationService
+                    .selectCINWithDemographicCheck(applicationId, selectedCin, request, userId);
 
-            log.info("CIN match selected for application: {} - CIN: {}", applicationId, selectedCin);
-            return ResponseEntity.ok(updated);
+            log.info("select-cin result for application {}: {}", applicationId, result.get("result"));
+            return ResponseEntity.ok(result);
         } catch (Exception e) {
             log.error("Error selecting CIN match", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Save Create Case without CIN (EM-176 / EM-185 / BR 9)
+     * Called when user clicks Continue on the CreateCaseWithoutCIN confirmation modal.
+     */
+    @PostMapping("/{applicationId}/save-without-cin")
+    @RequirePermission(resource = "Application Resource", scope = "edit")
+    public ResponseEntity<?> saveWithoutCIN(@PathVariable String applicationId) {
+        try {
+            String userId = getCurrentUserId();
+            Map<String, Object> result = applicationService.saveWithoutCIN(applicationId, userId);
+            log.info("save-without-cin result for application {}: {}", applicationId, result.get("result"));
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Error in save-without-cin", e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

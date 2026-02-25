@@ -160,6 +160,114 @@ public class ApplicationService {
         return applicationRepository.save(application);
     }
 
+    // ==================== CIN SELECT WITH DEMOGRAPHIC CHECK ====================
+
+    /**
+     * Completes the CIN selection after the EL/OM transaction (Scenarios 4, 5, 6).
+     *
+     * Scenario 4 (BR 1)  – demographics match  → assign CIN, save MEDS info
+     * Scenario 5         – demographics mismatch → return MISMATCH, do NOT assign
+     * Scenario 6 (EM-202)– CIN in use elsewhere → return CIN_IN_USE
+     * BR 13              – if Medi-Cal active → log IH18 Pending Application
+     */
+    @Transactional
+    public java.util.Map<String, Object> selectCINWithDemographicCheck(
+            String applicationId, String selectedCin,
+            java.util.Map<String, Object> mediCalData, String userId) {
+
+        ApplicationEntity application = getApplicationById(applicationId);
+
+        // Scenario 6 / EM-202: CIN already assigned to a different application
+        boolean takenByOther = applicationRepository.findByCin(selectedCin)
+                .map(a -> !a.getId().equals(applicationId))
+                .orElse(false);
+        if (takenByOther) {
+            return java.util.Map.of(
+                "result",    "CIN_IN_USE",
+                "errorCode", "EM-202",
+                "message",   "Person record with indicated CIN already exists. " +
+                             "Please resolve the conflict and perform CIN clearance again."
+            );
+        }
+
+        // Scenario 4/5: demographic comparison against applicant record
+        RecipientEntity recipient = application.getRecipientId() != null
+                ? recipientRepository.findById(application.getRecipientId()).orElse(null)
+                : null;
+
+        if (recipient != null) {
+            String cinLastName  = normalize(String.valueOf(mediCalData.getOrDefault("lastName", "")));
+            String cinFirstName = normalize(String.valueOf(mediCalData.getOrDefault("firstName", "")));
+            String cinGender    = normalize(String.valueOf(mediCalData.getOrDefault("gender", "")));
+
+            boolean nameMatch   = cinLastName.equalsIgnoreCase(normalize(recipient.getLastName()))
+                               && cinFirstName.equalsIgnoreCase(normalize(recipient.getFirstName()));
+            boolean genderMatch = cinGender.equalsIgnoreCase(normalize(recipient.getGender()));
+
+            if (!nameMatch || !genderMatch) {
+                log.warn("CIN demographic mismatch for application {}. CIN={}", applicationId, selectedCin);
+                return java.util.Map.of("result", "MISMATCH", "message", "CIN data does not match Applicant data");
+            }
+        }
+
+        // Scenario 4 (BR 1): match — assign CIN and persist MEDS info
+        boolean mediCalActive = Boolean.TRUE.equals(mediCalData.get("mediCalActive"));
+        application.setCin(selectedCin);
+        application.setCinClearanceStatus(CINClearanceStatus.CLEARED);
+        application.setCinMatchType("EXACT");
+        application.setMediCalAidCode(String.valueOf(mediCalData.getOrDefault("aidCode", "")));
+        application.setMediCalStatus(mediCalActive ? "ACTIVE" : "INACTIVE");
+        String effDate = String.valueOf(mediCalData.getOrDefault("effectiveDate", ""));
+        if (!effDate.isBlank()) {
+            try { application.setMediCalEffectiveDate(LocalDate.parse(effDate)); } catch (Exception ignored) {}
+        }
+        application.setUpdatedBy(userId);
+
+        if (recipient != null) { recipient.setCin(selectedCin); recipientRepository.save(recipient); }
+
+        // BR 13: active Medi-Cal → send IH18 Pending Application to MEDS
+        if (mediCalActive) {
+            log.info("[BR13] MEDS IH18 Pending Application: CIN={}, application={}", selectedCin, applicationId);
+        }
+        applicationRepository.save(application);
+        log.info("CIN selected: application={}, CIN={}, mediCalActive={}", applicationId, selectedCin, mediCalActive);
+        return java.util.Map.of("result", "SUCCESS", "cin", selectedCin,
+                                "mediCalStatus", mediCalActive ? "ACTIVE" : "INACTIVE",
+                                "message", "CIN selected successfully");
+    }
+
+    // ==================== SAVE WITHOUT CIN (EM-176 / EM-185 / BR 9) ====================
+
+    /**
+     * Validates and handles a "Save" attempt on Create Case when CIN is blank.
+     *
+     * EM-176: CIN clearance was NOT performed → block the save.
+     * EM-185 / BR 9: Clearance WAS performed (no match or inactive Medi-Cal)
+     *               → allow save, trigger S1 IHSS Referral to SAWS.
+     */
+    @Transactional
+    public java.util.Map<String, Object> saveWithoutCIN(String applicationId, String userId) {
+        ApplicationEntity application = getApplicationById(applicationId);
+        CINClearanceStatus clearStatus = application.getCinClearanceStatus();
+
+        // EM-176: clearance not performed at all
+        if (clearStatus == null || clearStatus == CINClearanceStatus.NOT_STARTED) {
+            return java.util.Map.of(
+                "result", "BLOCKED", "errorCode", "EM-176",
+                "message", "Client Index Number search is required.");
+        }
+
+        // EM-185 / BR 9: clearance was done, no active Medi-Cal → send S1 to SAWS
+        log.info("[BR9] S1 IHSS Referral for Medi-Cal Determination: application={}", applicationId);
+        application.setMediCalStatus("PENDING_SAWS");
+        application.setUpdatedBy(userId);
+        applicationRepository.save(application);
+        return java.util.Map.of(
+            "result", "S1_SENT", "errorCode", "EM-185",
+            "message", "CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS.",
+            "applicationId", applicationId);
+    }
+
     // ==================== MEDS VERIFICATION ====================
 
     /**
@@ -496,10 +604,15 @@ public class ApplicationService {
     }
 
     private String generateSimulatedCIN() {
-        // Generate simulated CIN: 8 digits + 1 letter
+        // Generate simulated CIN: 8 digits + 1 letter (EM-188 format)
         long digits = (long) (Math.random() * 100000000);
         char letter = (char) ('A' + (int) (Math.random() * 26));
         return String.format("%08d%c", digits, letter);
+    }
+
+    /** Null-safe trim + lowercase for demographic comparison */
+    private String normalize(String s) {
+        return s == null ? "" : s.trim();
     }
 
     private void validateApprovalPrerequisites(ApplicationEntity application) {
