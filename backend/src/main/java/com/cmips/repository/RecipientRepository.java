@@ -90,6 +90,36 @@ public interface RecipientRepository extends JpaRepository<RecipientEntity, Long
     // Find ESP registered recipients
     List<RecipientEntity> findByEspRegisteredTrue();
 
+    // Find by provider number / taxpayer ID (BR-20)
+    Optional<RecipientEntity> findByTaxpayerId(String taxpayerId);
+
+    // Soundex phonetic name matching (BR-5: fuzzy duplicate detection)
+    // Uses PostgreSQL built-in soundex() — no extension needed
+    @Query(value = "SELECT * FROM recipients WHERE soundex(last_name) = soundex(:lastName) " +
+                   "AND soundex(first_name) = soundex(:firstName)", nativeQuery = true)
+    List<RecipientEntity> findBySoundex(@Param("lastName") String lastName,
+                                        @Param("firstName") String firstName);
+
+    /**
+     * Expanded name/demographic search (BR OS 05 + BR-20).
+     * All parameters optional; unset params (NULL) are ignored in the WHERE clause.
+     * Supports DOB, gender, county, and personType filtering in addition to name.
+     */
+    @Query(value = "SELECT * FROM recipients r WHERE " +
+           "(:lastName IS NULL OR UPPER(CAST(r.last_name AS VARCHAR)) LIKE UPPER('%' || :lastName || '%')) AND " +
+           "(:firstName IS NULL OR UPPER(CAST(r.first_name AS VARCHAR)) LIKE UPPER('%' || :firstName || '%')) AND " +
+           "(:dob IS NULL OR CAST(r.date_of_birth AS VARCHAR) = :dob) AND " +
+           "(:gender IS NULL OR UPPER(CAST(r.gender AS VARCHAR)) = UPPER(:gender)) AND " +
+           "(:countyCode IS NULL OR r.county_code = :countyCode) AND " +
+           "(:personType IS NULL OR r.person_type = :personType)", nativeQuery = true)
+    List<RecipientEntity> searchRecipientsExpanded(
+            @Param("lastName") String lastName,
+            @Param("firstName") String firstName,
+            @Param("dob") String dob,
+            @Param("gender") String gender,
+            @Param("countyCode") String countyCode,
+            @Param("personType") String personType);
+
     // Companion case search - find recipients with matching address (per BR SE 26, 27)
     @Query("SELECT r FROM RecipientEntity r WHERE " +
            "r.residenceStreetNumber = :streetNumber AND " +

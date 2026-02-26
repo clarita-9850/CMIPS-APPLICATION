@@ -36,6 +36,9 @@ import { PersonDuplicateProviderCheckPage } from './pages/uim/PersonDuplicatePro
 import { PersonEnterSickLeaveClaimManualEntryPage } from './pages/uim/PersonEnterSickLeaveClaimManualEntryPage';
 import { PersonLiveInProvSelfCertificationSearchPage } from './pages/uim/PersonLiveInProvSelfCertificationSearchPage';
 import { PersonSearchPage } from './pages/uim/PersonSearchPage';
+import { PersonSearchReferralPage } from './pages/PersonSearchReferralPage';
+import { PersonSearchApplicationPage } from './pages/PersonSearchApplicationPage';
+import { PersonCreateReferralPage } from './pages/PersonCreateReferralPage';
 import { CaseSearchStateHearingPage } from './pages/uim/CaseSearchStateHearingPage';
 import { PersonMergeDuplicateSsnPage } from './pages/uim/PersonMergeDuplicateSsnPage';
 import { PaymentListWarrantReplacementsPage } from './pages/uim/PaymentListWarrantReplacementsPage';
@@ -186,6 +189,10 @@ function App() {
             <Route path="/recipients/:id" element={<RecipientDetailPage />} />
             <Route path="/applications/new" element={<ApplicationsNewPage />} />
             <Route path="/applications/:id" element={<ApplicationDetailPage />} />
+            {/* Initial Contact — Person Search + Create Referral (CI-67784, CI-67788) */}
+            <Route path="/persons/search/referral" element={<PersonSearchReferralPage />} />
+            <Route path="/persons/search/application" element={<PersonSearchApplicationPage />} />
+            <Route path="/persons/referral/new" element={<PersonCreateReferralPage />} />
             <Route path="/providers" element={<ProvidersPage />} />
             <Route path="/providers/register" element={<ProviderRegisterPage />} />
             <Route path="/providers/live-in" element={<LiveInProviderPage />} />

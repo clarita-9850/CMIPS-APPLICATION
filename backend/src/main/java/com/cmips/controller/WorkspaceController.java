@@ -45,4 +45,27 @@ public class WorkspaceController {
         Map<String, Object> team = workspaceService.getTeamWorkloads(supervisorId);
         return ResponseEntity.ok(team);
     }
+
+    /**
+     * Get My Tasks — open tasks assigned to the user within the last 7 days (max 25).
+     * Implements DSD My Workspace Phase 1.
+     */
+    @GetMapping("/my-tasks")
+    @RequirePermission(resource = "Normal Login Resource", scope = "view")
+    public ResponseEntity<Map<String, Object>> getMyTasks(@RequestParam String username) {
+        Map<String, Object> tasks = workspaceService.getMyTasks(username);
+        return ResponseEntity.ok(tasks);
+    }
+
+    /**
+     * Get My Shortcuts — quick-access page links for the authenticated user.
+     * Implements DSD My Workspace Phase 1.
+     */
+    @GetMapping("/my-shortcuts")
+    @RequirePermission(resource = "Normal Login Resource", scope = "view")
+    public ResponseEntity<Map<String, Object>> getMyShortcuts(
+            @RequestParam(required = false, defaultValue = "") String username) {
+        Map<String, Object> shortcuts = workspaceService.getMyShortcuts(username);
+        return ResponseEntity.ok(shortcuts);
+    }
 }

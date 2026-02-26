@@ -64,33 +64,49 @@ public class CaseManagementController {
         return ResponseEntity.ok(filteredCases);
     }
 
+    /**
+     * Get case by ID — returns enriched response per DSD Phase 7 Case Home fields.
+     *
+     * Includes: ihssReferralDate, mediCalEligibilityReferralDate, recipientName,
+     * caseOwnerName, and all standard case fields.
+     */
     @GetMapping("/{id}")
     @RequirePermission(resource = "Case Resource", scope = "view")
-    public ResponseEntity<Map<String, Object>> getCaseById(
+    public ResponseEntity<?> getCaseById(
             @PathVariable Long id,
             @RequestHeader(value = "X-User-Roles", required = false) String roles) {
 
-        CaseEntity caseEntity = caseManagementService.searchCases(null, null, null, null, null)
-                .stream().filter(c -> c.getId().equals(id)).findFirst()
-                .orElseThrow(() -> new RuntimeException("Case not found"));
-
-        Map<String, Object> filteredCase = fieldAuthService.filterFieldsForRole(caseEntity, roles, "Case Resource");
-        return ResponseEntity.ok(filteredCase);
+        try {
+            // Use enriched lookup (efficient findById + recipient join)
+            Map<String, Object> enrichedCase = caseManagementService.getCaseWithDetails(id);
+            return ResponseEntity.ok(enrichedCase);
+        } catch (RuntimeException e) {
+            if (e.getMessage() != null && e.getMessage().startsWith("Case not found")) {
+                return ResponseEntity.notFound().build();
+            }
+            throw e;
+        }
     }
 
     @PostMapping
     @RequirePermission(resource = "Case Resource", scope = "create")
-    public ResponseEntity<CaseEntity> createCase(
+    public ResponseEntity<?> createCase(
             @RequestBody CreateCaseRequest request,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @RequestHeader(value = "X-User-Id", required = false) String headerUserId) {
 
-        CaseEntity caseEntity = caseManagementService.createCase(
-                request.getRecipientId(),
-                request.getCaseOwnerId(),
-                request.getCountyCode(),
-                userId);
+        // Resolve userId: prefer the header, fall back to request body createdBy field
+        String userId = (headerUserId != null && !headerUserId.isBlank())
+                ? headerUserId
+                : (request.getCreatedBy() != null ? request.getCreatedBy() : "unknown");
 
-        return ResponseEntity.ok(caseEntity);
+        try {
+            CaseEntity caseEntity = caseManagementService.createCaseFromRequest(request, userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (IllegalArgumentException e) {
+            // EM-175, EM-176, and other field-level validation errors
+            log.warn("[createCase] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/approve")
@@ -372,9 +388,31 @@ public class CaseManagementController {
 
     @lombok.Data
     public static class CreateCaseRequest {
+        // Existing path: provide a pre-existing recipientId
         private Long recipientId;
         private String caseOwnerId;
         private String countyCode;
+
+        // New-case path: demographics sent directly from Create Case form.
+        // When recipientId is null, the service creates the RecipientEntity first.
+        private String lastName;
+        private String firstName;
+        private String gender;
+        private String dateOfBirth;
+        private String ssn;
+        private String zipCode;
+        private String spokenLanguage;
+        private String writtenLanguage;
+        private Boolean interpreterAvailable;
+        private String ihssReferralDate;
+
+        // CIN clearance info carried through from the frontend
+        private String cin;
+        private String cinClearanceStatus;   // e.g. "CLEARED", "NO_MATCH", "NOT_STARTED"
+        private String mediCalStatus;        // "ACTIVE", "INACTIVE", "PENDING_SAWS"
+        private String aidCode;
+        private String createdBy;
+        private String applicantName;
     }
 
     @lombok.Data

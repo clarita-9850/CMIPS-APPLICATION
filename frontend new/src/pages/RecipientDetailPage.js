@@ -5,6 +5,107 @@ import * as notesApi from '../api/notesApi';
 import { AddNoteModal } from './modals/AddNoteModal';
 import './WorkQueues.css';
 
+// ── PersonType badge ─────────────────────────────────────────────────────────
+const PERSON_TYPE_STYLES = {
+  OPEN_REFERRAL:   { background: '#bee3f8', color: '#2b6cb0' },
+  CLOSED_REFERRAL: { background: '#e2e8f0', color: '#4a5568' },
+  APPLICANT:       { background: '#feebc8', color: '#c05621' },
+  RECIPIENT:       { background: '#c6f6d5', color: '#276749' },
+};
+const PersonTypeBadge = ({ type }) => {
+  if (!type) return null;
+  const style = PERSON_TYPE_STYLES[type] || { background: '#e2e8f0', color: '#4a5568' };
+  const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return (
+    <span style={{ ...style, padding: '0.2rem 0.75rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700, marginLeft: '0.75rem', whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  );
+};
+
+// ── CloseReferralModal ────────────────────────────────────────────────────────
+const CLOSE_REASONS = [
+  'Moved / Unable to Locate',
+  'Unable to Contact',
+  'Declined Services',
+  'No Longer Eligible',
+  'Duplicate Record',
+  'Services Completed',
+  'Other',
+];
+const CloseReferralModal = ({ onConfirm, onCancel, saving }) => {
+  const [reason, setReason] = useState('');
+  const [notes, setNotes]   = useState('');
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#fff', borderRadius: '8px', width: '460px', maxWidth: '95vw', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: '#153554', color: '#fff', padding: '1rem 1.5rem', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Close Referral</h3>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: '1.25rem' }}>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#4a5568', marginBottom: '0.25rem' }}>Reason *</label>
+            <select value={reason} onChange={e => setReason(e.target.value)}
+              style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e0', borderRadius: '4px', fontSize: '0.875rem' }}>
+              <option value="">-- Select Reason --</option>
+              {CLOSE_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#4a5568', marginBottom: '0.25rem' }}>Notes</label>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e0', borderRadius: '4px', fontSize: '0.875rem', boxSizing: 'border-box', resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button onClick={onCancel} style={{ background: '#fff', color: '#153554', border: '1px solid #153554', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
+            <button onClick={() => onConfirm({ reason, notes })} disabled={!reason || saving}
+              style={{ background: '#c53030', color: '#fff', border: 'none', padding: '0.4rem 1rem', borderRadius: '4px', cursor: reason && !saving ? 'pointer' : 'not-allowed', fontSize: '0.875rem', opacity: !reason ? 0.6 : 1 }}>
+              {saving ? 'Closing...' : 'Close Referral'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── ReopenReferralModal ───────────────────────────────────────────────────────
+const ReopenReferralModal = ({ onConfirm, onCancel, saving }) => {
+  const [referralDate, setReferralDate] = useState(new Date().toISOString().split('T')[0]);
+  const [reason, setReason]             = useState('');
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+      <div style={{ background: '#fff', borderRadius: '8px', width: '420px', maxWidth: '95vw', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+        <div style={{ background: '#153554', color: '#fff', padding: '1rem 1.5rem', borderRadius: '8px 8px 0 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: '1rem' }}>Re-open Referral</h3>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: '1.25rem' }}>
+          <div style={{ marginBottom: '0.75rem' }}>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#4a5568', marginBottom: '0.25rem' }}>New Referral Date *</label>
+            <input type="date" value={referralDate} onChange={e => setReferralDate(e.target.value)}
+              style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e0', borderRadius: '4px', fontSize: '0.875rem', boxSizing: 'border-box' }} />
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#4a5568', marginBottom: '0.25rem' }}>Reason</label>
+            <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3}
+              placeholder="Explain why this referral is being re-opened..."
+              style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e0', borderRadius: '4px', fontSize: '0.875rem', boxSizing: 'border-box', resize: 'vertical' }} />
+          </div>
+          <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+            <button onClick={onCancel} style={{ background: '#fff', color: '#153554', border: '1px solid #153554', padding: '0.4rem 1rem', borderRadius: '4px', cursor: 'pointer', fontSize: '0.875rem' }}>Cancel</button>
+            <button onClick={() => onConfirm({ referralDate, reason })} disabled={!referralDate || saving}
+              style={{ background: '#153554', color: '#fff', border: 'none', padding: '0.4rem 1rem', borderRadius: '4px', cursor: referralDate && !saving ? 'pointer' : 'not-allowed', fontSize: '0.875rem' }}>
+              {saving ? 'Re-opening...' : 'Re-open Referral'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const RecipientDetailPage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -16,6 +117,11 @@ export const RecipientDetailPage = () => {
   const [notes, setNotes] = useState([]);
   const [referrals, setReferrals] = useState([]);
   const [showAddNote, setShowAddNote] = useState(false);
+  // PersonType lifecycle modals
+  const [showCloseReferral,  setShowCloseReferral]  = useState(false);
+  const [showReopenReferral, setShowReopenReferral] = useState(false);
+  const [modalSaving,        setModalSaving]        = useState(false);
+  const [actionError,        setActionError]        = useState('');
 
   const loadPerson = useCallback(() => {
     if (!id) { setLoading(false); return; }
@@ -47,6 +153,35 @@ export const RecipientDetailPage = () => {
     }
   }, [id, activeTab]);
 
+  // ── PersonType lifecycle handlers ─────────────────────────────────────────
+  const handleCloseReferral = async ({ reason, notes: closeNotes }) => {
+    setModalSaving(true);
+    setActionError('');
+    try {
+      await recipientsApi.updatePersonType(id, { personType: 'CLOSED_REFERRAL', reason, notes: closeNotes });
+      setShowCloseReferral(false);
+      loadPerson();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || 'Failed to close referral.');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
+  const handleReopenReferral = async ({ referralDate, reason }) => {
+    setModalSaving(true);
+    setActionError('');
+    try {
+      await recipientsApi.updatePersonType(id, { personType: 'OPEN_REFERRAL', referralDate, reason });
+      setShowReopenReferral(false);
+      loadPerson();
+    } catch (err) {
+      setActionError(err?.response?.data?.message || 'Failed to re-open referral.');
+    } finally {
+      setModalSaving(false);
+    }
+  };
+
   const maskSsn = (val) => val ? '***-**-' + val.slice(-4) : '\u2014';
 
   if (loading) return <div className="wq-page"><p>Loading person...</p></div>;
@@ -57,13 +192,68 @@ export const RecipientDetailPage = () => {
   return (
     <div className="wq-page">
       <div className="wq-page-header">
-        <h2>{[p.lastName, p.firstName].filter(Boolean).join(', ') || p.name || 'Person Detail'}</h2>
-        <div>
-          <button className="wq-btn wq-btn-primary" style={{ marginRight: '0.5rem' }} onClick={() => navigate(`/recipients/${id}/edit`)}>Edit</button>
-          <button className="wq-btn wq-btn-outline" style={{ marginRight: '0.5rem' }} onClick={() => navigate('/recipients/new')}>Create Referral</button>
+        <h2 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.25rem' }}>
+          {[p.lastName, p.firstName].filter(Boolean).join(', ') || p.name || 'Person Detail'}
+          <PersonTypeBadge type={p.personType} />
+        </h2>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+          {/* Edit always available */}
+          <button className="wq-btn wq-btn-outline" onClick={() => navigate(`/recipients/${id}/edit`)}>Edit</button>
+
+          {/* OPEN_REFERRAL: Start Application + Close Referral */}
+          {p.personType === 'OPEN_REFERRAL' && (
+            <>
+              <button className="wq-btn wq-btn-primary"
+                onClick={() => navigate(`/applications/new?recipientId=${id}&source=existing`)}>
+                Start Application
+              </button>
+              <button className="wq-btn wq-btn-outline"
+                style={{ color: '#c53030', borderColor: '#fc8181' }}
+                onClick={() => { setActionError(''); setShowCloseReferral(true); }}>
+                Close Referral
+              </button>
+            </>
+          )}
+
+          {/* CLOSED_REFERRAL: Re-open Referral + Start Application (BR-8) */}
+          {p.personType === 'CLOSED_REFERRAL' && (
+            <>
+              <button className="wq-btn wq-btn-primary"
+                onClick={() => { setActionError(''); setShowReopenReferral(true); }}>
+                Re-open Referral
+              </button>
+              <button className="wq-btn wq-btn-outline"
+                onClick={() => navigate(`/applications/new?recipientId=${id}&source=existing`)}>
+                Start Application
+              </button>
+            </>
+          )}
+
+          {/* APPLICANT: Continue Application */}
+          {p.personType === 'APPLICANT' && (
+            <button className="wq-btn wq-btn-primary"
+              onClick={() => navigate(`/applications/new?recipientId=${id}&source=existing`)}>
+              Continue Application
+            </button>
+          )}
+
+          {/* RECIPIENT: View Case */}
+          {p.personType === 'RECIPIENT' && (
+            <button className="wq-btn wq-btn-primary" onClick={() => navigate('/cases')}>
+              View Cases
+            </button>
+          )}
+
           <button className="wq-btn wq-btn-outline" onClick={() => navigate('/recipients')}>Back</button>
         </div>
       </div>
+
+      {/* Action error banner */}
+      {actionError && (
+        <div style={{ background: '#fff5f5', border: '1px solid #fc8181', borderLeft: '4px solid #c53030', padding: '0.5rem 1rem', borderRadius: '4px', marginBottom: '1rem', color: '#c53030', fontSize: '0.875rem' }}>
+          {actionError}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="wq-tabs">
@@ -189,7 +379,11 @@ export const RecipientDetailPage = () => {
                   </div>
                   <div className="wq-detail-row">
                     <span className="wq-detail-label">Person Type:</span>
-                    <span className="wq-detail-value">{p.personType || '\u2014'}</span>
+                    <span className="wq-detail-value">
+                      {p.personType
+                        ? <PersonTypeBadge type={p.personType} />
+                        : '\u2014'}
+                    </span>
                   </div>
                   <div className="wq-detail-row">
                     <span className="wq-detail-label">Status:</span>
@@ -306,6 +500,20 @@ export const RecipientDetailPage = () => {
           entityId={id}
           onClose={() => setShowAddNote(false)}
           onSaved={() => { setShowAddNote(false); setActiveTab('notes'); }}
+        />
+      )}
+      {showCloseReferral && (
+        <CloseReferralModal
+          onConfirm={handleCloseReferral}
+          onCancel={() => setShowCloseReferral(false)}
+          saving={modalSaving}
+        />
+      )}
+      {showReopenReferral && (
+        <ReopenReferralModal
+          onConfirm={handleReopenReferral}
+          onCancel={() => setShowReopenReferral(false)}
+          saving={modalSaving}
         />
       )}
     </div>

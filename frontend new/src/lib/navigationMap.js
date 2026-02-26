@@ -17,8 +17,8 @@ export const ROUTE_TO_TAB = Object.fromEntries(
 
 /** Side nav link ID -> route */
 export const SIDE_NAV_ROUTES = {
-  'new-referral': '/recipients/new',
-  'new-application': '/applications/new',
+  'new-referral': '/persons/search/referral',
+  'new-application': '/persons/search/application',
   'message-center': '/inbox',
   'inbox': '/inbox',
   'assigned-tasks': '/tasks/assigned',

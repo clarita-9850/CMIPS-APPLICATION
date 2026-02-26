@@ -80,10 +80,21 @@ export const MediCalEligibilityModal = ({
     setSelecting(true);
     setError('');
     try {
-      // Demographic comparison + CIN-in-use check via backend
+      // Demographic comparison + CIN-in-use check via backend.
+      // Pass applicantLastName / applicantFirstName / applicantGender so the backend
+      // can compare the form data against MEDS even when the case is not yet saved
+      // (empty applicationId). Used by the stateless path in selectCINWithDemographicCheck.
+      // Use "new-case" when no applicationId yet (case not saved to DB yet)
+      const appId = applicationId || 'new-case';
       const res = await http.post(
-        `/applications/${applicationId}/select-cin`,
-        { ...eligibilityData, cin: eligibilityData.cin }
+        `/applications/${appId}/select-cin`,
+        {
+          ...eligibilityData,
+          cin:                eligibilityData.cin,
+          applicantLastName:  applicantData?.lastName  || '',
+          applicantFirstName: applicantData?.firstName || '',
+          applicantGender:    applicantData?.gender    || '',
+        }
       );
       const { result, errorCode, message } = res.data;
 

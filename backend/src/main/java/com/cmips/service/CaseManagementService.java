@@ -1,5 +1,6 @@
 package com.cmips.service;
 
+import com.cmips.controller.CaseManagementController.CreateCaseRequest;
 import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity.CaseStatus;
 import com.cmips.entity.RecipientEntity.PersonType;
@@ -38,6 +39,8 @@ public class CaseManagementService {
     private final CaseLeaveRepository caseLeaveRepository;
     private final TaskService taskService;
     private final NotificationService notificationService;
+    private final SAWSService sawsService;              // BR-9: S1 referral when no CIN found
+    private final PayrollIntegrationService payrollIntegrationService; // BR-15: PR00901A on case create
 
     public CaseManagementService(
             CaseRepository caseRepository,
@@ -51,7 +54,9 @@ public class CaseManagementService {
             CaseStatusRescindRepository caseStatusRescindRepository,
             CaseLeaveRepository caseLeaveRepository,
             TaskService taskService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            SAWSService sawsService,
+            PayrollIntegrationService payrollIntegrationService) {
         this.caseRepository = caseRepository;
         this.recipientRepository = recipientRepository;
         this.serviceEligibilityRepository = serviceEligibilityRepository;
@@ -64,6 +69,8 @@ public class CaseManagementService {
         this.caseLeaveRepository = caseLeaveRepository;
         this.taskService = taskService;
         this.notificationService = notificationService;
+        this.sawsService = sawsService;
+        this.payrollIntegrationService = payrollIntegrationService;
     }
 
     // ==================== CASE CREATION ====================
@@ -101,6 +108,9 @@ public class CaseManagementService {
 
         caseEntity = caseRepository.save(caseEntity);
 
+        // BR-15: Send PR00901A to payroll system on new case creation
+        payrollIntegrationService.sendPR00901A(caseEntity.getCaseNumber(), String.valueOf(recipientId));
+
         // Generate task notification for case assignment
         createCaseAssignmentTask(caseEntity, caseOwnerId);
 
@@ -109,10 +119,178 @@ public class CaseManagementService {
     }
 
     /**
+     * Full Create-Case path called from the Create Case form.
+     *
+     * Handles both variants:
+     *   • recipientId provided  → use existing recipient (legacy path)
+     *   • demographics provided → create RecipientEntity first, then the case
+     *
+     * BR-9: If mediCalStatus == "PENDING_SAWS", sends an S1 IHSS Referral to
+     *       the county SAWS system via SAWSService (CMSD4XXB / SMDS4XXB).
+     *
+     * Also sets the CIN on the new recipient when one was cleared.
+     */
+    @Transactional
+    public CaseEntity createCaseFromRequest(CreateCaseRequest request, String userId) {
+
+        // ── EM-176: CIN clearance must be performed before saving a case ─────
+        // Block the save if clearance was never initiated (NOT_STARTED or null).
+        // "PENDING_SAWS" is allowed — it means clearance ran but no CIN was found
+        // and an S1 referral will be sent to SAWS.
+        String clearStatus = request.getCinClearanceStatus();
+        if (clearStatus == null || clearStatus.isBlank() || "NOT_STARTED".equalsIgnoreCase(clearStatus)) {
+            throw new IllegalArgumentException(
+                "EM-176: Client Index Number search is required before creating a case.");
+        }
+
+        // ── EM-175: IHSS Referral Date cannot be in the future ───────────────
+        LocalDate parsedReferralDate = null;
+        if (request.getIhssReferralDate() != null && !request.getIhssReferralDate().isBlank()) {
+            try {
+                parsedReferralDate = LocalDate.parse(request.getIhssReferralDate());
+                if (parsedReferralDate.isAfter(LocalDate.now())) {
+                    throw new IllegalArgumentException(
+                        "EM-175: IHSS Referral Date cannot be in the future.");
+                }
+            } catch (java.time.format.DateTimeParseException ignored) {
+                // Non-parseable date — leave for frontend validation
+            }
+        }
+
+        Long recipientId = request.getRecipientId();
+
+        // When using existing recipient, fall back to recipient's referralDate if request omits it
+        if (recipientId != null && parsedReferralDate == null) {
+            RecipientEntity existingRecipient = recipientRepository.findById(recipientId).orElse(null);
+            if (existingRecipient != null && existingRecipient.getReferralDate() != null) {
+                parsedReferralDate = existingRecipient.getReferralDate();
+            }
+        }
+
+        if (recipientId == null) {
+            // ── Create recipient from form demographics ──────────────────────
+            RecipientEntity recipient = new RecipientEntity();
+            recipient.setLastName(request.getLastName() != null ? request.getLastName() : "");
+            recipient.setFirstName(request.getFirstName() != null ? request.getFirstName() : "");
+            recipient.setGender(request.getGender());
+            if (request.getDateOfBirth() != null && !request.getDateOfBirth().isBlank()) {
+                try { recipient.setDateOfBirth(LocalDate.parse(request.getDateOfBirth())); }
+                catch (Exception ignored) {}
+            }
+            if (request.getSsn() != null) recipient.setSsn(request.getSsn());
+            if (request.getCountyCode() != null) recipient.setCountyCode(request.getCountyCode());
+            if (request.getSpokenLanguage() != null) recipient.setSpokenLanguage(request.getSpokenLanguage());
+            if (request.getWrittenLanguage() != null) recipient.setWrittenLanguage(request.getWrittenLanguage());
+            if (request.getCin() != null && !request.getCin().isBlank()) {
+                recipient.setCin(request.getCin());
+            }
+            if (parsedReferralDate != null) {
+                recipient.setReferralDate(parsedReferralDate);
+            }
+            // Determine person type from CIN clearance status (reuse outer clearStatus)
+            if ("CLEARED".equals(clearStatus) || "EXACT_MATCH".equals(clearStatus)) {
+                recipient.setPersonType(PersonType.APPLICANT);
+            } else {
+                recipient.setPersonType(PersonType.OPEN_REFERRAL);
+            }
+            recipient.setCreatedBy(userId);
+            recipient = recipientRepository.save(recipient);
+            recipientId = recipient.getId();
+            log.info("[createCaseFromRequest] Created recipient id={} for {}", recipientId, request.getApplicantName());
+        }
+
+        // ── Create the case ──────────────────────────────────────────────────
+        String caseNumber = generateCaseNumber(request.getCountyCode());
+        CaseEntity caseEntity = CaseEntity.builder()
+                .caseNumber(caseNumber)
+                .recipientId(recipientId)
+                .caseStatus(CaseStatus.PENDING)
+                .caseType(CaseEntity.CaseType.IHSS)
+                .countyCode(request.getCountyCode())
+                .caseOwnerId(request.getCaseOwnerId())
+                .cin(request.getCin())
+                .applicationDate(LocalDate.now())
+                .referralDate(parsedReferralDate)
+                .createdBy(userId)
+                .build();
+        caseEntity = caseRepository.save(caseEntity);
+
+        // ── Fix 2: Record initial PENDING status in audit trail ──────────────
+        recordStatusHistory(caseEntity, "CREATE", null,
+                "Case created with status PENDING", LocalDate.now(), userId);
+
+        // ── BR-9: S1 referral to SAWS when no CIN was found ─────────────────
+        // mediCalStatus == "PENDING_SAWS" means clearance was performed but no
+        // active Medi-Cal CIN was selected. Send S1 IHSS Referral via CMSD4XXB.
+        if ("PENDING_SAWS".equals(request.getMediCalStatus())) {
+            log.info("[BR-9] Sending S1 IHSS Referral to SAWS for case={}, recipient={}",
+                     caseEntity.getCaseNumber(), recipientId);
+            sawsService.sendS1Referral(
+                    caseEntity.getCaseNumber(),
+                    request.getCin() != null ? request.getCin() : "",
+                    request.getLastName()  != null ? request.getLastName()  : "",
+                    request.getFirstName() != null ? request.getFirstName() : "",
+                    request.getDateOfBirth() != null ? request.getDateOfBirth() : "",
+                    request.getGender()    != null ? request.getGender()    : "",
+                    request.getCountyCode());
+        }
+
+        createCaseAssignmentTask(caseEntity, request.getCaseOwnerId());
+
+        // ── Fix 1: Notify the assigned case owner ────────────────────────────
+        String caseOwnerId = request.getCaseOwnerId();
+        if (caseOwnerId != null && !caseOwnerId.isBlank()) {
+            notificationService.createNotification(
+                    Notification.builder()
+                            .userId(caseOwnerId)
+                            .message("New case assigned to you: " + caseNumber +
+                                     ". Applicant: " + request.getApplicantName() +
+                                     ". Please review and take action.")
+                            .notificationType(Notification.NotificationType.INFO)
+                            .readStatus(false)
+                            .build());
+            log.info("[createCaseFromRequest] Notification sent to case owner {}", caseOwnerId);
+        }
+
+        // BR-15: Send PR00901A to payroll system on new case creation
+        payrollIntegrationService.sendPR00901A(caseNumber, String.valueOf(recipientId));
+
+        log.info("[createCaseFromRequest] Created case {} (mediCalStatus={})",
+                 caseNumber, request.getMediCalStatus());
+        return caseEntity;
+    }
+
+    /**
      * Create a referral (per BR OS 17, 28)
+     *
+     * Required-field enforcement per DSD CI-67784 and EM codes:
+     *   EM-205: Last Name is required
+     *   EM-206: First Name is required
+     *   EM-201: Referral Source is required
+     *   EM-208/209: At least Address (city+zip) OR a primary phone number is required
      */
     @Transactional
     public RecipientEntity createReferral(RecipientEntity recipient, String userId) {
+
+        // ── Field validation ────────────────────────────────────────────────
+        if (recipient.getLastName() == null || recipient.getLastName().isBlank()) {
+            throw new IllegalArgumentException("EM-205: Last Name is required");
+        }
+        if (recipient.getFirstName() == null || recipient.getFirstName().isBlank()) {
+            throw new IllegalArgumentException("EM-206: First Name is required");
+        }
+        if (recipient.getReferralSource() == null || recipient.getReferralSource().isBlank()) {
+            throw new IllegalArgumentException("EM-201: Referral Source is required");
+        }
+        // EM-208/209: Address (city + ZIP) OR phone must be provided
+        boolean hasAddress = (recipient.getResidenceCity() != null && !recipient.getResidenceCity().isBlank())
+                          && (recipient.getResidenceZip()  != null && !recipient.getResidenceZip().isBlank());
+        boolean hasPhone   = (recipient.getPrimaryPhone()  != null && !recipient.getPrimaryPhone().isBlank());
+        if (!hasAddress && !hasPhone) {
+            throw new IllegalArgumentException(
+                "EM-208: At least a Residence Address (city and ZIP) or a Phone Number is required");
+        }
+
         // Set person type to Open-Referral
         recipient.setPersonType(PersonType.OPEN_REFERRAL);
         recipient.setReferralDate(LocalDate.now());
@@ -620,6 +798,64 @@ public class CaseManagementService {
     public List<CaseEntity> searchCases(String caseNumber, String cin, String countyCode,
                                         String caseOwnerId, CaseStatus status) {
         return caseRepository.searchCases(caseNumber, cin, countyCode, caseOwnerId, status);
+    }
+
+    /**
+     * Get a single case by ID — efficient lookup plus recipient enrichment.
+     *
+     * Returns a map with all CaseEntity fields PLUS:
+     *   recipientName        — full name from RecipientEntity
+     *   recipientPersonType  — OPEN_REFERRAL / APPLICANT / RECIPIENT / etc.
+     *   ihssReferralDate     — DSD Phase 7 canonical label for referralDate
+     *   mediCalEligibilityReferralDate — mediCalEligibilityDate alias
+     *
+     * Throws RuntimeException("Case not found") if ID does not exist.
+     */
+    public Map<String, Object> getCaseWithDetails(Long caseId) {
+        CaseEntity c = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        // Build enriched response map
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id",            c.getId());
+        map.put("caseNumber",    c.getCaseNumber());
+        map.put("caseStatus",    c.getCaseStatus() != null ? c.getCaseStatus().name() : null);
+        map.put("caseType",      c.getCaseType()   != null ? c.getCaseType().name()   : null);
+        map.put("recipientId",   c.getRecipientId());
+        map.put("cin",           c.getCin());
+        map.put("countyCode",    c.getCountyCode());
+        map.put("countyName",    c.getCountyName());
+        map.put("caseOwnerId",   c.getCaseOwnerId());
+        map.put("caseOwnerName", c.getCaseOwnerName());
+        map.put("supervisorId",  c.getSupervisorId());
+        map.put("mediCalStatus", c.getMediCalStatus());
+        map.put("mediCalAidCode",c.getMediCalAidCode());
+        map.put("fundingSource", c.getFundingSource());
+        map.put("transferStatus",c.getTransferStatus());
+        // DSD Phase 7 canonical field names
+        map.put("ihssReferralDate",              c.getReferralDate());
+        map.put("applicationDate",               c.getApplicationDate());
+        map.put("eligibilityDate",               c.getEligibilityDate());
+        map.put("mediCalEligibilityReferralDate",c.getMediCalEligibilityDate());
+        map.put("authorizationStartDate",        c.getAuthorizationStartDate());
+        map.put("authorizationEndDate",          c.getAuthorizationEndDate());
+        map.put("createdAt",     c.getCreatedAt());
+        map.put("updatedAt",     c.getUpdatedAt());
+
+        // Enrich with recipient demographics
+        if (c.getRecipientId() != null) {
+            recipientRepository.findById(c.getRecipientId()).ifPresent(r -> {
+                map.put("recipientName",       r.getFullName());
+                map.put("recipientFirstName",  r.getFirstName());
+                map.put("recipientLastName",   r.getLastName());
+                map.put("recipientDob",        r.getDateOfBirth());
+                map.put("recipientPersonType", r.getPersonType() != null ? r.getPersonType().name() : null);
+                map.put("recipientAddress",    r.getFullResidenceAddress());
+                map.put("recipientPhone",      r.getPrimaryPhone());
+            });
+        }
+
+        return map;
     }
 
     /**

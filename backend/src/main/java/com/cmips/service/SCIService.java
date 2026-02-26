@@ -64,7 +64,10 @@ public class SCIService {
     private static final List<Map<String, Object>> MOCK_SCI_RECORDS = List.of(
         buildRecord("12345678A", "***-**-1234", "Smith",    "John",     "",   "M", "1975-03-15", true,  95),
         buildRecord("23456789B", "***-**-5678", "Smith",    "Jonathan", "Jr", "M", "1975-03-15", false, 88),
-        buildRecord("34567890C", "***-**-9012", "Smithson", "Maria",    "",   "F", "1988-07-22", false, 72)
+        buildRecord("34567890C", "***-**-9012", "Smithson", "Maria",    "",   "F", "1988-07-22", false, 72),
+        // Scenario 3 test record: appears in OI results but has NO entry in MOCK_ELIGIBILITY,
+        // so clicking MEDS Eligibility returns EL=305 (transaction not successful).
+        buildRecord("99999999X", "***-**-0000", "Harrison", "Patrick",  "",   "M", "1980-05-20", false, 61)
     );
 
     // ── OM eligibility records (MEDICALELIGINFO table equivalent) ────────────
@@ -158,12 +161,20 @@ public class SCIService {
             // BR-32: CIN exists on case — include CIN + demographics + SSN (unless mediCalPseudo)
             String sentCin = cin.length() > 9 ? cin.substring(0, 9) : cin;
             sentCriteria.put("cin", sentCin);
-            if (!mediCalPseudo && ssn != null && !ssn.isBlank() && isValidSsn(ssn)) {
+            if (mediCalPseudo) {
+                // SSN excluded because applicant has a pseudo Medi-Cal ID (not a real SSN)
+                sentCriteria.put("mediCalPseudo", true);
+                log.info("[BR32] Medi-Cal Pseudo: SSN excluded from OI send for CIN={}", sentCin);
+            } else if (ssn != null && !ssn.isBlank() && isValidSsn(ssn)) {
                 sentCriteria.put("ssn", ssn);
-            } else if (!mediCalPseudo && ssn != null && !ssn.isBlank() && !isValidSsn(ssn)) {
+            } else if (ssn != null && !ssn.isBlank() && !isValidSsn(ssn)) {
                 log.warn("[BR32] SSN failed CMOO106A validation, excluded from OI send");
             }
-            log.info("[BR32] SCI OI search: CIN={}, applicationId excluded from criteria panel", sentCin);
+            log.info("[BR32] SCI OI search: CIN={}", sentCin);
+        } else if (mediCalPseudo) {
+            // No CIN, but pseudo flag set — send demographics only, record the reason SSN is absent
+            sentCriteria.put("mediCalPseudo", true);
+            log.info("[BR33+Pseudo] Medi-Cal Pseudo: SSN excluded from OI, demographics only");
         } else if (ssn != null && !ssn.isBlank()) {
             if (isValidSsn(ssn)) {
                 sentCriteria.put("ssn", ssn);

@@ -16,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Service for Application Processing
@@ -183,38 +185,109 @@ public class ApplicationService {
             String applicationId, String selectedCin,
             java.util.Map<String, Object> mediCalData, String userId) {
 
+        boolean isNewCase = (applicationId == null || applicationId.isBlank()
+                || "new-case".equalsIgnoreCase(applicationId));
+
+        // ── STATELESS PATH: new case not yet saved in DB ───────────────────────
+        // When a worker runs CIN clearance during Create Case before saving,
+        // the applicationId is empty. Compare form demographics from the request
+        // body (applicantLastName / applicantFirstName / applicantGender) against
+        // the MEDS OM demographics (lastName / firstName / gender).
+        if (isNewCase) {
+            String formLastName  = normalize((String) mediCalData.getOrDefault("applicantLastName",  ""));
+            String formFirstName = normalize((String) mediCalData.getOrDefault("applicantFirstName", ""));
+            String formGender    = normGender((String) mediCalData.getOrDefault("applicantGender",   ""));
+
+            String cinLastName  = normalize((String) mediCalData.getOrDefault("lastName",  ""));
+            String cinFirstName = normalize((String) mediCalData.getOrDefault("firstName", ""));
+            String cinGender    = normGender((String) mediCalData.getOrDefault("gender",   ""));
+
+            boolean nameMatch   = cinLastName.equalsIgnoreCase(formLastName)
+                               && cinFirstName.equalsIgnoreCase(formFirstName);
+            boolean genderMatch = cinGender.equalsIgnoreCase(formGender);
+
+            if (!nameMatch || !genderMatch) {
+                log.warn("[select-cin stateless] Mismatch: CIN={} MEDS={}/{}/{} form={}/{}/{}",
+                         selectedCin, cinLastName, cinFirstName, cinGender,
+                         formLastName, formFirstName, formGender);
+                return java.util.Map.of("result", "MISMATCH",
+                                        "message", "CIN data does not match Applicant data");
+            }
+
+            boolean mediCalActive = Boolean.TRUE.equals(mediCalData.get("mediCalActive"));
+            log.info("[select-cin stateless] CIN={} cleared for new case, mediCalActive={}", selectedCin, mediCalActive);
+            return java.util.Map.of("result", "SUCCESS",
+                                    "mediCalStatus", mediCalActive ? "ACTIVE" : "INACTIVE",
+                                    "message", "CIN selected successfully");
+        }
+
+        // ── PERSISTED PATH: application already exists in DB ──────────────────
         ApplicationEntity application = getApplicationById(applicationId);
 
-        // Scenario 6 / EM-202: CIN already assigned to a different application
-        boolean takenByOther = applicationRepository.findByCin(selectedCin)
+        // Scenario 6 / EM-233 or EM-234: CIN already assigned to a different record.
+        //   EM-233: CIN is on an APPLICANT (application-stage recipient)
+        //   EM-234: CIN is on a RECIPIENT (active case recipient)
+        //   EM-202: kept for generic "duplicate application" conflicts (not CIN-in-use)
+        boolean takenByOtherApp = applicationRepository.findByCin(selectedCin)
                 .map(a -> !a.getId().equals(applicationId))
                 .orElse(false);
-        if (takenByOther) {
+        if (takenByOtherApp) {
+            // Determine whether the CIN holder is an Applicant or Recipient for correct EM code
+            RecipientEntity cinHolder = recipientRepository.findByCin(selectedCin).orElse(null);
+            String errorCode = "EM-233";
+            String msg = "This Client Index Number (CIN) is already associated with an Applicant. " +
+                         "Please resolve the conflict and perform CIN clearance again.";
+            if (cinHolder != null && cinHolder.getPersonType() == com.cmips.entity.RecipientEntity.PersonType.RECIPIENT) {
+                errorCode = "EM-234";
+                msg = "This Client Index Number (CIN) is already associated with an active Recipient. " +
+                      "Please resolve the conflict and perform CIN clearance again.";
+            }
             return java.util.Map.of(
                 "result",    "CIN_IN_USE",
-                "errorCode", "EM-202",
-                "message",   "Person record with indicated CIN already exists. " +
-                             "Please resolve the conflict and perform CIN clearance again."
+                "errorCode", errorCode,
+                "message",   msg
             );
         }
 
-        // Scenario 4/5: demographic comparison against applicant record
+        // Scenario 4/5: demographic comparison
+        // Compare MEDS OM demographics against the stored recipient (if linked).
+        // Also accept form demographics from request body as fallback when
+        // the application has no linked recipient yet.
         RecipientEntity recipient = application.getRecipientId() != null
                 ? recipientRepository.findById(application.getRecipientId()).orElse(null)
                 : null;
 
-        if (recipient != null) {
-            String cinLastName  = normalize(String.valueOf(mediCalData.getOrDefault("lastName", "")));
-            String cinFirstName = normalize(String.valueOf(mediCalData.getOrDefault("firstName", "")));
-            String cinGender    = normalize(String.valueOf(mediCalData.getOrDefault("gender", "")));
+        String cinLastName  = normalize((String) mediCalData.getOrDefault("lastName",  ""));
+        String cinFirstName = normalize((String) mediCalData.getOrDefault("firstName", ""));
+        String cinGender    = normGender((String) mediCalData.getOrDefault("gender",   ""));
 
+        if (recipient != null) {
             boolean nameMatch   = cinLastName.equalsIgnoreCase(normalize(recipient.getLastName()))
                                && cinFirstName.equalsIgnoreCase(normalize(recipient.getFirstName()));
-            boolean genderMatch = cinGender.equalsIgnoreCase(normalize(recipient.getGender()));
+            // Normalize both sides to M/F so "Male" == "M" does not cause a false mismatch
+            boolean genderMatch = cinGender.equalsIgnoreCase(normGender(recipient.getGender()));
 
             if (!nameMatch || !genderMatch) {
-                log.warn("CIN demographic mismatch for application {}. CIN={}", applicationId, selectedCin);
-                return java.util.Map.of("result", "MISMATCH", "message", "CIN data does not match Applicant data");
+                log.warn("[select-cin] Demographic mismatch for application {}. CIN={}", applicationId, selectedCin);
+                return java.util.Map.of("result", "MISMATCH",
+                                        "message", "CIN data does not match Applicant data");
+            }
+        } else {
+            // No recipient linked — fall back to form demographics from request body
+            String formLastName  = normalize((String) mediCalData.getOrDefault("applicantLastName",  ""));
+            String formFirstName = normalize((String) mediCalData.getOrDefault("applicantFirstName", ""));
+            String formGender    = normGender((String) mediCalData.getOrDefault("applicantGender",   ""));
+
+            if (!formLastName.isEmpty()) {
+                boolean nameMatch   = cinLastName.equalsIgnoreCase(formLastName)
+                                   && cinFirstName.equalsIgnoreCase(formFirstName);
+                boolean genderMatch = cinGender.equalsIgnoreCase(formGender);
+                if (!nameMatch || !genderMatch) {
+                    log.warn("[select-cin] Demographic mismatch (form fallback) for application {}. CIN={}",
+                             applicationId, selectedCin);
+                    return java.util.Map.of("result", "MISMATCH",
+                                            "message", "CIN data does not match Applicant data");
+                }
             }
         }
 
@@ -234,17 +307,17 @@ public class ApplicationService {
         if (recipient != null) { recipient.setCin(selectedCin); recipientRepository.save(recipient); }
 
         if (mediCalActive) {
-            // BR-13: Send IH18 Pending Application to MEDS via CMDS103C (separate from SCI/CMOO106A)
+            // BR-13: Send IH18 Pending Application to MEDS via CMDS103C
             medsService.sendIH18PendingApplication(applicationId, selectedCin, "IHSS_APPLICATION");
 
-            // BR-16: Send S8 Notification to SAWS via SMDS4XXB when aid code is NOT 10, 20, or 60
+            // BR-16: Send S8 to SAWS when aid code is NOT 10, 20, or 60
             String aidCode = String.valueOf(mediCalData.getOrDefault("aidCode", ""));
             if (!aidCode.isBlank() && !Set.of("10", "20", "60").contains(aidCode)) {
                 sawsService.sendS8Notification(applicationId, selectedCin, aidCode);
             }
         }
         applicationRepository.save(application);
-        log.info("CIN selected: application={}, CIN={}, mediCalActive={}", applicationId, selectedCin, mediCalActive);
+        log.info("[select-cin] CIN={} cleared for application={}, mediCalActive={}", selectedCin, applicationId, mediCalActive);
         return java.util.Map.of("result", "SUCCESS", "cin", selectedCin,
                                 "mediCalStatus", mediCalActive ? "ACTIVE" : "INACTIVE",
                                 "message", "CIN selected successfully");
@@ -419,8 +492,15 @@ public class ApplicationService {
         application.setDenialReason(denialReason);
         application.setUpdatedBy(userId);
 
+        ApplicationEntity saved = applicationRepository.save(application);
+
+        // BR-12: Send IH34 to MEDS when application is denied
+        if (saved.getCin() != null && !saved.getCin().isBlank()) {
+            medsService.sendIH34UpdateApplicationData(applicationId, saved.getCin(), "DENIED");
+        }
+
         log.info("Application {} denied. Reason: {}", applicationId, denialCode);
-        return applicationRepository.save(application);
+        return saved;
     }
 
     /**
@@ -589,6 +669,41 @@ public class ApplicationService {
         return applicationRepository.countOverdueByCounty(countyCode);
     }
 
+    // ==================== DUPLICATE CHECK (BR-1, BR-4, BR-5) ====================
+
+    /**
+     * Check for duplicate persons before creating a referral or application.
+     * Searches by SSN (exact) then by Soundex phonetic name match.
+     * Returns list of potential duplicates for worker to review.
+     */
+    public java.util.List<RecipientEntity> findDuplicates(DuplicateCheckRequest req) {
+        // SSN exact match — strong duplicate signal (BR-1)
+        if (req.getSsn() != null && !req.getSsn().isBlank()) {
+            String normalizedSsn = req.getSsn().replaceAll("[^0-9]", "");
+            validateSsn(normalizedSsn);
+            java.util.Optional<RecipientEntity> bySsn = recipientRepository.findBySsn(normalizedSsn);
+            if (bySsn.isPresent()) {
+                return java.util.List.of(bySsn.get());
+            }
+        }
+
+        // Soundex name + DOB match (BR-4, BR-5)
+        java.util.List<RecipientEntity> soundexMatches = java.util.Collections.emptyList();
+        if (req.getLastName() != null && req.getFirstName() != null) {
+            soundexMatches = recipientRepository.findBySoundex(req.getLastName(), req.getFirstName());
+        }
+
+        // If DOB also provided, filter soundex matches by DOB
+        if (req.getDateOfBirth() != null && !soundexMatches.isEmpty()) {
+            LocalDate reqDob = LocalDate.parse(req.getDateOfBirth());
+            soundexMatches = soundexMatches.stream()
+                    .filter(r -> reqDob.equals(r.getDateOfBirth()))
+                    .collect(java.util.stream.Collectors.toList());
+        }
+
+        return soundexMatches;
+    }
+
     // ==================== HELPER METHODS ====================
 
     private void updateRecipientToApplicant(Long recipientId, String userId) {
@@ -630,6 +745,41 @@ public class ApplicationService {
         return recipientRepository.save(recipient);
     }
 
+    /**
+     * Validate SSN per DSD rules.
+     * EM-237: SSN cannot start with 9
+     * EM-238: SSN cannot have all same digits
+     * EM-240: SSN must be exactly 9 digits
+     */
+    public void validateSsn(String ssn) {
+        if (ssn == null || ssn.isBlank()) return; // SSN is optional at referral stage
+        if (!ssn.matches("\\d{9}")) {
+            throw new IllegalArgumentException("EM-240: SSN must be exactly 9 digits");
+        }
+        if (ssn.startsWith("9")) {
+            throw new IllegalArgumentException("EM-237: SSN cannot begin with digit 9");
+        }
+        if (ssn.matches("(\\d)\\1{8}")) {
+            throw new IllegalArgumentException("EM-238: SSN cannot consist of all identical digits");
+        }
+    }
+
+    /**
+     * Validate date of birth per DSD rules.
+     * EM-203: DOB cannot be in the future
+     * EM-204: DOB cannot be more than 120 years ago
+     */
+    public void validateDob(String dobString) {
+        if (dobString == null || dobString.isBlank()) return;
+        LocalDate dob = LocalDate.parse(dobString);
+        if (dob.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("EM-203: Date of birth cannot be in the future");
+        }
+        if (LocalDate.now().getYear() - dob.getYear() > 120) {
+            throw new IllegalArgumentException("EM-204: Date of birth cannot be more than 120 years ago");
+        }
+    }
+
     private String generateSimulatedCIN() {
         // Generate simulated CIN: 8 digits + 1 letter (EM-188 format)
         long digits = (long) (Math.random() * 100000000);
@@ -637,9 +787,22 @@ public class ApplicationService {
         return String.format("%08d%c", digits, letter);
     }
 
-    /** Null-safe trim + lowercase for demographic comparison */
+    /** Null-safe trim for demographic string comparison */
     private String normalize(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    /**
+     * Normalizes a gender value to SCI wire format (M / F) so that
+     * "Male" and "M" are treated as equal when comparing form data to MEDS data.
+     */
+    private String normGender(String gender) {
+        if (gender == null) return "";
+        return switch (gender.trim().toUpperCase()) {
+            case "MALE",   "M" -> "M";
+            case "FEMALE", "F" -> "F";
+            default            -> gender.trim().toUpperCase();
+        };
     }
 
     private void validateApprovalPrerequisites(ApplicationEntity application) {
@@ -677,5 +840,22 @@ public class ApplicationService {
         } else {
             application.setMissingDocuments(null);
         }
+    }
+
+    // DTO for duplicate check requests
+    public static class DuplicateCheckRequest {
+        private String lastName;
+        private String firstName;
+        private String dateOfBirth; // yyyy-MM-dd
+        private String ssn;         // optional; 9 digits if provided
+
+        public String getLastName() { return lastName; }
+        public void setLastName(String lastName) { this.lastName = lastName; }
+        public String getFirstName() { return firstName; }
+        public void setFirstName(String firstName) { this.firstName = firstName; }
+        public String getDateOfBirth() { return dateOfBirth; }
+        public void setDateOfBirth(String dateOfBirth) { this.dateOfBirth = dateOfBirth; }
+        public String getSsn() { return ssn; }
+        public void setSsn(String ssn) { this.ssn = ssn; }
     }
 }

@@ -3,7 +3,9 @@ package com.cmips.controller;
 import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.ApplicationEntity;
 import com.cmips.entity.ApplicationEntity.*;
+import com.cmips.entity.RecipientEntity;
 import com.cmips.service.ApplicationService;
+import com.cmips.service.ApplicationService.DuplicateCheckRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,27 @@ public class ApplicationController {
 
     public ApplicationController(ApplicationService applicationService) {
         this.applicationService = applicationService;
+    }
+
+    // ==================== DUPLICATE CHECK (BR-1, BR-4, BR-5) ====================
+
+    /**
+     * Check for duplicate persons before creating a referral or application.
+     * Body: { lastName, firstName, dateOfBirth (yyyy-MM-dd), ssn (optional) }
+     * Returns list of matching RecipientEntity records.
+     */
+    @PostMapping("/duplicate-check")
+    @RequirePermission(resource = "Application Resource", scope = "create")
+    public ResponseEntity<?> duplicateCheck(@RequestBody DuplicateCheckRequest req) {
+        try {
+            java.util.List<RecipientEntity> matches = applicationService.findDuplicates(req);
+            return ResponseEntity.ok(matches);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        } catch (Exception e) {
+            log.error("Error during duplicate check", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ==================== CREATE ====================

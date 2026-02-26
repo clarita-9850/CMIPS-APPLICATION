@@ -37,3 +37,6 @@ export const getClosedReferrals = (countyCode) =>
 
 export const getCompanionCases = (id) =>
   http.get(`/recipients/${id}/companion-cases`).then(r => r.data);
+
+export const updatePersonType = (id, data) =>
+  http.patch(`/recipients/${id}/person-type`, data).then(r => r.data);

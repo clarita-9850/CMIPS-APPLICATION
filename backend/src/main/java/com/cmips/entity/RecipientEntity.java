@@ -179,6 +179,25 @@ public class RecipientEntity {
     @Column(name = "county_name", length = 100)
     private String countyName;
 
+    // CASS Address Verification Fields (CI-116197 — informational, non-blocking)
+    @Column(name = "residence_cass_match")
+    private Boolean residenceCassMatch;
+
+    @Column(name = "residence_cass_updates", length = 500)
+    private String residenceCassUpdates;
+
+    @Column(name = "residence_cass_failed")
+    private Boolean residenceCassFailed;
+
+    @Column(name = "mailing_cass_match")
+    private Boolean mailingCassMatch;
+
+    @Column(name = "mailing_cass_updates", length = 500)
+    private String mailingCassUpdates;
+
+    @Column(name = "mailing_cass_failed")
+    private Boolean mailingCassFailed;
+
     // Death Information
     @Column(name = "deceased")
     private Boolean deceased;
@@ -659,6 +678,24 @@ public class RecipientEntity {
     public void setUpdatedBy(String updatedBy) {
         this.updatedBy = updatedBy;
     }
+
+    public Boolean getResidenceCassMatch() { return residenceCassMatch; }
+    public void setResidenceCassMatch(Boolean residenceCassMatch) { this.residenceCassMatch = residenceCassMatch; }
+
+    public String getResidenceCassUpdates() { return residenceCassUpdates; }
+    public void setResidenceCassUpdates(String residenceCassUpdates) { this.residenceCassUpdates = residenceCassUpdates; }
+
+    public Boolean getResidenceCassFailed() { return residenceCassFailed; }
+    public void setResidenceCassFailed(Boolean residenceCassFailed) { this.residenceCassFailed = residenceCassFailed; }
+
+    public Boolean getMailingCassMatch() { return mailingCassMatch; }
+    public void setMailingCassMatch(Boolean mailingCassMatch) { this.mailingCassMatch = mailingCassMatch; }
+
+    public String getMailingCassUpdates() { return mailingCassUpdates; }
+    public void setMailingCassUpdates(String mailingCassUpdates) { this.mailingCassUpdates = mailingCassUpdates; }
+
+    public Boolean getMailingCassFailed() { return mailingCassFailed; }
+    public void setMailingCassFailed(Boolean mailingCassFailed) { this.mailingCassFailed = mailingCassFailed; }
 
     @PrePersist
     protected void onCreate() {

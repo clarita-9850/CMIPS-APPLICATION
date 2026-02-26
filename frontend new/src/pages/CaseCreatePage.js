@@ -78,14 +78,15 @@ export const CaseCreatePage = () => {
 
   // ── Field change handler ──────────────────────────────────────────────────
   const handleChange = (field, value) => {
-    setForm(prev => ({ ...prev, [field]: value }));
-    // Clear any existing CIN / clearance status when demographics change (BR 14)
+    // BR-14: changing any demographic field resets CIN clearance status
     if (['lastName','firstName','gender','dateOfBirth'].includes(field)) {
       setForm(prev => ({ ...prev, [field]: value, cin: '' }));
       setCinClearancePerformed(false);
       setCinClearanceStatus('NOT_STARTED');
       setMediCalStatus('');
       setAidCode('');
+    } else {
+      setForm(prev => ({ ...prev, [field]: value }));
     }
   };
 
@@ -159,10 +160,11 @@ export const CaseCreatePage = () => {
       .finally(() => setSaving(false));
   };
 
-  // ── CreateCaseWithoutCINModal → Cancel (save as Open-Referral stub) ───────
+  // ── CreateCaseWithoutCINModal → Cancel (return to Create Case form) ────────
+  // Bug fix: previously navigated to /applications/new, discarding the form.
+  // Correct behaviour: close the modal and return the worker to the Create Case form.
   const handleWithoutCINCancel = () => {
     setShowWithoutCIN(false);
-    navigate('/applications/new');
   };
 
   // ── Main Save ─────────────────────────────────────────────────────────────
@@ -236,24 +238,26 @@ export const CaseCreatePage = () => {
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label>Last Name *</label>
+              <label htmlFor="cc-lastName">Last Name *</label>
               <input
+                id="cc-lastName"
                 type="text"
                 value={form.lastName}
                 onChange={e => handleChange('lastName', e.target.value)}
               />
             </div>
             <div className="wq-form-field">
-              <label>First Name *</label>
+              <label htmlFor="cc-firstName">First Name *</label>
               <input
+                id="cc-firstName"
                 type="text"
                 value={form.firstName}
                 onChange={e => handleChange('firstName', e.target.value)}
               />
             </div>
             <div className="wq-form-field">
-              <label>Gender</label>
-              <select value={form.gender} onChange={e => handleChange('gender', e.target.value)}>
+              <label htmlFor="cc-gender">Gender</label>
+              <select id="cc-gender" value={form.gender} onChange={e => handleChange('gender', e.target.value)}>
                 <option value="">-- Select --</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -261,16 +265,18 @@ export const CaseCreatePage = () => {
               </select>
             </div>
             <div className="wq-form-field">
-              <label>Date of Birth</label>
+              <label htmlFor="cc-dob">Date of Birth</label>
               <input
+                id="cc-dob"
                 type="date"
                 value={form.dateOfBirth}
                 onChange={e => handleChange('dateOfBirth', e.target.value)}
               />
             </div>
             <div className="wq-form-field">
-              <label>SSN</label>
+              <label htmlFor="cc-ssn">SSN</label>
               <input
+                id="cc-ssn"
                 type="text"
                 value={form.ssn}
                 onChange={e => setForm(prev => ({ ...prev, ssn: e.target.value }))}
@@ -280,8 +286,9 @@ export const CaseCreatePage = () => {
             </div>
             <div className="wq-form-field" style={{ justifyContent: 'flex-end' }}>
               <label style={{ visibility: 'hidden' }}>_</label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+              <label htmlFor="cc-mediCalPseudo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
                 <input
+                  id="cc-mediCalPseudo"
                   type="checkbox"
                   checked={form.mediCalPseudo}
                   onChange={e => setForm(prev => ({ ...prev, mediCalPseudo: e.target.checked }))}
@@ -371,16 +378,18 @@ export const CaseCreatePage = () => {
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label>County *</label>
+              <label htmlFor="cc-county">County *</label>
               <input
+                id="cc-county"
                 type="text"
                 value={form.countyCode}
                 onChange={e => setForm(prev => ({ ...prev, countyCode: e.target.value }))}
               />
             </div>
             <div className="wq-form-field">
-              <label>Zip Code</label>
+              <label htmlFor="cc-zip">Zip Code</label>
               <input
+                id="cc-zip"
                 type="text"
                 value={form.zipCode}
                 onChange={e => setForm(prev => ({ ...prev, zipCode: e.target.value }))}
@@ -396,24 +405,27 @@ export const CaseCreatePage = () => {
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label>Spoken Language</label>
+              <label htmlFor="cc-spokenLang">Spoken Language</label>
               <input
+                id="cc-spokenLang"
                 type="text"
                 value={form.spokenLanguage}
                 onChange={e => setForm(prev => ({ ...prev, spokenLanguage: e.target.value }))}
               />
             </div>
             <div className="wq-form-field">
-              <label>Written Language</label>
+              <label htmlFor="cc-writtenLang">Written Language</label>
               <input
+                id="cc-writtenLang"
                 type="text"
                 value={form.writtenLanguage}
                 onChange={e => setForm(prev => ({ ...prev, writtenLanguage: e.target.value }))}
               />
             </div>
             <div className="wq-form-field">
-              <label>Interpreter Available</label>
+              <label htmlFor="cc-interpreter">Interpreter Available</label>
               <select
+                id="cc-interpreter"
                 value={form.interpreterAvailable ? 'yes' : 'no'}
                 onChange={e => setForm(prev => ({ ...prev, interpreterAvailable: e.target.value === 'yes' }))}
               >
@@ -431,8 +443,9 @@ export const CaseCreatePage = () => {
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label>Assigned Worker</label>
+              <label htmlFor="cc-worker">Assigned Worker</label>
               <input
+                id="cc-worker"
                 type="text"
                 value={form.caseOwnerId}
                 onChange={e => setForm(prev => ({ ...prev, caseOwnerId: e.target.value }))}
@@ -440,8 +453,9 @@ export const CaseCreatePage = () => {
               />
             </div>
             <div className="wq-form-field">
-              <label>IHSS Referral Date</label>
+              <label htmlFor="cc-referralDate">IHSS Referral Date</label>
               <input
+                id="cc-referralDate"
                 type="date"
                 value={form.ihssReferralDate}
                 onChange={e => setForm(prev => ({ ...prev, ihssReferralDate: e.target.value }))}

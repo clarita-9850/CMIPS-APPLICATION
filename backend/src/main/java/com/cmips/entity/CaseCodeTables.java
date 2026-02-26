@@ -138,14 +138,48 @@ public final class CaseCodeTables {
         };
     }
 
-    // ==================== Referral Source Codes ====================
+    // ==================== Referral Source Codes (40 values per DSD spec) ====================
     public static final Map<String, String> REFERRAL_SOURCES = new LinkedHashMap<>() {{
-        put("SELF", "Self-Referral");
-        put("FAMILY", "Family Member");
-        put("AGENCY", "Agency Referral");
-        put("HOSPITAL", "Hospital/Medical Facility");
+        put("SELF", "Self");
+        put("PARENT_GUARDIAN", "Parent/Guardian");
+        put("LEGAL_GUARDIAN", "Legal Guardian");
+        put("SPOUSE_PARTNER", "Spouse/Partner");
+        put("SIBLING", "Sibling");
+        put("OTHER_RELATIVE", "Other Relative");
+        put("FRIEND_NEIGHBOR", "Friend/Neighbor");
+        put("DOCTOR_PHYSICIAN", "Doctor/Physician");
+        put("HOSPITAL_CLINIC", "Hospital/Clinic");
+        put("SOCIAL_WORKER", "Social Worker");
+        put("SCHOOL", "School");
+        put("PROBATION_PAROLE", "Probation/Parole");
+        put("LAW_ENFORCEMENT", "Law Enforcement");
         put("APS", "Adult Protective Services");
-        put("OTHER", "Other");
+        put("CPS", "Child Protective Services");
+        put("REGIONAL_CENTER", "Regional Center");
+        put("COMMUNITY_ORG", "Community Organization");
+        put("FAITH_ORG", "Faith Organization");
+        put("MENTAL_HEALTH", "Mental Health Provider");
+        put("SUBSTANCE_ABUSE", "Substance Abuse Program");
+        put("HOME_HEALTH", "Home Health Agency");
+        put("NURSING_HOME", "Nursing Home");
+        put("ASSISTED_LIVING", "Assisted Living");
+        put("DD_PROGRAM", "Developmental Disability Program");
+        put("AREA_AGENCY_AGING", "Area Agency on Aging");
+        put("FOOD_BANK", "Food Bank/Pantry");
+        put("HOUSING_AUTHORITY", "Housing Authority");
+        put("VETERAN_SERVICES", "Veteran Services");
+        put("MEDICARE", "Medicare");
+        put("MEDI_CAL", "Medi-Cal");
+        put("INSURANCE_COMPANY", "Insurance Company");
+        put("EMPLOYER", "Employer");
+        put("EMPLOYMENT_AGENCY", "Employment Agency");
+        put("REHABILITATION", "Rehabilitation Program");
+        put("COURT_JUDGE", "Court/Judge");
+        put("DEPT_LABOR", "Department of Labor");
+        put("DMV", "Department of Motor Vehicles");
+        put("OTHER_GOVT_AGENCY", "Other Government Agency");
+        put("ANONYMOUS", "Anonymous");
+        put("UNKNOWN", "Unknown");
     }};
 
     // ==================== Meets Residency Requirement ====================

@@ -110,6 +110,83 @@ public class WorkspaceService {
     }
 
     /**
+     * Get My Tasks — open tasks assigned to the user with dueDate within the next 7 days.
+     * Returns at most 25 tasks ordered by due date ascending (soonest first).
+     * Implements DSD My Workspace Phase 1 requirement.
+     */
+    public Map<String, Object> getMyTasks(String username) {
+        Map<String, Object> result = new HashMap<>();
+        try {
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            java.time.LocalDateTime sevenDaysFromNow = now.plusDays(7);
+            java.time.LocalDateTime maxDue = java.time.LocalDateTime.MAX;
+
+            List<Map<String, Object>> tasks = taskRepository.findByAssignedTo(username).stream()
+                .filter(t -> t.getStatus() != Task.TaskStatus.CLOSED)
+                .filter(t -> t.getDueDate() != null
+                    && !t.getDueDate().isBefore(now)
+                    && !t.getDueDate().isAfter(sevenDaysFromNow))
+                .sorted(Comparator.comparing(
+                    t -> t.getDueDate() != null ? t.getDueDate() : maxDue))
+                .limit(25)
+                .map(t -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("id",          t.getId());
+                    m.put("taskType",    t.getTaskTypeCode());   // taskTypeCode is the DSD field
+                    m.put("subject",     t.getSubject());
+                    m.put("status",      t.getStatus() != null ? t.getStatus().name() : null);
+                    m.put("priority",    t.getPriority() != null ? t.getPriority().name() : null);
+                    m.put("dueDate",     t.getDueDate());
+                    m.put("caseNumber",  t.getCaseNumber());
+                    m.put("createdAt",   t.getCreatedAt());
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+            result.put("tasks",      tasks);
+            result.put("totalCount", tasks.size());
+            result.put("windowDays", 7);
+            result.put("status",     "SUCCESS");
+        } catch (Exception e) {
+            result.put("tasks",      Collections.emptyList());
+            result.put("totalCount", 0);
+            result.put("status",     "ERROR");
+            result.put("message",    e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Get My Shortcuts — static list of shortcut pages available to all workers.
+     * Personalisation (pinned shortcuts) deferred to a later sprint.
+     */
+    public Map<String, Object> getMyShortcuts(String username) {
+        Map<String, Object> result = new HashMap<>();
+        java.util.LinkedHashMap<String, String>[] shortcuts = new java.util.LinkedHashMap[] {
+            shortcut("New Referral",    "/persons/search/referral",   "REFERRAL"),
+            shortcut("New Application", "/persons/search/application","APPLICATION"),
+            shortcut("New Case",        "/cases/new",                 "CASE"),
+            shortcut("My Cases",        "/cases",                     "CASE"),
+            shortcut("My Tasks",        "/workspace",                 "TASK"),
+            shortcut("Person Search",   "/recipients/search",         "PERSON"),
+            shortcut("Reports",         "/reports",                   "REPORT"),
+            shortcut("Work Queue",      "/workqueues",                "WORKQUEUE")
+        };
+        result.put("shortcuts", java.util.Arrays.asList(shortcuts));
+        result.put("status",    "SUCCESS");
+        return result;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static java.util.LinkedHashMap<String, String> shortcut(String label, String path, String type) {
+        java.util.LinkedHashMap<String, String> m = new java.util.LinkedHashMap<>();
+        m.put("label", label);
+        m.put("path",  path);
+        m.put("type",  type);
+        return m;
+    }
+
+    /**
      * Get team workload data for supervisor
      */
     public Map<String, Object> getTeamWorkloads(String supervisorId) {
