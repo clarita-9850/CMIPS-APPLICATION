@@ -681,9 +681,9 @@ public class ApplicationService {
         if (req.getSsn() != null && !req.getSsn().isBlank()) {
             String normalizedSsn = req.getSsn().replaceAll("[^0-9]", "");
             validateSsn(normalizedSsn);
-            java.util.Optional<RecipientEntity> bySsn = recipientRepository.findBySsn(normalizedSsn);
-            if (bySsn.isPresent()) {
-                return java.util.List.of(bySsn.get());
+            java.util.List<RecipientEntity> bySsn = recipientRepository.findAllBySsn(normalizedSsn);
+            if (!bySsn.isEmpty()) {
+                return bySsn;
             }
         }
 

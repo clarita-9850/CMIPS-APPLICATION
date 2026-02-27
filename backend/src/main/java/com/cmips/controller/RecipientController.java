@@ -134,11 +134,9 @@ public class RecipientController {
 
         // ── Search hierarchy ────────────────────────────────────────────────
         if (ssn != null && !ssn.isBlank()) {
-            // 1) BR OS 02: SSN exact match
+            // 1) BR OS 02: SSN match — use findAllBySsn to handle duplicate SSN cases (BR-1)
             String normalizedSsn = ssn.replaceAll("[^0-9]", "");
-            recipients = recipientRepository.findBySsn(normalizedSsn)
-                    .map(List::of)
-                    .orElse(List.of());
+            recipients = recipientRepository.findAllBySsn(normalizedSsn);
 
         } else if (cin != null && !cin.isBlank()) {
             // 2) BR OS 03: CIN exact match
@@ -180,15 +178,13 @@ public class RecipientController {
             return ResponseEntity.ok(providerResponse);
 
         } else if (phone != null && !phone.isBlank()) {
-            // 4) Phone search (EM-251)
+            // 4) Phone search (EM-251) — strip formatting from both input and stored phone
             String digitsOnly = phone.replaceAll("[^0-9]", "");
-            recipients = recipientRepository.findByPrimaryPhone(digitsOnly);
+            recipients = recipientRepository.findByPrimaryPhoneDigits(digitsOnly);
 
         } else if (email != null && !email.isBlank()) {
-            // 5) Email search
-            recipients = recipientRepository.findByEmail(email)
-                    .map(List::of)
-                    .orElse(List.of());
+            // 5) Email search — use findAllByEmail to handle duplicate email cases
+            recipients = recipientRepository.findAllByEmail(email);
 
         } else if (hasCompleteAddress) {
             // 6) Address search (DSD: complete address = Street Number + Street Name + City)

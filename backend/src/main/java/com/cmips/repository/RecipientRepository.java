@@ -15,8 +15,11 @@ import org.springframework.data.domain.Pageable;
 @Repository
 public interface RecipientRepository extends JpaRepository<RecipientEntity, Long> {
 
-    // Find by SSN (per BR OS 02)
+    // Find by SSN (per BR OS 02) — single result (use findAllBySsn for duplicates)
     Optional<RecipientEntity> findBySsn(String ssn);
+
+    // Find all recipients by SSN — handles duplicate SSN cases (BR-1)
+    List<RecipientEntity> findAllBySsn(String ssn);
 
     // Find by CIN (per BR OS 03)
     Optional<RecipientEntity> findByCin(String cin);
@@ -76,8 +79,16 @@ public interface RecipientRepository extends JpaRepository<RecipientEntity, Long
     // Find by email
     Optional<RecipientEntity> findByEmail(String email);
 
+    // Find all by email — handles duplicate email cases
+    List<RecipientEntity> findAllByEmail(String email);
+
     // Find by phone
     List<RecipientEntity> findByPrimaryPhone(String phone);
+
+    // Find by phone digits — strips formatting from stored phone before comparison
+    @Query(value = "SELECT * FROM recipients WHERE REGEXP_REPLACE(CAST(primary_phone AS VARCHAR), '[^0-9]', '', 'g') = :phone",
+           nativeQuery = true)
+    List<RecipientEntity> findByPrimaryPhoneDigits(@Param("phone") String phone);
 
     // Find duplicate SSN cases
     @Query("SELECT r FROM RecipientEntity r WHERE r.ssnType = 'DUPLICATE_SSN'")
