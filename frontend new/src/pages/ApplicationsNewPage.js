@@ -335,6 +335,26 @@ export const ApplicationsNewPage = () => {
     if (form.ssn && form.ssn.replace(/\D/g, '').startsWith('9')) {
       setError('EM-237: SSN cannot begin with 9.'); return false;
     }
+    // Phone validation (EM-251/252)
+    const phoneFields = [
+      { val: form.homePhone, label: 'Home Phone' },
+      { val: form.cellPhone, label: 'Cell Phone' },
+      { val: form.workPhone, label: 'Work Phone' },
+    ];
+    for (const pf of phoneFields) {
+      if (pf.val && pf.val.trim()) {
+        const digits = pf.val.replace(/\D/g, '');
+        if (digits.length !== 10) {
+          setError(`EM-251/252: ${pf.label} must be 10 digits (area code + 7-digit number).`);
+          return false;
+        }
+      }
+    }
+    // Email validation (EM-254)
+    if (form.email && form.email.trim() && !/^[^@]+@[^@]+\.[^@]+$/.test(form.email)) {
+      setError('EM-254: Not a valid email address. Please enter a valid email address.');
+      return false;
+    }
     return true;
   };
 
@@ -394,6 +414,16 @@ export const ApplicationsNewPage = () => {
 
   const validateStep3 = () => {
     if (!caseForm.countyCode.trim()) { setError('EM-210: County is required.'); return false; }
+    // EM-175: IHSS Referral Date cannot be in the future
+    if (caseForm.ihssReferralDate) {
+      const refDate = new Date(caseForm.ihssReferralDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (refDate > today) {
+        setError('EM-175: IHSS Referral Date cannot be in the future.');
+        return false;
+      }
+    }
     return true;
   };
 

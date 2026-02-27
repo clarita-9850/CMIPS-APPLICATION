@@ -109,8 +109,28 @@ export const PersonCreateReferralPage = () => {
     if (ssn.length > 0 && ssn.length < 9) errs.ssn = 'EM-240: SSN must be exactly 9 digits';
     if (ssn.length === 9 && ssn.startsWith('9')) errs.ssn = 'EM-237: SSN cannot begin with digit 9';
     if (ssn.length === 9 && /^(.)\1{8}$/.test(ssn)) errs.ssn = 'EM-238: SSN cannot consist of all identical digits';
-    if (!resAddr.city.trim()) errs.resCity = 'EM-208: Residence City is required';
-    if (!resAddr.zip.trim())  errs.resZip  = 'EM-209: Residence ZIP is required';
+    // Phone validation (EM-251/252)
+    const validatePhone = (val, fieldName) => {
+      if (val && val.trim()) {
+        const digits = val.replace(/\D/g, '');
+        if (digits.length !== 10) errs[fieldName] = 'EM-251/252: Phone number must be 10 digits (area code + 7-digit number)';
+      }
+    };
+    validatePhone(homePhone, 'homePhone');
+    validatePhone(cellPhone, 'cellPhone');
+    validatePhone(workPhone, 'workPhone');
+    // Email validation (EM-254)
+    if (email && email.trim() && !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+      errs.email = 'EM-254: Not a valid email address';
+    }
+    // EM-208: At least address (city + ZIP) or phone required
+    const hasAddress = resAddr.city.trim() && resAddr.zip.trim();
+    const hasPhone = (homePhone && homePhone.replace(/\D/g, '').length === 10) ||
+                     (cellPhone && cellPhone.replace(/\D/g, '').length === 10) ||
+                     (workPhone && workPhone.replace(/\D/g, '').length === 10);
+    if (!hasAddress && !hasPhone) errs.resCity = 'EM-208: At least a Residence Address (city and ZIP) or a Phone Number is required';
+    if (hasAddress && !resAddr.city.trim()) errs.resCity = 'EM-208: Residence City is required';
+    if (hasAddress && !resAddr.zip.trim())  errs.resZip  = 'EM-209: Residence ZIP is required';
     if (!county)              errs.county  = 'EM-210: County is required';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
@@ -357,20 +377,24 @@ export const PersonCreateReferralPage = () => {
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label>Home Phone</label>
-              <input type="tel" value={homePhone} onChange={e => setHomePhone(e.target.value)} placeholder="(###) ###-####" />
+              <label>Home Phone {fe.homePhone && <span style={errStyle}>{fe.homePhone}</span>}</label>
+              <input type="tel" value={homePhone} onChange={e => setHomePhone(e.target.value)} placeholder="(###) ###-####"
+                style={fe.homePhone ? { borderColor: '#fc8181' } : {}} />
             </div>
             <div className="wq-form-field">
-              <label>Cell Phone</label>
-              <input type="tel" value={cellPhone} onChange={e => setCellPhone(e.target.value)} placeholder="(###) ###-####" />
+              <label>Cell Phone {fe.cellPhone && <span style={errStyle}>{fe.cellPhone}</span>}</label>
+              <input type="tel" value={cellPhone} onChange={e => setCellPhone(e.target.value)} placeholder="(###) ###-####"
+                style={fe.cellPhone ? { borderColor: '#fc8181' } : {}} />
             </div>
             <div className="wq-form-field">
-              <label>Work Phone</label>
-              <input type="tel" value={workPhone} onChange={e => setWorkPhone(e.target.value)} placeholder="(###) ###-####" />
+              <label>Work Phone {fe.workPhone && <span style={errStyle}>{fe.workPhone}</span>}</label>
+              <input type="tel" value={workPhone} onChange={e => setWorkPhone(e.target.value)} placeholder="(###) ###-####"
+                style={fe.workPhone ? { borderColor: '#fc8181' } : {}} />
             </div>
             <div className="wq-form-field">
-              <label>Email Address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} />
+              <label>Email Address {fe.email && <span style={errStyle}>{fe.email}</span>}</label>
+              <input type="email" value={email} onChange={e => setEmail(e.target.value)}
+                style={fe.email ? { borderColor: '#fc8181' } : {}} />
             </div>
           </div>
         </div>
