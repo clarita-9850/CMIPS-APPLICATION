@@ -69,6 +69,24 @@ public class ApplicationController {
             Long recipientId = request.get("recipientId") != null ?
                     ((Number) request.get("recipientId")).longValue() : null;
 
+            // Validate recipientId is provided
+            if (recipientId == null) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                    "recipientId is required. Search for or create a person first, then link their ID."));
+            }
+
+            // Validate SSN if provided (EM-237/238/240)
+            String ssn = (String) request.get("ssn");
+            if (ssn != null && !ssn.isBlank()) {
+                applicationService.validateSsn(ssn.replaceAll("[^0-9]", ""));
+            }
+
+            // Validate DOB if provided (EM-203/204)
+            String dob = (String) request.get("dateOfBirth");
+            if (dob != null && !dob.isBlank()) {
+                applicationService.validateDob(dob);
+            }
+
             ApplicationEntity application = ApplicationEntity.builder()
                     .countyCode((String) request.get("countyCode"))
                     .programType(request.get("programType") != null ?
@@ -80,6 +98,9 @@ public class ApplicationController {
             ApplicationEntity created = applicationService.createApplication(application, recipientId, userId);
             log.info("Application created: {} by user: {}", created.getId(), userId);
             return ResponseEntity.ok(created);
+        } catch (IllegalArgumentException e) {
+            log.warn("Validation error creating application: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             log.error("Error creating application", e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

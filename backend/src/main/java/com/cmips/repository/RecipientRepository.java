@@ -94,9 +94,10 @@ public interface RecipientRepository extends JpaRepository<RecipientEntity, Long
     Optional<RecipientEntity> findByTaxpayerId(String taxpayerId);
 
     // Soundex phonetic name matching (BR-5: fuzzy duplicate detection)
-    // Uses PostgreSQL built-in soundex() — no extension needed
-    @Query(value = "SELECT * FROM recipients WHERE soundex(last_name) = soundex(:lastName) " +
-                   "AND soundex(first_name) = soundex(:firstName)", nativeQuery = true)
+    // Requires PostgreSQL fuzzystrmatch extension (CREATE EXTENSION IF NOT EXISTS fuzzystrmatch)
+    @Query(value = "SELECT * FROM recipients WHERE soundex(CAST(last_name AS VARCHAR)) = soundex(CAST(:lastName AS VARCHAR)) " +
+                   "AND soundex(CAST(first_name AS VARCHAR)) = soundex(CAST(:firstName AS VARCHAR))",
+           nativeQuery = true)
     List<RecipientEntity> findBySoundex(@Param("lastName") String lastName,
                                         @Param("firstName") String firstName);
 
