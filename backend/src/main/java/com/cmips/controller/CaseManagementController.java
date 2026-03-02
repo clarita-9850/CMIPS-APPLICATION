@@ -101,9 +101,21 @@ public class CaseManagementController {
 
         try {
             CaseEntity caseEntity = caseManagementService.createCaseFromRequest(request, userId);
+
+            // EM OS 186: If CIN is blank and CIN clearance was performed, include
+            // informational message so frontend can display the SAWS referral notice
+            if ((request.getCin() == null || request.getCin().isBlank())
+                    && "PENDING_SAWS".equals(request.getMediCalStatus())) {
+                Map<String, Object> response = new java.util.LinkedHashMap<>();
+                response.put("case", caseEntity);
+                response.put("infoMessage", "EM OS 186: CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS.");
+                response.put("sawsReferralSent", true);
+                return ResponseEntity.ok(response);
+            }
+
             return ResponseEntity.ok(caseEntity);
         } catch (IllegalArgumentException e) {
-            // EM-175, EM-176, and other field-level validation errors
+            // EM OS 067, EM OS 176, EM OS 177, and other field-level validation errors
             log.warn("[createCase] Validation failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
@@ -177,31 +189,40 @@ public class CaseManagementController {
 
     @PutMapping("/{id}/rescind")
     @RequirePermission(resource = "Case Resource", scope = "rescind")
-    public ResponseEntity<CaseEntity> rescindCase(
+    public ResponseEntity<?> rescindCase(
             @PathVariable Long id,
             @RequestBody RescindRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-
-        CaseEntity caseEntity = caseManagementService.rescindCase(id, request.getReason(), userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            CaseEntity caseEntity = caseManagementService.rescindCase(id, request.getReason(), userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (IllegalArgumentException e) {
+            log.warn("[rescindCase] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
     }
 
     // ==================== REACTIVATE (DSD Section 3.6) ====================
 
     @PutMapping("/{id}/reactivate")
     @RequirePermission(resource = "Case Resource", scope = "reactivate")
-    public ResponseEntity<CaseEntity> reactivateCase(
+    public ResponseEntity<?> reactivateCase(
             @PathVariable Long id,
             @RequestBody ReactivateRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
 
-        LocalDate refDate = request.getReferralDate() != null
-                ? LocalDate.parse(request.getReferralDate()) : null;
-        CaseEntity caseEntity = caseManagementService.reactivateCase(
-                id, refDate, request.getMeetsResidencyRequirement(),
-                request.getReferralSource(), request.isInterpreterAvailable(),
-                request.getAssignedWorkerId(), userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            LocalDate refDate = request.getReferralDate() != null
+                    ? LocalDate.parse(request.getReferralDate()) : null;
+            CaseEntity caseEntity = caseManagementService.reactivateCase(
+                    id, refDate, request.getMeetsResidencyRequirement(),
+                    request.getReferralSource(), request.isInterpreterAvailable(),
+                    request.getAssignedWorkerId(), request.getCinClearanceStatus(), userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (IllegalArgumentException e) {
+            log.warn("[reactivateCase] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ==================== STATUS HISTORY ====================
@@ -451,6 +472,7 @@ public class CaseManagementController {
         private String referralSource;
         private boolean interpreterAvailable;
         private String assignedWorkerId;
+        private String cinClearanceStatus;  // CLEARED, NO_MATCH, WITHOUT_CIN, NOT_STARTED
     }
 
     @lombok.Data

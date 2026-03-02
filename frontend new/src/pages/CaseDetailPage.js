@@ -27,6 +27,7 @@ export const CaseDetailPage = () => {
   const [servicePlans, setServicePlans] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
   const [actionError, setActionError] = useState('');
+  const [infoMessage, setInfoMessage] = useState('');
 
   // Modal states
   const [showAddNote, setShowAddNote] = useState(false);
@@ -44,6 +45,15 @@ export const CaseDetailPage = () => {
   }, [id]);
 
   useEffect(() => { loadCase(); }, [loadCase]);
+
+  // EM OS 186: Show informational message after case creation (SAWS referral notice)
+  useEffect(() => {
+    const msg = sessionStorage.getItem('caseInfoMessage');
+    if (msg) {
+      setInfoMessage(msg);
+      sessionStorage.removeItem('caseInfoMessage');
+    }
+  }, []);
 
   useEffect(() => {
     if (caseData) {
@@ -105,6 +115,13 @@ export const CaseDetailPage = () => {
         </div>
       )}
 
+      {infoMessage && (
+        <div style={{ background: '#ebf8ff', border: '1px solid #63b3ed', borderLeft: '4px solid #3182ce', padding: '0.5rem 1rem', borderRadius: '4px', marginBottom: '1rem', color: '#2b6cb0', fontSize: '0.875rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{infoMessage}</span>
+          <button onClick={() => setInfoMessage('')} style={{ background: 'none', border: 'none', color: '#2b6cb0', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}>&times;</button>
+        </div>
+      )}
+
       {/* Action Bar */}
       <div className="wq-panel">
         <div className="wq-panel-header"><h4>Actions</h4></div>
@@ -157,10 +174,18 @@ export const CaseDetailPage = () => {
           )}
 
           {/* Reactivate (New Application) — DSD 3.6: available for TERMINATED/DENIED/WITHDRAWN */}
-          {['TERMINATED', 'DENIED', 'WITHDRAWN'].includes(status) && (
+          {/* TR25: Hidden if terminated for CC514 (non-compliance with Medi-Cal) within 90 days */}
+          {['TERMINATED', 'DENIED', 'WITHDRAWN'].includes(status) && c.reactivationAllowed !== false && (
             <button className="wq-manage-action" onClick={() => navigate(`/case/reactivate-case?caseId=${id}`)}>
               <span className="action-icon">&#43;</span> New Application
             </button>
+          )}
+          {status === 'TERMINATED' && c.reactivationAllowed === false && (
+            <div style={{ background: '#fff3cd', border: '1px solid #ffc107', borderLeft: '4px solid #856404',
+              borderRadius: '4px', padding: '0.5rem 1rem', color: '#856404', fontSize: '0.85rem' }}>
+              TR25: This case was terminated for non-compliance with Medi-Cal within the past 90 days.
+              A new application cannot be created until the 90-day period has elapsed.
+            </div>
           )}
 
           {/* Transfer — available for active cases */}
@@ -208,6 +233,46 @@ export const CaseDetailPage = () => {
                   <div className="wq-detail-row">
                     <span className="wq-detail-label">CIN:</span>
                     <span className="wq-detail-value">{c.cin || c.clientIndexNumber || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">IHSS Referral Date:</span>
+                    <span className="wq-detail-value">{c.ihssReferralDate ? new Date(c.ihssReferralDate).toLocaleDateString() : '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">District Office:</span>
+                    <span className="wq-detail-value">{c.districtOffice || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Interpreter Available:</span>
+                    <span className="wq-detail-value">{c.interpreterAvailable === true ? 'Yes' : c.interpreterAvailable === false ? 'No' : '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Medi-Cal Status:</span>
+                    <span className="wq-detail-value">{c.mediCalStatus || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Medi-Cal Aid Code:</span>
+                    <span className="wq-detail-value">{c.mediCalAidCode || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Medi-Cal Elig. Referral Date:</span>
+                    <span className="wq-detail-value">{c.mediCalEligibilityReferralDate ? new Date(c.mediCalEligibilityReferralDate).toLocaleDateString() : '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Companion Case:</span>
+                    <span className="wq-detail-value">{c.companionCase || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">State Hearing:</span>
+                    <span className="wq-detail-value">{c.stateHearing || '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Household Members:</span>
+                    <span className="wq-detail-value">{c.numberOfHouseholdMembers ?? '\u2014'}</span>
+                  </div>
+                  <div className="wq-detail-row">
+                    <span className="wq-detail-label">Mail Designee:</span>
+                    <span className="wq-detail-value">{c.mailDesignee || '\u2014'}</span>
                   </div>
                   <div className="wq-detail-row">
                     <span className="wq-detail-label">Created:</span>

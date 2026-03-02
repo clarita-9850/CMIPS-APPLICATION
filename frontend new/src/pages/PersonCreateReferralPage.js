@@ -27,19 +27,42 @@ const COUNTIES = [
   'Stanislaus','Sutter','Tehama','Trinity','Tulare','Tuolumne','Ventura','Yolo','Yuba'
 ];
 
+const LANGUAGES = [
+  'English','Spanish','Cantonese','Mandarin','Vietnamese','Korean',
+  'Armenian','Tagalog','Russian','Arabic','Farsi','Hmong',
+  'Cambodian','Japanese','Laotian','Thai','Other'
+];
+
+const TITLE_OPTIONS = ['','Mr','Mrs','Ms','Miss','Dr','Rev','Hon','Other'];
+const SUFFIX_OPTIONS = ['','Jr','Sr','I','II','III','IV','V','Esq','MD','PhD'];
+const BLANK_SSN_REASONS = ['','Refused to Provide','Unable to Obtain','Applied for but not yet received','Non-citizen'];
+const GENDER_IDENTITY_OPTIONS = ['','Male','Female','Non-Binary','Transgender Male','Transgender Female','Genderqueer','Not Listed','Decline to State'];
+const SEXUAL_ORIENTATION_OPTIONS = ['','Straight','Gay','Lesbian','Bisexual','Queer','Not Listed','Decline to State'];
+const RESIDENCE_ADDRESS_TYPES = ['','House','Apartment','Mobile Home','Hotel/Motel','Shelter','Homeless','Other'];
+
 const today = () => new Date().toISOString().split('T')[0];
 
 /**
  * PersonCreateReferralPage — Full DSD CI-67784 Create Referral form.
- * 6 sections: Referral Info | Demographics | Residence Address | Mailing Address | Phone/Contact | Program Info
- * Business rules enforced: BR-1 (duplicate SSN block), BR-4 (Soundex warning), BR-20 (required fields)
- * Error messages: EM-200 through EM-210
+ * 5 sections: Referral Info | Demographics | Residence Address | Mailing Address | Phone/Contact
+ * Business rules enforced: BR-1 (duplicate SSN block), BR-28/29/30 (UPPERCASE names), BR-20 (required fields)
+ * Error messages: EM OS 001 through EM OS 080
+ *
+ * DSD alignment:
+ * - Removed non-DSD fields: Referral Reason, Referring Worker, Referring Agency, Program Type, Assigned Worker
+ * - Added DSD fields: Title, Suffix, Blank SSN Reason, Gender Identity, Sexual Orientation,
+ *   Written Language, Other Language Details, Medi-Cal Pseudo Number, Residence Address Type,
+ *   Meets Residency Requirements
+ * - DOB and Gender are optional for Referral (required only for Application)
+ * - EM OS 007: SSN + Blank SSN Reason mutual exclusion
+ * - County auto-set from logged-in user
  */
 export const PersonCreateReferralPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
   const userId = user?.sub || user?.username || 'unknown';
+  const userCounty = user?.county || '';
   const prefill = location.state?.prefill || {};
 
   const [saving, setSaving] = useState(false);
@@ -49,26 +72,34 @@ export const PersonCreateReferralPage = () => {
   const [showMailAddrModal, setShowMailAddrModal] = useState(false);
   const [sameAsResidence, setSameAsResidence] = useState(false);
 
-  // Referral Information (Section 1)
+  // Referral Information (Section 1) — DSD fields only
   const [referralDate, setReferralDate] = useState(today());
   const [referralSource, setReferralSource] = useState('');
-  const [referralReason, setReferralReason] = useState('');
-  const [referringWorker, setReferringWorker] = useState('');
-  const [referringAgency, setReferringAgency] = useState('');
 
-  // Demographics (Section 2)
+  // Demographics (Section 2) — DSD CI-67784 fields
+  const [title, setTitle] = useState('');
   const [lastName, setLastName] = useState(prefill.lastName || '');
   const [firstName, setFirstName] = useState(prefill.firstName || '');
   const [middleName, setMiddleName] = useState('');
+  const [suffix, setSuffix] = useState('');
   const [dob, setDob] = useState(prefill.dob || '');
   const [gender, setGender] = useState('');
+  const [genderIdentity, setGenderIdentity] = useState('');
+  const [sexualOrientation, setSexualOrientation] = useState('');
   const [ssn, setSsn] = useState('');
   const [ssnDisplay, setSsnDisplay] = useState('');
+  const [blankSsnReason, setBlankSsnReason] = useState('');
   const [language, setLanguage] = useState('English');
+  const [otherSpokenLanguageDetail, setOtherSpokenLanguageDetail] = useState('');
+  const [writtenLanguage, setWrittenLanguage] = useState('English');
+  const [otherWrittenLanguageDetail, setOtherWrittenLanguageDetail] = useState('');
   const [ethnicity, setEthnicity] = useState('');
+  const [mediCalPseudoNumber, setMediCalPseudoNumber] = useState('');
 
   // Residence Address (Section 3)
   const [resAddr, setResAddr] = useState({ streetNumber: '', streetName: '', unitType: '', unitNumber: '', city: '', state: 'CA', zip: '', cassMatch: null, cassUpdates: null, cassFailed: null });
+  const [residenceAddressType, setResidenceAddressType] = useState('');
+  const [meetsResidencyRequirements, setMeetsResidencyRequirements] = useState(false);
 
   // Mailing Address (Section 4)
   const [mailAddr, setMailAddr] = useState({ streetNumber: '', streetName: '', unitType: '', unitNumber: '', city: '', state: 'CA', zip: '', cassMatch: null, cassUpdates: null, cassFailed: null });
@@ -79,10 +110,8 @@ export const PersonCreateReferralPage = () => {
   const [workPhone, setWorkPhone] = useState('');
   const [email, setEmail] = useState('');
 
-  // Program Info (Section 6)
-  const [programType, setProgramType] = useState('IHSS');
-  const [county, setCounty] = useState('');
-  const [assignedWorker, setAssignedWorker] = useState('');
+  // County — auto-set from user, editable as fallback
+  const [county, setCounty] = useState(userCounty || '');
 
   const handleSsnChange = (raw) => {
     const digits = raw.replace(/\D/g, '').slice(0, 9);
@@ -90,48 +119,82 @@ export const PersonCreateReferralPage = () => {
     for (let i = 0; i < digits.length; i++) masked += i < 5 ? 'X' : digits[i];
     setSsnDisplay(masked);
     setSsn(digits);
+    // Clear Blank SSN Reason if SSN is being entered (EM OS 007)
+    if (digits.length > 0) setBlankSsnReason('');
+  };
+
+  const handleBlankSsnReasonChange = (val) => {
+    setBlankSsnReason(val);
+    // Clear SSN if Blank SSN Reason is selected (EM OS 007)
+    if (val) { setSsn(''); setSsnDisplay(''); }
   };
 
   const validate = () => {
     const errs = {};
-    if (!referralDate)    errs.referralDate   = 'EM-200: Referral Date is required';
-    if (!referralSource)  errs.referralSource = 'EM-201: Referral Source is required';
-    if (!referralReason.trim()) errs.referralReason = 'EM-202: Referral Reason is required';
-    if (!lastName.trim()) errs.lastName  = 'EM-205: Last Name is required';
-    if (!firstName.trim()) errs.firstName = 'EM-206: First Name is required';
+    if (!referralDate)    errs.referralDate   = 'EM OS 200: Referral Date is required';
+    if (!referralSource)  errs.referralSource = 'EM OS 001: Referral Source is required';
+    if (!lastName.trim()) errs.lastName  = 'EM OS 005: Last Name is required';
+    if (!firstName.trim()) errs.firstName = 'EM OS 006: First Name is required';
+
+    // DOB validation — optional for Referral, but validate if provided
     if (dob) {
       const dobDate = new Date(dob);
       const now = new Date();
-      if (dobDate > now) errs.dob = 'EM-203: Date of Birth cannot be in the future';
-      else if (now.getFullYear() - dobDate.getFullYear() > 120) errs.dob = 'EM-204: Date of Birth cannot be more than 120 years ago';
+      if (dobDate > now) errs.dob = 'EM OS 003: Date of Birth cannot be in the future';
+      else if (now.getFullYear() - dobDate.getFullYear() > 120) errs.dob = 'EM OS 004: Date of Birth cannot be more than 120 years ago';
     }
-    if (!gender) errs.gender = 'EM-207: Gender is required';
-    if (ssn.length > 0 && ssn.length < 9) errs.ssn = 'EM-240: SSN must be exactly 9 digits';
-    if (ssn.length === 9 && ssn.startsWith('9')) errs.ssn = 'EM-237: SSN cannot begin with digit 9';
-    if (ssn.length === 9 && /^(.)\1{8}$/.test(ssn)) errs.ssn = 'EM-238: SSN cannot consist of all identical digits';
-    // Phone validation (EM-251/252)
+
+    // EM OS 007: SSN + Blank SSN Reason mutual exclusion
+    if (ssn.length > 0 && blankSsnReason) {
+      errs.ssn = 'EM OS 007: SSN must be blank when Blank SSN Reason is indicated';
+    }
+    if (ssn.length > 0 && ssn.length < 9) errs.ssn = 'EM OS 010: SSN must be exactly 9 digits';
+    if (ssn.length === 9 && ssn.startsWith('9')) errs.ssn = 'EM OS 010: SSN cannot begin with digit 9';
+    if (ssn.length === 9 && /^(.)\1{8}$/.test(ssn)) errs.ssn = 'EM OS 010: SSN cannot consist of all identical digits';
+
+    // Phone validation (EM OS 264/265 + EM-256)
     const validatePhone = (val, fieldName) => {
       if (val && val.trim()) {
         const digits = val.replace(/\D/g, '');
-        if (digits.length !== 10) errs[fieldName] = 'EM-251/252: Phone number must be 10 digits (area code + 7-digit number)';
+        if (digits.length !== 10) errs[fieldName] = 'EM OS 264/265: Phone number must be 10 digits (area code + 7-digit number)';
+        else if (digits === '0000000000' || digits === '9999999999') errs[fieldName] = 'EM OS 256: Not a valid phone number. Please enter valid phone number.';
       }
     };
     validatePhone(homePhone, 'homePhone');
     validatePhone(cellPhone, 'cellPhone');
     validatePhone(workPhone, 'workPhone');
-    // Email validation (EM-254)
-    if (email && email.trim() && !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
-      errs.email = 'EM-254: Not a valid email address';
+
+    // Email validation (EM OS 209-211, EM-216, EM-217)
+    if (email && email.trim()) {
+      const emailVal = email.trim();
+      const atCount = (emailVal.match(/@/g) || []).length;
+      if (atCount !== 1) { errs.email = 'EM OS 209: Not a valid email address. Please enter valid email address.'; }
+      else {
+        const [local, domain] = emailVal.split('@');
+        if (local.length < 2) { errs.email = 'EM OS 210: Not a valid email address. Please enter valid email address.'; }
+        else if (!domain || !domain.includes('.')) { errs.email = 'EM OS 211: Not a valid email address. Please enter valid email address.'; }
+        else if (/\.\.|^\.|\.$/.test(domain)) { errs.email = 'EM OS 216: Not a valid email address. Please enter valid email address.'; }
+        else if (/^[^a-zA-Z0-9]|[^a-zA-Z0-9]$/.test(local.replace(/[.+\-_]/g, 'x'))) { errs.email = 'EM OS 217: Not a valid email address. Please enter valid email address.'; }
+      }
     }
-    // EM-208: At least address (city + ZIP) or phone required
+
+    // EM OS 080: At least address (city + ZIP) or phone required
     const hasAddress = resAddr.city.trim() && resAddr.zip.trim();
     const hasPhone = (homePhone && homePhone.replace(/\D/g, '').length === 10) ||
                      (cellPhone && cellPhone.replace(/\D/g, '').length === 10) ||
                      (workPhone && workPhone.replace(/\D/g, '').length === 10);
-    if (!hasAddress && !hasPhone) errs.resCity = 'EM-208: At least a Residence Address (city and ZIP) or a Phone Number is required';
-    if (hasAddress && !resAddr.city.trim()) errs.resCity = 'EM-208: Residence City is required';
-    if (hasAddress && !resAddr.zip.trim())  errs.resZip  = 'EM-209: Residence ZIP is required';
-    if (!county)              errs.county  = 'EM-210: County is required';
+    if (!hasAddress && !hasPhone) errs.resCity = 'EM OS 080: At least a Residence Address (city and ZIP) or a Phone Number is required';
+
+    // EM-242/243: Other Language fields must contain only alpha characters
+    if (language === 'Other' && otherSpokenLanguageDetail && /[^a-zA-Z\s\-']/.test(otherSpokenLanguageDetail)) {
+      errs.otherSpokenLanguageDetail = 'EM OS 243: Other Spoken Language Details field allows only English language alpha characters.';
+    }
+    if (writtenLanguage === 'Other' && otherWrittenLanguageDetail && /[^a-zA-Z\s\-']/.test(otherWrittenLanguageDetail)) {
+      errs.otherWrittenLanguageDetail = 'EM OS 242: Other Written Language Details field allows only English language alpha characters.';
+    }
+
+    if (!county) errs.county = 'EM OS 210: County is required';
+
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -149,17 +212,23 @@ export const PersonCreateReferralPage = () => {
         personType: 'OPEN_REFERRAL',
         referralDate,
         referralSource,
-        referralReason,
-        referringWorker,
-        referringAgency,
+        title: title || null,
         lastName: lastName.toUpperCase(),
         firstName: firstName.toUpperCase(),
         middleName: middleName ? middleName.toUpperCase() : null,
+        suffix: suffix || null,
         dateOfBirth: dob || null,
-        gender,
+        gender: gender || null,
+        genderIdentity: genderIdentity || null,
+        sexualOrientation: sexualOrientation || null,
         ssn: ssn || null,
+        blankSsnReason: blankSsnReason || null,
         spokenLanguage: language,
+        otherSpokenLanguageDetail: language === 'Other' ? otherSpokenLanguageDetail : null,
+        writtenLanguage: writtenLanguage || null,
+        otherWrittenLanguageDetail: writtenLanguage === 'Other' ? otherWrittenLanguageDetail : null,
         ethnicity: ethnicity || null,
+        mediCalPseudo: mediCalPseudoNumber || null,
         residenceStreetNumber: resAddr.streetNumber,
         residenceStreetName:   resAddr.streetName,
         residenceUnitType:     resAddr.unitType,
@@ -170,6 +239,8 @@ export const PersonCreateReferralPage = () => {
         residenceCassMatch:    resAddr.cassMatch,
         residenceCassUpdates:  resAddr.cassUpdates,
         residenceCassFailed:   resAddr.cassFailed,
+        residenceAddressType:  residenceAddressType || null,
+        meetsResidencyRequirements: meetsResidencyRequirements || null,
         mailingStreetNumber:   effectiveMailAddr.streetNumber,
         mailingStreetName:     effectiveMailAddr.streetName,
         mailingUnitType:       effectiveMailAddr.unitType,
@@ -228,28 +299,21 @@ export const PersonCreateReferralPage = () => {
                 {REFERRAL_SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
-            <div className="wq-form-field" style={{ gridColumn: 'span 2' }}>
-              <label>Referral Reason * {fe.referralReason && <span style={errStyle}>{fe.referralReason}</span>}</label>
-              <textarea value={referralReason} onChange={e => setReferralReason(e.target.value)} rows={3}
-                style={{ width: '100%', padding: '0.4rem 0.6rem', border: '1px solid #cbd5e0', borderRadius: '4px', resize: 'vertical', boxSizing: 'border-box' }} />
-            </div>
-            <div className="wq-form-field">
-              <label>Referring Worker</label>
-              <input type="text" value={referringWorker} onChange={e => setReferringWorker(e.target.value)} />
-            </div>
-            <div className="wq-form-field">
-              <label>Referring Agency</label>
-              <input type="text" value={referringAgency} onChange={e => setReferringAgency(e.target.value)} />
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Section 2: Demographics */}
+      {/* Section 2: Demographics — DSD CI-67784 fields */}
       <div className="wq-panel" style={{ marginBottom: '1rem' }}>
         <div className="wq-panel-header"><h4>Section 2 — Person Demographics</h4></div>
         <div className="wq-panel-body">
           <div className="wq-search-grid">
+            <div className="wq-form-field">
+              <label>Title</label>
+              <select value={title} onChange={e => setTitle(e.target.value)}>
+                {TITLE_OPTIONS.map(t => <option key={t} value={t}>{t || 'Select...'}</option>)}
+              </select>
+            </div>
             <div className="wq-form-field">
               <label>Last Name * {fe.lastName && <span style={errStyle}>{fe.lastName}</span>}</label>
               <input type="text" value={lastName} onChange={e => setLastName(e.target.value)} />
@@ -263,11 +327,17 @@ export const PersonCreateReferralPage = () => {
               <input type="text" value={middleName} onChange={e => setMiddleName(e.target.value)} />
             </div>
             <div className="wq-form-field">
+              <label>Suffix</label>
+              <select value={suffix} onChange={e => setSuffix(e.target.value)}>
+                {SUFFIX_OPTIONS.map(s => <option key={s} value={s}>{s || 'Select...'}</option>)}
+              </select>
+            </div>
+            <div className="wq-form-field">
               <label>Date of Birth {fe.dob && <span style={errStyle}>{fe.dob}</span>}</label>
               <input type="date" value={dob} onChange={e => setDob(e.target.value)} />
             </div>
             <div className="wq-form-field">
-              <label>Gender * {fe.gender && <span style={errStyle}>{fe.gender}</span>}</label>
+              <label>Gender {fe.gender && <span style={errStyle}>{fe.gender}</span>}</label>
               <select value={gender} onChange={e => setGender(e.target.value)}>
                 <option value="">Select...</option>
                 <option value="MALE">Male</option><option value="FEMALE">Female</option>
@@ -275,20 +345,54 @@ export const PersonCreateReferralPage = () => {
               </select>
             </div>
             <div className="wq-form-field">
-              <label>SSN (optional) {fe.ssn && <span style={errStyle}>{fe.ssn}</span>}</label>
-              <input type="text" value={ssnDisplay} onChange={e => handleSsnChange(e.target.value)}
-                placeholder="XXX-XX-####" maxLength={9} style={{ fontFamily: 'monospace' }} />
-            </div>
-            <div className="wq-form-field">
-              <label>Language</label>
-              <select value={language} onChange={e => setLanguage(e.target.value)}>
-                <option value="English">English</option><option value="Spanish">Spanish</option>
-                <option value="Cantonese">Cantonese</option><option value="Mandarin">Mandarin</option>
-                <option value="Vietnamese">Vietnamese</option><option value="Korean">Korean</option>
-                <option value="Armenian">Armenian</option><option value="Tagalog">Tagalog</option>
-                <option value="Russian">Russian</option><option value="Other">Other</option>
+              <label>Gender Identity</label>
+              <select value={genderIdentity} onChange={e => setGenderIdentity(e.target.value)}>
+                {GENDER_IDENTITY_OPTIONS.map(g => <option key={g} value={g}>{g || 'Select...'}</option>)}
               </select>
             </div>
+            <div className="wq-form-field">
+              <label>Sexual Orientation</label>
+              <select value={sexualOrientation} onChange={e => setSexualOrientation(e.target.value)}>
+                {SEXUAL_ORIENTATION_OPTIONS.map(s => <option key={s} value={s}>{s || 'Select...'}</option>)}
+              </select>
+            </div>
+            <div className="wq-form-field">
+              <label>SSN (optional) {fe.ssn && <span style={errStyle}>{fe.ssn}</span>}</label>
+              <input type="text" value={ssnDisplay} onChange={e => handleSsnChange(e.target.value)}
+                placeholder="XXX-XX-####" maxLength={9} style={{ fontFamily: 'monospace' }}
+                disabled={!!blankSsnReason} />
+            </div>
+            <div className="wq-form-field">
+              <label>Blank SSN Reason {fe.blankSsnReason && <span style={errStyle}>{fe.blankSsnReason}</span>}</label>
+              <select value={blankSsnReason} onChange={e => handleBlankSsnReasonChange(e.target.value)}
+                disabled={ssn.length > 0}>
+                {BLANK_SSN_REASONS.map(r => <option key={r} value={r}>{r || 'Select...'}</option>)}
+              </select>
+            </div>
+            <div className="wq-form-field">
+              <label>Spoken Language</label>
+              <select value={language} onChange={e => setLanguage(e.target.value)}>
+                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            {language === 'Other' && (
+              <div className="wq-form-field">
+                <label>Other Spoken Language (specify)</label>
+                <input type="text" value={otherSpokenLanguageDetail} onChange={e => setOtherSpokenLanguageDetail(e.target.value)} />
+              </div>
+            )}
+            <div className="wq-form-field">
+              <label>Written Language</label>
+              <select value={writtenLanguage} onChange={e => setWrittenLanguage(e.target.value)}>
+                {LANGUAGES.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            {writtenLanguage === 'Other' && (
+              <div className="wq-form-field">
+                <label>Other Written Language (specify)</label>
+                <input type="text" value={otherWrittenLanguageDetail} onChange={e => setOtherWrittenLanguageDetail(e.target.value)} />
+              </div>
+            )}
             <div className="wq-form-field">
               <label>Ethnicity</label>
               <select value={ethnicity} onChange={e => setEthnicity(e.target.value)}>
@@ -303,6 +407,11 @@ export const PersonCreateReferralPage = () => {
                 <option value="Other">Other</option>
                 <option value="Decline to State">Decline to State</option>
               </select>
+            </div>
+            <div className="wq-form-field">
+              <label>Medi-Cal Pseudo Number</label>
+              <input type="text" value={mediCalPseudoNumber} onChange={e => setMediCalPseudoNumber(e.target.value.slice(0, 14))}
+                maxLength={14} placeholder="Up to 14 characters" />
             </div>
           </div>
         </div>
@@ -336,6 +445,21 @@ export const PersonCreateReferralPage = () => {
           ) : (
             <p style={{ color: '#999', fontSize: '0.875rem' }}>No address entered. {fe.resCity && <span style={{ color: '#c53030' }}>{fe.resCity}</span>}</p>
           )}
+          <div className="wq-search-grid" style={{ marginTop: '0.75rem' }}>
+            <div className="wq-form-field">
+              <label>Residence Address Type</label>
+              <select value={residenceAddressType} onChange={e => setResidenceAddressType(e.target.value)}>
+                {RESIDENCE_ADDRESS_TYPES.map(t => <option key={t} value={t}>{t || 'Select...'}</option>)}
+              </select>
+            </div>
+            <div className="wq-form-field">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input type="checkbox" checked={meetsResidencyRequirements}
+                  onChange={e => setMeetsResidencyRequirements(e.target.checked)} />
+                Meets Residency Requirements
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -400,27 +524,17 @@ export const PersonCreateReferralPage = () => {
         </div>
       </div>
 
-      {/* Section 6: Program Information */}
+      {/* County Selection */}
       <div className="wq-panel" style={{ marginBottom: '1rem' }}>
-        <div className="wq-panel-header"><h4>Section 6 — Program Information</h4></div>
+        <div className="wq-panel-header"><h4>County</h4></div>
         <div className="wq-panel-body">
           <div className="wq-search-grid">
-            <div className="wq-form-field">
-              <label>Program Type</label>
-              <select value={programType} onChange={e => setProgramType(e.target.value)}>
-                <option value="IHSS">IHSS</option><option value="WAIVER">Waiver</option><option value="BOTH">Both</option>
-              </select>
-            </div>
             <div className="wq-form-field">
               <label>County * {fe.county && <span style={errStyle}>{fe.county}</span>}</label>
               <select value={county} onChange={e => setCounty(e.target.value)}>
                 <option value="">Select County...</option>
                 {COUNTIES.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
-            </div>
-            <div className="wq-form-field">
-              <label>Assigned Worker</label>
-              <input type="text" value={assignedWorker} onChange={e => setAssignedWorker(e.target.value)} placeholder="Worker ID or username" />
             </div>
           </div>
         </div>
