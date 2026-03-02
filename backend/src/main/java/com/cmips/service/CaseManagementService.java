@@ -40,7 +40,11 @@ public class CaseManagementService {
     private final TaskService taskService;
     private final NotificationService notificationService;
     private final SAWSService sawsService;              // BR-9: S1 referral when no CIN found
+    private final MEDSService medsService;              // BR-13: IH18 on active Medi-Cal case create
     private final PayrollIntegrationService payrollIntegrationService; // BR-15: PR00901A on case create
+
+    // Aid codes excluded from S8 notification per BR OS 16
+    private static final Set<String> EXCLUDED_AID_CODES = Set.of("10", "20", "60");
 
     public CaseManagementService(
             CaseRepository caseRepository,
@@ -56,6 +60,7 @@ public class CaseManagementService {
             TaskService taskService,
             NotificationService notificationService,
             SAWSService sawsService,
+            MEDSService medsService,
             PayrollIntegrationService payrollIntegrationService) {
         this.caseRepository = caseRepository;
         this.recipientRepository = recipientRepository;
@@ -70,6 +75,7 @@ public class CaseManagementService {
         this.taskService = taskService;
         this.notificationService = notificationService;
         this.sawsService = sawsService;
+        this.medsService = medsService;
         this.payrollIntegrationService = payrollIntegrationService;
     }
 
@@ -133,24 +139,36 @@ public class CaseManagementService {
     @Transactional
     public CaseEntity createCaseFromRequest(CreateCaseRequest request, String userId) {
 
-        // ── EM-176: CIN clearance must be performed before saving a case ─────
+        // ── EM OS 176: CIN clearance must be performed before saving a case ─────
         // Block the save if clearance was never initiated (NOT_STARTED or null).
         // "PENDING_SAWS" is allowed — it means clearance ran but no CIN was found
         // and an S1 referral will be sent to SAWS.
         String clearStatus = request.getCinClearanceStatus();
         if (clearStatus == null || clearStatus.isBlank() || "NOT_STARTED".equalsIgnoreCase(clearStatus)) {
             throw new IllegalArgumentException(
-                "EM-176: Client Index Number search is required before creating a case.");
+                "EM OS 176: Client Index Number search is required before creating a case.");
         }
 
-        // ── EM-175: IHSS Referral Date cannot be in the future ───────────────
+        // ── EM OS 067: Assigned Worker is required ────────────────────────────
+        if (request.getCaseOwnerId() == null || request.getCaseOwnerId().isBlank()) {
+            throw new IllegalArgumentException(
+                "EM OS 067: Assigned worker must be entered.");
+        }
+
+        // ── IHSS Referral Date validation (DSD Screen Design pg 62) ──────────
+        // DSD allows post-dating up to 2 weeks from the displayed date.
+        // EM OS 175 was CANCELLED (ASR Sprint 43). EM OS 176 applies only when
+        // changing an *existing* referral date to a date future to the displayed one.
+        // For new cases the referral date defaults to current date and may be
+        // post-dated up to 2 weeks.
         LocalDate parsedReferralDate = null;
         if (request.getIhssReferralDate() != null && !request.getIhssReferralDate().isBlank()) {
             try {
                 parsedReferralDate = LocalDate.parse(request.getIhssReferralDate());
-                if (parsedReferralDate.isAfter(LocalDate.now())) {
+                // Allow up to 2 weeks in the future per DSD screen design
+                if (parsedReferralDate.isAfter(LocalDate.now().plusWeeks(2))) {
                     throw new IllegalArgumentException(
-                        "EM-175: IHSS Referral Date cannot be in the future.");
+                        "EM OS 176: IHSS Referral Date may not be more than two weeks in the future.");
                 }
             } catch (java.time.format.DateTimeParseException ignored) {
                 // Non-parseable date — leave for frontend validation
@@ -164,6 +182,16 @@ public class CaseManagementService {
             RecipientEntity existingRecipient = recipientRepository.findById(recipientId).orElse(null);
             if (existingRecipient != null && existingRecipient.getReferralDate() != null) {
                 parsedReferralDate = existingRecipient.getReferralDate();
+            }
+        }
+
+        // BR-19: Transition existing Open Referral to Applicant on case creation
+        if (recipientId != null) {
+            RecipientEntity existingRecipient = recipientRepository.findById(recipientId).orElse(null);
+            if (existingRecipient != null && existingRecipient.getPersonType() == PersonType.OPEN_REFERRAL) {
+                existingRecipient.setPersonType(PersonType.APPLICANT);
+                recipientRepository.save(existingRecipient);
+                log.info("[BR-19] Transitioned recipient {} from OPEN_REFERRAL to APPLICANT", recipientId);
             }
         }
 
@@ -211,6 +239,9 @@ public class CaseManagementService {
                 .cin(request.getCin())
                 .applicationDate(LocalDate.now())
                 .referralDate(parsedReferralDate)
+                .interpreterAvailable(request.getInterpreterAvailable())
+                .mediCalAidCode(request.getAidCode())
+                .mediCalStatus(request.getMediCalStatus())
                 .createdBy(userId)
                 .build();
         caseEntity = caseRepository.save(caseEntity);
@@ -233,11 +264,42 @@ public class CaseManagementService {
                     request.getDateOfBirth() != null ? request.getDateOfBirth() : "",
                     request.getGender()    != null ? request.getGender()    : "",
                     request.getCountyCode());
+            // Record the S1 referral date on the case for Case Home display
+            caseEntity.setMediCalEligibilityReferralDate(LocalDate.now());
+            caseRepository.save(caseEntity);
+        }
+
+        // ── BR-13: IH18 Pending Application to MEDS when active Medi-Cal CIN selected ──
+        // Active Medi-Cal = CIN clearance status is CLEARED or EXACT_MATCH (not PENDING_SAWS).
+        // Eligibility status does NOT have 9 in first AND third digits, and aid codes != 10, 20, 60.
+        String mediCalStatus = request.getMediCalStatus();
+        if ("ACTIVE".equals(mediCalStatus)
+                || "CLEARED".equals(clearStatus) || "EXACT_MATCH".equals(clearStatus)) {
+            if (request.getCin() != null && !request.getCin().isBlank()
+                    && !"PENDING_SAWS".equals(mediCalStatus)) {
+                log.info("[BR-13] Sending IH18 Pending Application to MEDS for case={}, cin={}",
+                         caseEntity.getCaseNumber(), request.getCin());
+                medsService.sendIH18PendingApplication(
+                        caseEntity.getCaseNumber(), request.getCin(), "IHSS_APPLICATION");
+            }
+        }
+
+        // ── BR-16: S8 Notification to SAWS when active Medi-Cal with non-excluded aid code ──
+        // When case is created for recipient with active Medi-Cal AND aid code is NOT 10, 20, or 60,
+        // send S8 (SMDS4XXB) notification of IHSS "Pending" status.
+        String aidCode = request.getAidCode();
+        if (request.getCin() != null && !request.getCin().isBlank()
+                && !"PENDING_SAWS".equals(mediCalStatus)
+                && aidCode != null && !aidCode.isBlank()
+                && !EXCLUDED_AID_CODES.contains(aidCode)) {
+            log.info("[BR-16] Sending S8 IHSS Pending notification to SAWS for case={}, cin={}, aidCode={}",
+                     caseEntity.getCaseNumber(), request.getCin(), aidCode);
+            sawsService.sendS8Notification(caseEntity.getCaseNumber(), request.getCin(), aidCode);
         }
 
         createCaseAssignmentTask(caseEntity, request.getCaseOwnerId());
 
-        // ── Fix 1: Notify the assigned case owner ────────────────────────────
+        // ── Notify the assigned case owner ─────────────────────────────────
         String caseOwnerId = request.getCaseOwnerId();
         if (caseOwnerId != null && !caseOwnerId.isBlank()) {
             notificationService.createNotification(
@@ -253,7 +315,31 @@ public class CaseManagementService {
         }
 
         // BR-15: Send PR00901A to payroll system on new case creation
-        payrollIntegrationService.sendPR00901A(caseNumber, String.valueOf(recipientId));
+        // Per DSD pages 245-247, send full recipient demographics + mailing address
+        RecipientEntity payrollRecipient = recipientRepository.findById(recipientId).orElse(null);
+        if (payrollRecipient != null) {
+            String mailingAddr = String.join(", ",
+                    payrollRecipient.getMailingStreetName() != null ? payrollRecipient.getMailingStreetName() : "",
+                    payrollRecipient.getMailingCity() != null ? payrollRecipient.getMailingCity() : "",
+                    payrollRecipient.getMailingState() != null ? payrollRecipient.getMailingState() : "",
+                    payrollRecipient.getMailingZip() != null ? payrollRecipient.getMailingZip() : "");
+            payrollIntegrationService.sendPR00901A(
+                    caseNumber, String.valueOf(recipientId),
+                    payrollRecipient.getLastName(), payrollRecipient.getFirstName(),
+                    payrollRecipient.getMiddleName(), payrollRecipient.getSuffix(),
+                    payrollRecipient.getSsn(), null, payrollRecipient.getBlankSsnReason(),
+                    payrollRecipient.getDateOfBirth() != null ? payrollRecipient.getDateOfBirth().toString() : "",
+                    payrollRecipient.getGender(),
+                    request.getCountyCode(), null,
+                    request.getCaseOwnerId(), mailingAddr);
+        } else {
+            payrollIntegrationService.sendPR00901A(caseNumber, String.valueOf(recipientId));
+        }
+
+        // ── BR-44: Create Person Contact record on case creation ──────────────
+        // When Create Case is saved and contact info exists, create a new Person
+        // Contact record with From Date = current date.
+        createInitialPersonContact(caseEntity, recipientId, userId);
 
         log.info("[createCaseFromRequest] Created case {} (mediCalStatus={})",
                  caseNumber, request.getMediCalStatus());
@@ -261,34 +347,119 @@ public class CaseManagementService {
     }
 
     /**
+     * BR OS 44: Create initial Person Contact record when a case is created.
+     * Sets From Date to current date.
+     */
+    private void createInitialPersonContact(CaseEntity caseEntity, Long recipientId, String userId) {
+        RecipientEntity recipient = recipientRepository.findById(recipientId).orElse(null);
+        if (recipient == null) return;
+
+        // Only create if the recipient has contact info (phone or address)
+        boolean hasPhone = recipient.getPrimaryPhone() != null && !recipient.getPrimaryPhone().isBlank();
+        boolean hasAddress = recipient.getResidenceStreetName() != null && !recipient.getResidenceStreetName().isBlank();
+        if (!hasPhone && !hasAddress) return;
+
+        CaseContactEntity contact = new CaseContactEntity();
+        contact.setCaseId(caseEntity.getId());
+        contact.setRecipientId(recipientId);
+        contact.setContactType("PRIMARY");
+        contact.setFirstName(recipient.getFirstName());
+        contact.setLastName(recipient.getLastName());
+        contact.setPhone(recipient.getPrimaryPhone());
+        contact.setStreetAddress(recipient.getResidenceStreetName());
+        contact.setCity(recipient.getResidenceCity());
+        contact.setState(recipient.getResidenceState());
+        contact.setZipCode(recipient.getResidenceZip());
+        contact.setStatus("ACTIVE");
+        contact.setStartDate(LocalDate.now());
+        contact.setCreatedBy(userId);
+        caseContactRepository.save(contact);
+        log.info("[BR-44] Created initial Person Contact for case={}, recipient={}",
+                 caseEntity.getCaseNumber(), recipientId);
+    }
+
+    /**
+     * BR OS 45: Update Person Contact From Date when IHSS Referral Date is modified.
+     * When the IHSS Referral Date is changed and Person Contacts exist for the case,
+     * update all contacts' From Date to the new IHSS Referral Date.
+     */
+    public void updatePersonContactFromDate(Long caseId, LocalDate newReferralDate) {
+        List<CaseContactEntity> contacts = caseContactRepository.findByCaseId(caseId);
+        for (CaseContactEntity contact : contacts) {
+            contact.setStartDate(newReferralDate);
+            caseContactRepository.save(contact);
+        }
+        if (!contacts.isEmpty()) {
+            log.info("[BR-45] Updated From Date to {} on {} Person Contacts for case={}",
+                     newReferralDate, contacts.size(), caseId);
+        }
+    }
+
+    /**
      * Create a referral (per BR OS 17, 28)
      *
      * Required-field enforcement per DSD CI-67784 and EM codes:
-     *   EM-205: Last Name is required
-     *   EM-206: First Name is required
-     *   EM-201: Referral Source is required
-     *   EM-208/209: At least Address (city+zip) OR a primary phone number is required
+     *   EM OS 005: Last Name is required
+     *   EM OS 006: First Name is required
+     *   EM OS 001: Referral Source is required
+     *   EM OS 080: Either a Residence Address or a Phone Number is required
      */
     @Transactional
     public RecipientEntity createReferral(RecipientEntity recipient, String userId) {
 
         // ── Field validation ────────────────────────────────────────────────
         if (recipient.getLastName() == null || recipient.getLastName().isBlank()) {
-            throw new IllegalArgumentException("EM-205: Last Name is required");
+            throw new IllegalArgumentException("EM OS 005: Last Name is required");
         }
         if (recipient.getFirstName() == null || recipient.getFirstName().isBlank()) {
-            throw new IllegalArgumentException("EM-206: First Name is required");
+            throw new IllegalArgumentException("EM OS 006: First Name is required");
         }
         if (recipient.getReferralSource() == null || recipient.getReferralSource().isBlank()) {
-            throw new IllegalArgumentException("EM-201: Referral Source is required");
+            throw new IllegalArgumentException("EM OS 001: Referral Source is required");
         }
-        // EM-208/209: Address (city + ZIP) OR phone must be provided
+        // EM OS 007: SSN must be blank if Blank SSN Reason indicated (and vice versa)
+        if (recipient.getBlankSsnReason() != null && !recipient.getBlankSsnReason().isBlank()
+                && recipient.getSsn() != null && !recipient.getSsn().isBlank()) {
+            throw new IllegalArgumentException("EM OS 007: SSN must be blank when Blank SSN Reason is indicated");
+        }
+        // EM OS 080: Address (city + ZIP) OR phone must be provided
         boolean hasAddress = (recipient.getResidenceCity() != null && !recipient.getResidenceCity().isBlank())
                           && (recipient.getResidenceZip()  != null && !recipient.getResidenceZip().isBlank());
         boolean hasPhone   = (recipient.getPrimaryPhone()  != null && !recipient.getPrimaryPhone().isBlank());
         if (!hasAddress && !hasPhone) {
             throw new IllegalArgumentException(
-                "EM-208: At least a Residence Address (city and ZIP) or a Phone Number is required");
+                "EM OS 080: Either a Residence Address or a Phone Number is required");
+        }
+
+        // EM-237/238: SSN validation
+        if (recipient.getSsn() != null && !recipient.getSsn().isBlank()) {
+            String ssn = recipient.getSsn().replaceAll("\\D", "");
+            if (ssn.length() == 9 && ssn.startsWith("9")) {
+                throw new IllegalArgumentException("EM OS 010: A valid Social Security Number cannot begin with nine (9).");
+            }
+            if (ssn.length() == 9 && ssn.matches("(\\d)\\1{8}")) {
+                throw new IllegalArgumentException("EM OS 010: '" + ssn + "' is not a valid entry for the Social Security Number.");
+            }
+        }
+
+        // EM-256: Phone cannot be 0000000000 or 9999999999
+        if (hasPhone) {
+            String phone = recipient.getPrimaryPhone().replaceAll("\\D", "");
+            if ("0000000000".equals(phone) || "9999999999".equals(phone)) {
+                throw new IllegalArgumentException("EM OS 256: Not a valid phone number. Please enter valid phone number.");
+            }
+        }
+
+        // EM-242/243: Other Language fields must contain only English alpha characters
+        if (recipient.getOtherWrittenLanguageDetail() != null && !recipient.getOtherWrittenLanguageDetail().isBlank()) {
+            if (!recipient.getOtherWrittenLanguageDetail().matches("[a-zA-Z\\s\\-']+")) {
+                throw new IllegalArgumentException("EM OS 242: Other Written Language Details field allows only English language alpha characters.");
+            }
+        }
+        if (recipient.getOtherSpokenLanguageDetail() != null && !recipient.getOtherSpokenLanguageDetail().isBlank()) {
+            if (!recipient.getOtherSpokenLanguageDetail().matches("[a-zA-Z\\s\\-']+")) {
+                throw new IllegalArgumentException("EM OS 243: Other Spoken Language Details field allows only English language alpha characters.");
+            }
         }
 
         // Set person type to Open-Referral
@@ -591,23 +762,50 @@ public class CaseManagementService {
     @Transactional
     public CaseEntity rescindCase(Long caseId, String rescindReason, String userId) {
         CaseEntity caseEntity = caseRepository.findById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Case not found"));
 
         // EM#45: Only the Case Owner may rescind a case
-        if (caseEntity.getCaseOwnerId() != null && !caseEntity.getCaseOwnerId().equals(userId)) {
-            log.warn("User {} attempted to rescind case {} owned by {}", userId, caseId, caseEntity.getCaseOwnerId());
-            // Allow for now but log warning - strict enforcement would throw exception
+        if (caseEntity.getCaseOwnerId() != null && userId != null
+                && !caseEntity.getCaseOwnerId().equals(userId)) {
+            throw new IllegalArgumentException(
+                "EM#45: Only the Case Owner may rescind a case.");
+        }
+
+        // EM#99: Rescind not allowed when SSN is Duplicate or Suspect
+        if (caseEntity.getRecipientId() != null) {
+            recipientRepository.findById(caseEntity.getRecipientId()).ifPresent(recipient -> {
+                if (recipient.getSsnType() != null) {
+                    String ssnType = recipient.getSsnType();
+                    if ("DUPLICATE_SSN".equals(ssnType) || "SUSPECT_SSN".equals(ssnType)) {
+                        throw new IllegalArgumentException(
+                            "EM#99: Rescind Action not allowed when Alternative ID Type Social Security Number is indicated as "
+                            + ssnType.replace("_", " ") + ".");
+                    }
+                }
+            });
+        }
+
+        // EM#92: Rescind not allowed when CIN does not have active Medi-Cal eligibility
+        if (caseEntity.getCin() != null && !caseEntity.getCin().isBlank()) {
+            String mediCalSt = caseEntity.getMediCalStatus();
+            if (mediCalSt == null || "INACTIVE".equalsIgnoreCase(mediCalSt) || "PENDING_SAWS".equalsIgnoreCase(mediCalSt)) {
+                // Only block if termination reason is NOT recipient death
+                if (!"CC511".equals(caseEntity.getTerminationReason())) {
+                    throw new IllegalArgumentException(
+                        "EM#92: Rescind action not allowed when CIN does not have active Medi-Cal eligibility.");
+                }
+            }
         }
 
         // Must be Terminated or Denied to rescind
         Set<CaseStatus> rescindableStatuses = Set.of(CaseStatus.TERMINATED, CaseStatus.DENIED);
         if (!rescindableStatuses.contains(caseEntity.getCaseStatus())) {
-            throw new RuntimeException("Case must be Terminated or Denied to rescind");
+            throw new IllegalArgumentException("Case must be Terminated or Denied to rescind");
         }
 
         // Validate rescind reason code
         if (!CaseCodeTables.RESCIND_REASONS.containsKey(rescindReason)) {
-            throw new RuntimeException("Invalid rescind reason code: " + rescindReason);
+            throw new IllegalArgumentException("Invalid rescind reason code: " + rescindReason);
         }
 
         // Determine the restored status
@@ -680,14 +878,53 @@ public class CaseManagementService {
     @Transactional
     public CaseEntity reactivateCase(Long caseId, LocalDate referralDate, String meetsResidencyRequirement,
                                      String referralSource, boolean interpreterAvailable,
-                                     String assignedWorkerId, String userId) {
+                                     String assignedWorkerId, String cinClearanceStatus, String userId) {
         CaseEntity caseEntity = caseRepository.findById(caseId)
-                .orElseThrow(() -> new RuntimeException("Case not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Case not found"));
 
         // Only Terminated, Denied, or Application Withdrawn cases can be reactivated
         Set<CaseStatus> reactivatableStatuses = Set.of(CaseStatus.TERMINATED, CaseStatus.DENIED, CaseStatus.APPLICATION_WITHDRAWN);
         if (!reactivatableStatuses.contains(caseEntity.getCaseStatus())) {
-            throw new RuntimeException("Case must be Terminated, Denied, or Application Withdrawn to reactivate");
+            throw new IllegalArgumentException("Case must be Terminated, Denied, or Application Withdrawn to reactivate");
+        }
+
+        // TR25: Case terminated for CC514 (Medi-Cal non-compliance) within 90 days cannot be reactivated
+        if (caseEntity.getCaseStatus() == CaseStatus.TERMINATED
+                && "CC514".equals(caseEntity.getTerminationReason())
+                && caseEntity.getTerminationDate() != null
+                && caseEntity.getTerminationDate().isAfter(LocalDate.now().minusDays(90))) {
+            throw new IllegalArgumentException(
+                "TR25: Case terminated for Medi-Cal non-compliance (CC514) within the past 90 days cannot be reactivated.");
+        }
+
+        // EM#58: Reactivate Action not allowed when Death Outcome has been recorded
+        if (caseEntity.getRecipientId() != null) {
+            recipientRepository.findById(caseEntity.getRecipientId()).ifPresent(recipient -> {
+                if (Boolean.TRUE.equals(recipient.getDeceased()) || recipient.getDateOfDeath() != null) {
+                    throw new IllegalArgumentException(
+                        "EM#58: Reactivate Action not allowed — a Death Outcome has been recorded for this recipient.");
+                }
+                // EM#100: Reactivate Action not allowed when SSN is Duplicate or Suspect
+                if (recipient.getSsnType() != null) {
+                    String ssnType = recipient.getSsnType();
+                    if ("DUPLICATE_SSN".equals(ssnType) || "SUSPECT_SSN".equals(ssnType)) {
+                        throw new IllegalArgumentException(
+                            "EM#100: Reactivate Action not allowed when Alternative ID Type Social Security Number is indicated as "
+                            + ssnType.replace("_", " ") + ".");
+                    }
+                }
+            });
+        }
+
+        // Assigned Worker is required for reactivation
+        if (assignedWorkerId == null || assignedWorkerId.isBlank()) {
+            throw new IllegalArgumentException("Assigned Worker is required for case reactivation.");
+        }
+
+        // EM#117: CIN clearance (SCI search) must be performed before reactivation
+        if (cinClearanceStatus == null || cinClearanceStatus.isBlank() || "NOT_STARTED".equals(cinClearanceStatus)) {
+            throw new IllegalArgumentException(
+                "EM#117: CIN Clearance (SCI Search) must be performed before case reactivation.");
         }
 
         // EM#98: Cannot reactivate same day as denial/termination/withdrawal
@@ -695,17 +932,17 @@ public class CaseManagementService {
                 : caseEntity.getDenialDate() != null ? caseEntity.getDenialDate()
                 : caseEntity.getWithdrawalDate();
         if (actionDate != null && actionDate.equals(LocalDate.now())) {
-            throw new RuntimeException("EM#98: Case may not be Reactivated the same day as a Denial, Termination or Withdrawal action was taken");
+            throw new IllegalArgumentException("EM#98: Case may not be Reactivated the same day as a Denial, Termination or Withdrawal action was taken");
         }
 
         // EM#112: Updated Referral Date may not be dated more than 14 days prior
         if (referralDate != null && referralDate.isBefore(LocalDate.now().minusDays(14))) {
-            throw new RuntimeException("EM#112: Updated Referral Date may not be dated more than two weeks (14 calendar days) prior to the current date");
+            throw new IllegalArgumentException("EM#112: Updated Referral Date may not be dated more than two weeks (14 calendar days) prior to the current date");
         }
 
         // EM#113: IHSS Referral Date may not be changed to a date future to the displayed Referral Date
         if (referralDate != null && referralDate.isAfter(LocalDate.now())) {
-            throw new RuntimeException("EM#113: IHSS Referral Date may not be changed to a date future to the displayed IHSS Referral Date");
+            throw new IllegalArgumentException("EM#113: IHSS Referral Date may not be changed to a date future to the displayed IHSS Referral Date");
         }
 
         // Save previous state
@@ -715,6 +952,9 @@ public class CaseManagementService {
         caseEntity.setCaseStatus(CaseStatus.PENDING);
         caseEntity.setReferralDate(referralDate != null ? referralDate : LocalDate.now());
         caseEntity.setApplicationDate(LocalDate.now());
+        caseEntity.setInterpreterAvailable(interpreterAvailable);
+        caseEntity.setMeetsResidencyRequirement(meetsResidencyRequirement);
+        caseEntity.setReferralSource(referralSource);
 
         if (assignedWorkerId != null) {
             caseEntity.setCaseOwnerId(assignedWorkerId);
@@ -839,8 +1079,44 @@ public class CaseManagementService {
         map.put("mediCalEligibilityReferralDate",c.getMediCalEligibilityDate());
         map.put("authorizationStartDate",        c.getAuthorizationStartDate());
         map.put("authorizationEndDate",          c.getAuthorizationEndDate());
+        // DSD Case Home additional fields
+        map.put("districtOffice",                          c.getDistrictOffice());
+        map.put("interpreterAvailable",                    c.getInterpreterAvailable());
+        map.put("referralSource",                          c.getReferralSource());
+        map.put("meetsResidencyRequirement",               c.getMeetsResidencyRequirement());
+        map.put("mediCalInitialEligibilityNotificationDate", c.getMediCalInitialEligibilityNotificationDate());
+        map.put("companionCase",                           c.getCompanionCase());
+        map.put("stateHearing",                            c.getStateHearing());
+        map.put("numberOfHouseholdMembers",                c.getNumberOfHouseholdMembers());
+        map.put("mailDesignee",                            c.getMailDesignee());
+        map.put("countyUse1",                              c.getCountyUse1());
+        map.put("countyUse2",                              c.getCountyUse2());
+        map.put("countyUse3",                              c.getCountyUse3());
+        map.put("countyUse4",                              c.getCountyUse4());
+        map.put("terminationDate",   c.getTerminationDate());
+        map.put("terminationReason", c.getTerminationReason());
+        map.put("denialDate",        c.getDenialDate());
+        map.put("withdrawalDate",    c.getWithdrawalDate());
         map.put("createdAt",     c.getCreatedAt());
         map.put("updatedAt",     c.getUpdatedAt());
+
+        // Status alias for frontend compatibility (frontend reads c.status)
+        map.put("status", c.getCaseStatus() != null ? c.getCaseStatus().name() : null);
+
+        // TR25 90-Day Rule: block reactivation if terminated for CC514 within 90 days
+        boolean reactivationAllowed = false;
+        Set<CaseStatus> reactivatableStatuses = Set.of(
+            CaseStatus.TERMINATED, CaseStatus.DENIED, CaseStatus.APPLICATION_WITHDRAWN);
+        if (reactivatableStatuses.contains(c.getCaseStatus())) {
+            reactivationAllowed = true;
+            if (c.getCaseStatus() == CaseStatus.TERMINATED
+                    && "CC514".equals(c.getTerminationReason())
+                    && c.getTerminationDate() != null
+                    && c.getTerminationDate().isAfter(LocalDate.now().minusDays(90))) {
+                reactivationAllowed = false;
+            }
+        }
+        map.put("reactivationAllowed", reactivationAllowed);
 
         // Enrich with recipient demographics
         if (c.getRecipientId() != null) {
@@ -852,6 +1128,8 @@ public class CaseManagementService {
                 map.put("recipientPersonType", r.getPersonType() != null ? r.getPersonType().name() : null);
                 map.put("recipientAddress",    r.getFullResidenceAddress());
                 map.put("recipientPhone",      r.getPrimaryPhone());
+                map.put("spokenLanguage",      r.getSpokenLanguage());
+                map.put("writtenLanguage",     r.getWrittenLanguage());
             });
         }
 

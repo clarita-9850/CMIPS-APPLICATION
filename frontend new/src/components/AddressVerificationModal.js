@@ -41,7 +41,7 @@ const AddressVerificationModal = ({ isOpen, onClose, onConfirm, initialData = {}
       setResult(resp);
     } catch {
       // Network error — treat as unverifiable, non-blocking
-      setResult({ cassMatch: false, cassFailed: true, cassUpdates: 'EM-177: Address could not be verified. You may still proceed.' });
+      setResult({ cassMatch: false, cassFailed: true, cassUpdates: 'EM OS 177: Address could not be verified. You may still proceed.' });
     } finally {
       setVerifying(false);
     }
@@ -140,7 +140,7 @@ const AddressVerificationModal = ({ isOpen, onClose, onConfirm, initialData = {}
               )}
               {!result.cassMatch && result.cassUpdates && (
                 <div style={warningBanner}>
-                  <strong>EM-178:</strong> {result.cassUpdates}
+                  <strong>EM OS 178:</strong> {result.cassUpdates}
                   <div style={{ marginTop: '0.75rem', display: 'flex', gap: '0.5rem' }}>
                     <button onClick={() => handleAccept(form)} style={btnPrimary}>Use Original Address</button>
                     <button onClick={() => handleAccept({ ...form, ...result })} style={btnSecondary}>Use Suggested Address</button>
@@ -149,7 +149,7 @@ const AddressVerificationModal = ({ isOpen, onClose, onConfirm, initialData = {}
               )}
               {result.cassFailed && !result.cassUpdates && (
                 <div style={errorBanner}>
-                  <strong>EM-177:</strong> Address could not be verified with CASS. You may still proceed.
+                  <strong>EM OS 177:</strong> Address could not be verified with CASS. You may still proceed.
                   <br />
                   <button onClick={() => handleAccept(form)} style={{ ...btnPrimary, marginTop: '0.5rem' }}>Proceed with Unverified Address</button>
                 </div>

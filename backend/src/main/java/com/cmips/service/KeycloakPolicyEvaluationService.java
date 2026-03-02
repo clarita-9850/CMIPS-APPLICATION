@@ -120,10 +120,12 @@ public class KeycloakPolicyEvaluationService {
         long start = System.currentTimeMillis();
 
         try {
-            // 1. Fetch all resources -> build resourceId -> resourceName map and known names set
+            // 1. Fetch all resources -> build resourceId -> resourceName map, known names set,
+            //    and resourceName -> scopes map (for resource-based permission fallback)
             List<Map<String, Object>> resources = keycloakAdminService.getAllResources();
             Map<String, String> resourceIdToName = new HashMap<>();
             Set<String> knownResourceNames = new HashSet<>();
+            Map<String, Set<String>> resourceNameToScopes = new HashMap<>();
             for (Map<String, Object> resource : resources) {
                 String id = (String) resource.get("_id");
                 if (id == null) id = (String) resource.get("id");
@@ -131,6 +133,17 @@ public class KeycloakPolicyEvaluationService {
                 if (id != null && name != null) {
                     resourceIdToName.put(id, name);
                     knownResourceNames.add(name);
+                    // Extract scopes associated with this resource
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> resScopes = (List<Map<String, Object>>) resource.get("scopes");
+                    if (resScopes != null) {
+                        Set<String> scopeSet = new HashSet<>();
+                        for (Map<String, Object> s : resScopes) {
+                            String sName = (String) s.get("name");
+                            if (sName != null) scopeSet.add(sName);
+                        }
+                        resourceNameToScopes.put(name, scopeSet);
+                    }
                 }
             }
             logger.debug("Loaded {} resources", resourceIdToName.size());
@@ -204,6 +217,17 @@ public class KeycloakPolicyEvaluationService {
                                 for (Map<String, Object> s : permScopes) {
                                     String name = (String) s.get("name");
                                     if (name != null) scopeNames.add(name);
+                                }
+                                // Fallback: resource-based permissions have no explicit scope bindings
+                                // but implicitly grant ALL scopes on the associated resource.
+                                // Use the resource's own scopes as fallback.
+                                if (scopeNames.isEmpty() && parsed.resourceName != null) {
+                                    Set<String> resScopes = resourceNameToScopes.get(parsed.resourceName);
+                                    if (resScopes != null && !resScopes.isEmpty()) {
+                                        scopeNames.addAll(resScopes);
+                                        logger.debug("DSD permission '{}': using {} scopes from resource '{}'",
+                                            permissionName, resScopes.size(), parsed.resourceName);
+                                    }
                                 }
                             }
                         }

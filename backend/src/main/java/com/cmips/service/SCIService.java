@@ -141,7 +141,7 @@ public class SCIService {
                                           String gender, String cin, String ssn,
                                           boolean mediCalPseudo) {
 
-        // EM-811: last name or first name required
+        // EM OS 811: last name or first name required
         if ((lastName == null || lastName.isBlank()) && (firstName == null || firstName.isBlank())) {
             log.warn("[OI] Return code 811: last name and first name both missing");
             return buildOiResponse("811", List.of(), null, 0,
@@ -196,10 +196,10 @@ public class SCIService {
                     "CIN does not exist for the applicant");
         }
 
-        // Return code 000: matches found — EM-186
+        // Return code 000: matches found — EM OS 186
         log.info("[OI] Return code 000: {} match(es) for lastName={}", results.size(), lastName);
         return buildOiResponse("000", results, sentCriteria, results.size(),
-                "EM-186: Valid matches were found, please review matches to obtain " +
+                "EM OS 186: Valid matches were found, please review matches to obtain " +
                 "Medi-Cal Eligibility record. If matches are invalid select Cancel.");
     }
 
@@ -271,14 +271,14 @@ public class SCIService {
     }
 
     // ============================================================
-    // CIN Availability Check (Scenario 6 / EM-202)
+    // CIN Availability Check (Scenario 6 / EM OS 202)
     // ============================================================
 
     /**
      * Checks whether a CIN is already assigned to a DIFFERENT person record in CMIPS.
      * This is a local CMIPS DB check, not a CMOO106A transaction.
      *
-     * Scenario 6 / EM-202: "Person record with indicated CIN already exists."
+     * Scenario 6 / EM OS 202: "Person record with indicated CIN already exists."
      */
     public Map<String, Object> checkCinAvailability(String cin, String callerAppId) {
         boolean takenByOther = applicationRepository.findByCin(cin)
@@ -288,7 +288,7 @@ public class SCIService {
         if (takenByOther) {
             return Map.of(
                 "available",  false,
-                "errorCode",  "EM-202",
+                "errorCode",  "EM OS 202",
                 "message",    "Person record with indicated CIN already exists. " +
                               "Please resolve the conflict and perform CIN clearance again."
             );

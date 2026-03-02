@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import * as casesApi from '../api/casesApi';
 import { CINSearchModal }          from '../components/cin/CINSearchModal';
 import { MediCalEligibilityModal } from '../components/cin/MediCalEligibilityModal';
 import { CINDataMismatchModal }    from '../components/cin/CINDataMismatchModal';
 import { CreateCaseWithoutCINModal } from '../components/cin/CreateCaseWithoutCINModal';
+import { UserSearchModal }         from '../components/UserSearchModal';
 import './WorkQueues.css';
 
 // CIN clearance status badge styles
@@ -36,29 +37,38 @@ export const CaseCreatePage = () => {
   const { user }  = useAuth();
   const username  = user?.username || user?.preferred_username || 'unknown';
 
+  const [searchParams] = useSearchParams();
+
+  // Demographics pre-populated from Application record (DSD CI-67772: System Populated, Not Editable)
+  const isPrePopulated = !!(searchParams.get('lastName') || searchParams.get('firstName'));
+
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
 
-  // Core form fields
+  // Core form fields — demographics pre-filled from URL params when coming from Application flow
   const [form, setForm] = useState({
-    // Demographics (also sent to SCI)
-    lastName:          '',
-    firstName:         '',
-    gender:            '',
-    dateOfBirth:       '',
-    ssn:               '',
+    // Demographics (system-populated from application when isPrePopulated)
+    lastName:          searchParams.get('lastName') || '',
+    firstName:         searchParams.get('firstName') || '',
+    gender:            searchParams.get('gender') || '',
+    dateOfBirth:       searchParams.get('dateOfBirth') || '',
+    ssn:               searchParams.get('ssn') || '',
     mediCalPseudo:     false,
     // CIN (populated after clearance)
     cin:               '',
-    // Case fields
-    countyCode:        '',
-    zipCode:           '',
-    spokenLanguage:    '',
-    writtenLanguage:   '',
+    // Case fields (system-populated from application)
+    countyCode:        searchParams.get('countyCode') || '',
+    zipCode:           searchParams.get('zipCode') || '',
+    spokenLanguage:    searchParams.get('spokenLanguage') || '',
+    writtenLanguage:   searchParams.get('writtenLanguage') || '',
     interpreterAvailable: false,
     caseOwnerId:       '',
-    ihssReferralDate:  '',
+    ihssReferralDate:  new Date().toISOString().slice(0, 10),  // DSD: default to today
   });
+
+  // Selected worker from User Search modal (DSD CI-67746)
+  const [selectedWorker, setSelectedWorker] = useState(null);
+  const [showWorkerSearch, setShowWorkerSearch] = useState(false);
 
   // CIN Clearance state
   const [applicationId,         setApplicationId]        = useState('');
@@ -88,6 +98,13 @@ export const CaseCreatePage = () => {
     } else {
       setForm(prev => ({ ...prev, [field]: value }));
     }
+  };
+
+  // ── Worker Search select handler (DSD CI-67746) ─────────────────────────────
+  const handleWorkerSelect = (worker) => {
+    setSelectedWorker(worker);
+    setForm(prev => ({ ...prev, caseOwnerId: worker.workerNumber }));
+    setShowWorkerSearch(false);
   };
 
   // ── Open CIN Search modal ─────────────────────────────────────────────────
@@ -155,8 +172,15 @@ export const CaseCreatePage = () => {
       cinClearanceStatus,
       mediCalStatus: 'PENDING_SAWS',
     })
-      .then(data => navigate(`/cases/${data?.id || ''}`))
-      .catch(err => setError(err?.response?.data?.message || err.message || 'Failed to create case'))
+      .then(data => {
+        const caseId = data?.id || data?.case?.id || '';
+        // EM OS 186: Store informational message for Case Home display
+        if (data?.infoMessage) {
+          sessionStorage.setItem('caseInfoMessage', data.infoMessage);
+        }
+        navigate(`/cases/${caseId}`);
+      })
+      .catch(err => setError(err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create case'))
       .finally(() => setSaving(false));
   };
 
@@ -175,6 +199,23 @@ export const CaseCreatePage = () => {
     }
     if (!form.countyCode.trim()) { setError('County is required.'); return; }
 
+    // EM OS 067: Assigned Worker is required
+    if (!form.caseOwnerId.trim()) {
+      setError('EM OS 067: Assigned Worker must be indicated.');
+      return;
+    }
+
+    // IHSS Referral Date: DSD allows post-dating up to 2 weeks from today
+    if (form.ihssReferralDate) {
+      const refDate = new Date(form.ihssReferralDate + 'T00:00:00');
+      const today = new Date(); today.setHours(0,0,0,0);
+      const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 14);
+      if (refDate > maxDate) {
+        setError('IHSS Referral Date cannot be more than 2 weeks from today.');
+        return;
+      }
+    }
+
     // CIN present → save normally
     if (form.cin.trim()) {
       setError('');
@@ -187,19 +228,26 @@ export const CaseCreatePage = () => {
         mediCalStatus,
         aidCode,
       })
-        .then(data => navigate(`/cases/${data?.id || ''}`))
-        .catch(err => setError(err?.response?.data?.message || err.message || 'Failed to create case'))
+        .then(data => {
+          const caseId = data?.id || data?.case?.id || '';
+          // EM OS 186: Show informational message if SAWS referral sent
+          if (data?.infoMessage) {
+            sessionStorage.setItem('caseInfoMessage', data.infoMessage);
+          }
+          navigate(`/cases/${caseId}`);
+        })
+        .catch(err => setError(err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create case'))
         .finally(() => setSaving(false));
       return;
     }
 
-    // EM-176: CIN clearance not yet performed
+    // EM OS 176: CIN clearance not yet performed
     if (!cinClearancePerformed) {
-      setError('EM-176: CIN Clearance must be performed before saving. Click the 🔍 icon next to the CIN field.');
+      setError('EM OS 176: CIN Clearance must be performed before saving. Click the 🔍 icon next to the CIN field.');
       return;
     }
 
-    // EM-185: Clearance done but no CIN found → prompt to continue without CIN
+    // EM OS 185: Clearance done but no CIN found → prompt to continue without CIN
     setError('');
     setShowWithoutCIN(true);
   };
@@ -232,10 +280,15 @@ export const CaseCreatePage = () => {
         </div>
       )}
 
-      {/* ── Applicant Demographics ── */}
+      {/* ── Applicant Demographics (DSD CI-67772: System Populated, Not Editable when from Application) ── */}
       <div className="wq-panel">
         <div className="wq-panel-header"><h4>Applicant Demographics</h4></div>
         <div className="wq-panel-body">
+          {isPrePopulated && (
+            <div style={{ fontSize: '0.75rem', color: '#718096', marginBottom: '0.5rem', fontStyle: 'italic' }}>
+              Demographics are system-populated from the application record and cannot be edited here.
+            </div>
+          )}
           <div className="wq-search-grid">
             <div className="wq-form-field">
               <label htmlFor="cc-lastName">Last Name *</label>
@@ -243,7 +296,9 @@ export const CaseCreatePage = () => {
                 id="cc-lastName"
                 type="text"
                 value={form.lastName}
+                readOnly={isPrePopulated}
                 onChange={e => handleChange('lastName', e.target.value)}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
@@ -252,12 +307,17 @@ export const CaseCreatePage = () => {
                 id="cc-firstName"
                 type="text"
                 value={form.firstName}
+                readOnly={isPrePopulated}
                 onChange={e => handleChange('firstName', e.target.value)}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
               <label htmlFor="cc-gender">Gender</label>
-              <select id="cc-gender" value={form.gender} onChange={e => handleChange('gender', e.target.value)}>
+              <select id="cc-gender" value={form.gender}
+                disabled={isPrePopulated}
+                onChange={e => handleChange('gender', e.target.value)}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}>
                 <option value="">-- Select --</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
@@ -270,7 +330,9 @@ export const CaseCreatePage = () => {
                 id="cc-dob"
                 type="date"
                 value={form.dateOfBirth}
+                readOnly={isPrePopulated}
                 onChange={e => handleChange('dateOfBirth', e.target.value)}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
@@ -279,18 +341,21 @@ export const CaseCreatePage = () => {
                 id="cc-ssn"
                 type="text"
                 value={form.ssn}
+                readOnly={isPrePopulated}
                 onChange={e => setForm(prev => ({ ...prev, ssn: e.target.value }))}
                 placeholder="xxx-xx-xxxx"
                 maxLength={11}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field" style={{ justifyContent: 'flex-end' }}>
               <label style={{ visibility: 'hidden' }}>_</label>
-              <label htmlFor="cc-mediCalPseudo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.875rem' }}>
+              <label htmlFor="cc-mediCalPseudo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: isPrePopulated ? 'not-allowed' : 'pointer', fontSize: '0.875rem' }}>
                 <input
                   id="cc-mediCalPseudo"
                   type="checkbox"
                   checked={form.mediCalPseudo}
+                  disabled={isPrePopulated}
                   onChange={e => setForm(prev => ({ ...prev, mediCalPseudo: e.target.checked }))}
                 />
                 Medi-Cal Pseudo (no SSN to SCI)
@@ -372,7 +437,7 @@ export const CaseCreatePage = () => {
         </div>
       </div>
 
-      {/* ── Location ── */}
+      {/* ── Location (DSD: System Populated from Application) ── */}
       <div className="wq-panel">
         <div className="wq-panel-header"><h4>Location</h4></div>
         <div className="wq-panel-body">
@@ -383,7 +448,9 @@ export const CaseCreatePage = () => {
                 id="cc-county"
                 type="text"
                 value={form.countyCode}
+                readOnly={isPrePopulated}
                 onChange={e => setForm(prev => ({ ...prev, countyCode: e.target.value }))}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
@@ -392,14 +459,16 @@ export const CaseCreatePage = () => {
                 id="cc-zip"
                 type="text"
                 value={form.zipCode}
+                readOnly={isPrePopulated}
                 onChange={e => setForm(prev => ({ ...prev, zipCode: e.target.value }))}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
           </div>
         </div>
       </div>
 
-      {/* ── Language ── */}
+      {/* ── Language (DSD: Spoken/Written System Populated; Interpreter Available is editable) ── */}
       <div className="wq-panel">
         <div className="wq-panel-header"><h4>Language</h4></div>
         <div className="wq-panel-body">
@@ -410,7 +479,9 @@ export const CaseCreatePage = () => {
                 id="cc-spokenLang"
                 type="text"
                 value={form.spokenLanguage}
+                readOnly={isPrePopulated}
                 onChange={e => setForm(prev => ({ ...prev, spokenLanguage: e.target.value }))}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
@@ -419,7 +490,9 @@ export const CaseCreatePage = () => {
                 id="cc-writtenLang"
                 type="text"
                 value={form.writtenLanguage}
+                readOnly={isPrePopulated}
                 onChange={e => setForm(prev => ({ ...prev, writtenLanguage: e.target.value }))}
+                style={isPrePopulated ? { backgroundColor: '#f7f9fb', cursor: 'not-allowed' } : {}}
               />
             </div>
             <div className="wq-form-field">
@@ -437,21 +510,48 @@ export const CaseCreatePage = () => {
         </div>
       </div>
 
-      {/* ── Assignment ── */}
+      {/* ── Assignment (DSD CI-67746 / CI-116204: Worker via User Search popup) ── */}
       <div className="wq-panel">
         <div className="wq-panel-header"><h4>Assignment</h4></div>
         <div className="wq-panel-body">
           <div className="wq-search-grid">
             <div className="wq-form-field">
-              <label htmlFor="cc-worker">Assigned Worker</label>
-              <input
-                id="cc-worker"
-                type="text"
-                value={form.caseOwnerId}
-                onChange={e => setForm(prev => ({ ...prev, caseOwnerId: e.target.value }))}
-                placeholder="Worker username"
-              />
+              <label htmlFor="cc-worker">Assigned Worker *</label>
+              <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <input
+                  id="cc-worker"
+                  type="text"
+                  value={selectedWorker
+                    ? `${selectedWorker.lastName}, ${selectedWorker.firstName} (${selectedWorker.workerNumber})`
+                    : ''}
+                  readOnly
+                  placeholder="Search for a worker →"
+                  style={{ flex: 1, backgroundColor: '#f7f9fb', cursor: 'not-allowed' }}
+                />
+                <button
+                  type="button"
+                  className="wq-btn wq-btn-outline"
+                  onClick={() => setShowWorkerSearch(true)}
+                  title="Search for a worker (User Search)"
+                  style={{ padding: '0.35rem 0.6rem', fontSize: '1rem', lineHeight: 1 }}
+                >
+                  🔍
+                </button>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#666', marginTop: '2px' }}>
+                Click 🔍 to search and assign a case owner (DSD CI-67746)
+              </span>
             </div>
+            {selectedWorker && (
+              <div className="wq-form-field">
+                <label>Worker Details</label>
+                <div style={{ fontSize: '0.85rem', color: '#4a5568', lineHeight: 1.6 }}>
+                  <div><strong>District Office:</strong> {selectedWorker.districtOffice}</div>
+                  <div><strong>Language:</strong> {selectedWorker.language}{selectedWorker.language2 ? `, ${selectedWorker.language2}` : ''}</div>
+                  <div><strong>Case Count:</strong> {selectedWorker.caseCount || '—'}</div>
+                </div>
+              </div>
+            )}
             <div className="wq-form-field">
               <label htmlFor="cc-referralDate">IHSS Referral Date</label>
               <input
@@ -460,6 +560,9 @@ export const CaseCreatePage = () => {
                 value={form.ihssReferralDate}
                 onChange={e => setForm(prev => ({ ...prev, ihssReferralDate: e.target.value }))}
               />
+              <span style={{ fontSize: '0.72rem', color: '#666', marginTop: '2px' }}>
+                Defaults to today. May be post-dated up to 2 weeks.
+              </span>
             </div>
           </div>
         </div>
@@ -499,12 +602,20 @@ export const CaseCreatePage = () => {
         <CINDataMismatchModal onReturnToCINSelect={handleReturnToCINSelect} />
       )}
 
-      {/* ── Create Case Without CIN Modal (EM-185 / BR 9) ── */}
+      {/* ── Create Case Without CIN Modal (EM OS 185 / BR 9) ── */}
       {showWithoutCIN && (
         <CreateCaseWithoutCINModal
           onContinue={handleWithoutCINContinue}
           onCancel={handleWithoutCINCancel}
           saving={saving}
+        />
+      )}
+
+      {/* ── User Search Modal (DSD CI-67746 — Assign Case Owner) ── */}
+      {showWorkerSearch && (
+        <UserSearchModal
+          onSelect={handleWorkerSelect}
+          onCancel={() => setShowWorkerSearch(false)}
         />
       )}
     </div>

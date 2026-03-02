@@ -40,3 +40,6 @@ export const getCompanionCases = (id) =>
 
 export const updatePersonType = (id, data) =>
   http.patch(`/recipients/${id}/person-type`, data).then(r => r.data);
+
+export const createRecipientFromProvider = (providerId) =>
+  http.post(`/recipients/from-provider/${providerId}`).then(r => r.data);

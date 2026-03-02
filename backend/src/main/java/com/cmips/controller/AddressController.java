@@ -42,7 +42,7 @@ public class AddressController {
             return ResponseEntity.ok(java.util.Map.of(
                 "cassMatch",   false,
                 "cassFailed",  true,
-                "cassUpdates", "EM-24: Street name is required",
+                "cassUpdates", "EM OS 024: Street name is required",
                 "streetNumber", req.getOrDefault("streetNumber", ""),
                 "streetName",  streetName,
                 "unitType",    req.getOrDefault("unitType", ""),
@@ -57,7 +57,7 @@ public class AddressController {
             return ResponseEntity.ok(java.util.Map.of(
                 "cassMatch",   false,
                 "cassFailed",  true,
-                "cassUpdates", "EM-25: ZIP code must be 5 or 9 digits",
+                "cassUpdates", "EM OS 025: ZIP code must be 5 or 9 digits",
                 "streetNumber", req.getOrDefault("streetNumber", ""),
                 "streetName",  streetName,
                 "unitType",    req.getOrDefault("unitType", ""),
@@ -77,7 +77,7 @@ public class AddressController {
         String unitNumber = req.getOrDefault("unitNumber", "");
         if (!unitNumber.isBlank() && req.getOrDefault("unitType", "").isBlank()) {
             hasCassMatch = false;
-            cassUpdates = "EM-178: Unit type not specified. CASS suggests adding unit type (APT, STE, UNIT).";
+            cassUpdates = "EM OS 178: Unit type not specified. CASS suggests adding unit type (APT, STE, UNIT).";
         }
 
         log.info("[CASS mock] verify address: {}, {}, {} -> cassMatch={}", streetName, city, zip, hasCassMatch);
