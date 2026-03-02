@@ -112,16 +112,6 @@ public interface RecipientRepository extends JpaRepository<RecipientEntity, Long
     List<RecipientEntity> findBySoundex(@Param("lastName") String lastName,
                                         @Param("firstName") String firstName);
 
-    // Search by last 4 digits of SSN (Last 4 SSN checkbox on Person Search)
-    @Query(value = "SELECT * FROM recipients WHERE CAST(ssn AS VARCHAR) LIKE '%' || :last4",
-           nativeQuery = true)
-    List<RecipientEntity> findBySsnEndingWith(@Param("last4") String last4);
-
-    // Soundex matching by lastName only (BR-5: when firstName is not provided)
-    @Query(value = "SELECT * FROM recipients WHERE soundex(CAST(last_name AS VARCHAR)) = soundex(CAST(:lastName AS VARCHAR))",
-           nativeQuery = true)
-    List<RecipientEntity> findBySoundexLastName(@Param("lastName") String lastName);
-
     /**
      * Expanded name/demographic search (BR OS 05 + BR-20).
      * All parameters optional; unset params (NULL) are ignored in the WHERE clause.
@@ -135,25 +125,6 @@ public interface RecipientRepository extends JpaRepository<RecipientEntity, Long
            "(:countyCode IS NULL OR r.county_code = :countyCode) AND " +
            "(:personType IS NULL OR r.person_type = :personType)", nativeQuery = true)
     List<RecipientEntity> searchRecipientsExpanded(
-            @Param("lastName") String lastName,
-            @Param("firstName") String firstName,
-            @Param("dob") String dob,
-            @Param("gender") String gender,
-            @Param("countyCode") String countyCode,
-            @Param("personType") String personType);
-
-    /**
-     * Exact name/demographic search — used when last name is < 3 characters (DSD rule).
-     * Same as searchRecipientsExpanded but uses '=' instead of LIKE for lastName.
-     */
-    @Query(value = "SELECT * FROM recipients r WHERE " +
-           "(:lastName IS NULL OR UPPER(CAST(r.last_name AS VARCHAR)) = UPPER(CAST(:lastName AS VARCHAR))) AND " +
-           "(:firstName IS NULL OR UPPER(CAST(r.first_name AS VARCHAR)) LIKE UPPER('%' || :firstName || '%')) AND " +
-           "(:dob IS NULL OR CAST(r.date_of_birth AS VARCHAR) = :dob) AND " +
-           "(:gender IS NULL OR UPPER(CAST(r.gender AS VARCHAR)) = UPPER(:gender)) AND " +
-           "(:countyCode IS NULL OR r.county_code = :countyCode) AND " +
-           "(:personType IS NULL OR r.person_type = :personType)", nativeQuery = true)
-    List<RecipientEntity> searchRecipientsExact(
             @Param("lastName") String lastName,
             @Param("firstName") String firstName,
             @Param("dob") String dob,

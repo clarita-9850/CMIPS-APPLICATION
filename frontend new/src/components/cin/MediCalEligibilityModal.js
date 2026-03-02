@@ -4,7 +4,7 @@
  *
  * Opens after the EL/OM transaction succeeds.
  * Shows the OM response data and lets the user:
- *   Select  → triggers demographic check (EM OS 202, mismatch, or success)
+ *   Select  → triggers demographic check (EM-202, mismatch, or success)
  *   Cancel  → returns to CIN Search results list
  */
 
@@ -103,7 +103,7 @@ export const MediCalEligibilityModal = ({
         return;
       }
       if (result === 'CIN_IN_USE') {
-        // EM OS 202 / EM OS 203
+        // EM-202 / EM-203
         setError(`${errorCode}: ${message}`);
         return;
       }

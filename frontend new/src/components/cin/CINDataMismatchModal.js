@@ -2,12 +2,11 @@
  * CINDataMismatchModal
  * Implements the "CIN Data Does Not Match Applicant Data" screen (CI-67766).
  *
- * Scenario D: Selected CIN's demographics don't match the applicant's data.
+ * Scenario 5: Selected CIN's demographics don't match the applicant's data.
+ * No data fields — only a warning message and a "Return to CIN Select" button.
  *
- * DSD Options:
- *   1. Return to CIN Select — try a different CIN
- *   2. Proceed without CIN — create case without CIN (triggers S1 referral to SAWS)
- *   3. Cancel Create Case — abort and return to fix demographics
+ * If the user determines their OWN record is wrong they must:
+ * Cancel → Create Case → fix demographics on Person screen → restart flow.
  */
 
 import React from 'react';
@@ -18,7 +17,7 @@ const overlay = {
 };
 const box = {
   backgroundColor: '#fff', borderRadius: '6px', padding: '2rem',
-  width: '90%', maxWidth: '520px', boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+  width: '90%', maxWidth: '500px', boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
   textAlign: 'center',
 };
 const icon = { fontSize: '2.5rem', marginBottom: '0.75rem', color: '#856404' };
@@ -33,18 +32,8 @@ const btnPrimary = {
   backgroundColor: '#153554', color: '#fff', border: 'none', borderRadius: '4px',
   padding: '0.5rem 1.5rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
 };
-const btnSecondary = {
-  backgroundColor: '#fff', color: '#153554', border: '1px solid #153554',
-  borderRadius: '4px', padding: '0.5rem 1.5rem', cursor: 'pointer',
-  fontWeight: 600, fontSize: '0.875rem',
-};
-const btnDanger = {
-  backgroundColor: '#fff', color: '#c53030', border: '1px solid #c53030',
-  borderRadius: '4px', padding: '0.5rem 1.5rem', cursor: 'pointer',
-  fontWeight: 600, fontSize: '0.875rem',
-};
 
-export const CINDataMismatchModal = ({ onReturnToCINSelect, onProceedWithoutCIN, onCancelCreateCase }) => (
+export const CINDataMismatchModal = ({ onReturnToCINSelect }) => (
   <div style={overlay}>
     <div style={box}>
       <div style={icon}>⚠️</div>
@@ -56,26 +45,14 @@ export const CINDataMismatchModal = ({ onReturnToCINSelect, onProceedWithoutCIN,
       </p>
 
       <p style={hint}>
-        You can return to CIN select to try a different CIN, proceed without a CIN
-        (a Medi-Cal Eligibility Referral will be sent to SAWS), or cancel to correct
-        demographics on the Person record first.
+        If the applicant's own demographic information is incorrect, cancel back to
+        the Create Case screen, correct the demographics on the Person record, then
+        restart the CIN clearance process.
       </p>
 
-      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
-        <button style={btnPrimary} onClick={onReturnToCINSelect}>
-          Return to CIN Select
-        </button>
-        {onProceedWithoutCIN && (
-          <button style={btnSecondary} onClick={onProceedWithoutCIN}>
-            Proceed without CIN
-          </button>
-        )}
-        {onCancelCreateCase && (
-          <button style={btnDanger} onClick={onCancelCreateCase}>
-            Cancel
-          </button>
-        )}
-      </div>
+      <button style={btnPrimary} onClick={onReturnToCINSelect}>
+        Return to CIN Select
+      </button>
     </div>
   </div>
 );

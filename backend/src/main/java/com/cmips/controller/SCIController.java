@@ -16,7 +16,7 @@ import java.util.Map;
  *
  *  1. GET  /api/sci/search            — OI transaction (BR 32/33): search for CIN candidates
  *  2. GET  /api/sci/meds-eligibility  — EL/OM transaction: fetch Medi-Cal eligibility for a CIN
- *  3. GET  /api/sci/check-cin         — Scenario 6 / EM OS 202: check if CIN is already in CMIPS
+ *  3. GET  /api/sci/check-cin         — Scenario 6 / EM-202: check if CIN is already in CMIPS
  *
  * All endpoints require authentication and the "Application Resource / edit" permission
  * since CIN clearance is part of the Create Case workflow.
@@ -52,7 +52,7 @@ public class SCIController {
      *
      * Response scenarios:
      *   NO_MATCH      – "CIN does not exist for the applicant"
-     *   MATCHES_FOUND – list of CIN records + EM OS 186 informational message
+     *   MATCHES_FOUND – list of CIN records + EM-186 informational message
      */
     @GetMapping("/search")
     @RequirePermission(resource = "Application Resource", scope = "edit")
@@ -104,7 +104,7 @@ public class SCIController {
     }
 
     // ============================================================
-    // CIN AVAILABILITY CHECK (Scenario 6 / EM OS 202)
+    // CIN AVAILABILITY CHECK (Scenario 6 / EM-202)
     // ============================================================
 
     /**
@@ -116,7 +116,7 @@ public class SCIController {
      *
      * Response:
      *   { available: true }
-     *   { available: false, errorCode: "EM OS 202", message: "..." }
+     *   { available: false, errorCode: "EM-202", message: "..." }
      */
     @GetMapping("/check-cin")
     @RequirePermission(resource = "Application Resource", scope = "edit")

@@ -65,12 +65,12 @@ public class RecipientController {
      *  2. CIN exact match          — second strongest
      *  3. Provider Number exact    — BR-20
      *  4. Last Name + optional First/DOB/Gender/County — Soundex + exact DOB filter
-     *  5. Phone number             — EM OS 264 eligible search
-     *  6. Email address            — EM OS 265 eligible search
+     *  5. Phone number             — EM-251 eligible search
+     *  6. Email address            — EM-252 eligible search
      *
-     * Validation rules (DSD EM OS 264, EM OS 265, EM OS 267):
-     *  EM OS 264/265: Phone must be 10 digits (3-digit area code + 7-digit number) if provided
-     *  EM OS 267: Valid email format if provided
+     * Validation rules (DSD EM-251, EM-252, EM-254):
+     *  EM-251/252: Phone must be 10 digits (3-digit area code + 7-digit number) if provided
+     *  EM-254: Valid email format if provided
      *
      * Minimum search requirement (DSD BR-4, BR-5): At least one of SSN, CIN, Provider Number,
      * Phone, Email, or partial lastName (min 3 chars) with optional address/other criteria.
@@ -92,29 +92,28 @@ public class RecipientController {
             @RequestParam(required = false) String city,
             @RequestParam(required = false) String countyCode,
             @RequestParam(required = false) String personType,
-            @RequestParam(required = false, defaultValue = "false") boolean soundex,
-            @RequestParam(required = false, defaultValue = "false") boolean allSsn,
-            @RequestParam(required = false, defaultValue = "false") boolean last4Ssn,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
+            @RequestParam(defaultValue = "10") int size) {
 
-        // ── Input validation (EM OS 264, EM OS 265, EM OS 267) ────────────────
+        // ── Input validation (EM-251, EM-252, EM-254) ────────────────────────
         if (phone != null && !phone.isBlank()) {
             String digitsOnly = phone.replaceAll("[^0-9]", "");
             if (digitsOnly.length() != 10) {
                 return ResponseEntity.badRequest().body(
-                    java.util.Map.of("error", "EM OS 264: Area Code must be three numeric digits. " +
-                        "EM OS 265: Phone Number must be seven numeric digits. Please enter a valid 10-digit phone number."));
+                    java.util.Map.of("error", "EM-251: Area Code must be three numeric digits. " +
+                        "EM-252: Phone Number must be seven numeric digits. Please enter a valid 10-digit phone number."));
             }
         }
         if (email != null && !email.isBlank()) {
             if (!email.contains("@") || !email.matches("^[^@]+@[^@]+\\.[^@]+$")) {
                 return ResponseEntity.badRequest().body(
-                    java.util.Map.of("error", "EM OS 267: Not a valid email address. Please enter valid email address."));
+                    java.util.Map.of("error", "EM-254: Not a valid email address. Please enter valid email address."));
             }
         }
 
         // ── Minimum search requirement (DSD BR-4, BR-5) ──────────────────────
+        // At least one of: SSN, CIN, Provider#, Phone, Email, or lastName (min 3 chars for partial)
+        // Complete address (streetNumber + streetName + city) also qualifies
         boolean hasSsn = ssn != null && !ssn.isBlank();
         boolean hasCin = cin != null && !cin.isBlank();
         boolean hasProviderNum = providerNumber != null && !providerNumber.isBlank();
@@ -123,44 +122,30 @@ public class RecipientController {
         boolean hasCompleteAddress = (streetNumber != null && !streetNumber.isBlank())
                 && (streetName != null && !streetName.isBlank())
                 && (city != null && !city.isBlank());
-        boolean hasValidLastName = lastName != null && lastName.trim().length() >= 1;
-        boolean lastNamePartialEligible = lastName != null && lastName.trim().length() >= 3; // DSD: 3-char min for partial/Soundex
+        boolean hasValidLastName = lastName != null && lastName.trim().length() >= 3;
 
         if (!hasSsn && !hasCin && !hasProviderNum && !hasPhone && !hasEmail && !hasCompleteAddress && !hasValidLastName) {
             return ResponseEntity.badRequest().body(
-                java.util.Map.of("error", "Please enter one or more of these fields: SSN, Full or partial last name, " +
-                    "CIN, Complete address, Provider Number, Phone Number, or Email Address."));
+                java.util.Map.of("error", "At least one search criterion is required: SSN, CIN, Provider Number, " +
+                    "Phone, Email, complete address (Street Number + Street Name + City), or Last Name (minimum 3 characters)."));
         }
 
         List<RecipientEntity> recipients;
 
-        // ── Search hierarchy (BR-2: SSN > BR-3: CIN > BR-20: Provider# > BR-4/5: everything else) ──
-        if (hasSsn) {
+        // ── Search hierarchy ────────────────────────────────────────────────
+        if (ssn != null && !ssn.isBlank()) {
+            // 1) BR OS 02: SSN match — use findAllBySsn to handle duplicate SSN cases (BR-1)
             String normalizedSsn = ssn.replaceAll("[^0-9]", "");
+            recipients = recipientRepository.findAllBySsn(normalizedSsn);
 
-            if (last4Ssn) {
-                // Last 4 SSN mode — search by last 4 digits only
-                recipients = recipientRepository.findBySsnEndingWith(normalizedSsn);
-            } else {
-                // Full SSN search
-                recipients = recipientRepository.findAllBySsn(normalizedSsn);
-            }
-
-            // By default, exclude Duplicate SSN records. Include them only when allSsn flag is set.
-            if (!allSsn) {
-                recipients = recipients.stream()
-                        .filter(r -> !"DUPLICATE_SSN".equals(r.getSsnType()))
-                        .collect(java.util.stream.Collectors.toList());
-            }
-
-        } else if (hasCin) {
-            // BR-3: CIN exact match — everything else ignored
+        } else if (cin != null && !cin.isBlank()) {
+            // 2) BR OS 03: CIN exact match
             recipients = recipientRepository.findByCin(cin)
                     .map(List::of)
                     .orElse(List.of());
 
-        } else if (hasProviderNum) {
-            // BR-20: Provider Number search
+        } else if (providerNumber != null && !providerNumber.isBlank()) {
+            // 3) BR-20: Provider Number search — searches ProviderEntity, not RecipientEntity
             java.util.Optional<ProviderEntity> providerOpt = providerRepository.findByProviderNumber(providerNumber);
             List<java.util.Map<String, Object>> providerResults = providerOpt
                     .map(p -> {
@@ -192,68 +177,42 @@ public class RecipientController {
             providerResponse.put("pageSize", size);
             return ResponseEntity.ok(providerResponse);
 
-        } else if (hasPhone) {
+        } else if (phone != null && !phone.isBlank()) {
+            // 4) Phone search (EM-251) — strip formatting from both input and stored phone
             String digitsOnly = phone.replaceAll("[^0-9]", "");
             recipients = recipientRepository.findByPrimaryPhoneDigits(digitsOnly);
 
-        } else if (hasEmail) {
+        } else if (email != null && !email.isBlank()) {
+            // 5) Email search — use findAllByEmail to handle duplicate email cases
             recipients = recipientRepository.findAllByEmail(email);
 
-        } else if (hasCompleteAddress && !hasValidLastName) {
-            // Address-only search (no name entered)
+        } else if (hasCompleteAddress) {
+            // 6) Address search (DSD: complete address = Street Number + Street Name + City)
             recipients = recipientRepository.searchByAddress(streetNumber, streetName, city);
 
         } else {
-            // Name-based / combined search (BR-4, BR-5): all remaining criteria used together
-            // DSD: Last name < 3 chars → exact match only; >= 3 chars → partial LIKE match
-            if (hasValidLastName && !lastNamePartialEligible) {
-                recipients = recipientRepository.searchRecipientsExact(
-                        lastName, firstName, dob, gender, countyCode, personType);
-            } else {
-                recipients = recipientRepository.searchRecipientsExpanded(
-                        lastName, firstName, dob, gender, countyCode, personType);
-            }
+            // 7) Name-based search (BR OS 05): expanded with DOB, gender, county, personType
+            // lastName min 3 chars enforced by validation above
+            recipients = recipientRepository.searchRecipientsExpanded(
+                    lastName, firstName, dob, gender, countyCode, personType);
 
-            // Soundex near-match augmentation (BR-5): only when SX checkbox is checked
-            // DSD: Last Name must be at least 3 characters for partial/Soundex match
-            if (soundex && lastName != null && !lastName.isBlank() && lastNamePartialEligible) {
-                List<RecipientEntity> soundexMatches;
-                if (firstName != null && !firstName.isBlank()) {
-                    soundexMatches = recipientRepository.findBySoundex(lastName, firstName);
-                } else {
-                    soundexMatches = recipientRepository.findBySoundexLastName(lastName);
-                }
-                Set<Long> exactIds = recipients.stream()
+            // Soundex near-match augmentation: add phonetic results for lastName
+            if (lastName != null && !lastName.isBlank() && firstName != null && !firstName.isBlank() && lastName.trim().length() >= 3) {
+                List<RecipientEntity> soundexMatches = recipientRepository.findBySoundex(lastName, firstName);
+                // Merge without duplicates (keep soundex matches not already in exact results)
+                java.util.Set<Long> exactIds = recipients.stream()
                         .map(RecipientEntity::getId)
-                        .collect(Collectors.toSet());
-                recipients = new ArrayList<>(recipients);
+                        .collect(java.util.stream.Collectors.toSet());
                 for (RecipientEntity sr : soundexMatches) {
                     if (!exactIds.contains(sr.getId())) {
-                        recipients.add(sr);
+                        recipients = new java.util.ArrayList<>(recipients);
+                        ((java.util.ArrayList<RecipientEntity>) recipients).add(sr);
                     }
                 }
             }
-
-            // Also filter by address fields if provided alongside name
-            if (hasCompleteAddress) {
-                final String sn = streetNumber;
-                final String snm = streetName;
-                final String ct = city;
-                recipients = recipients.stream()
-                        .filter(r -> (sn == null || sn.isBlank() || sn.equals(r.getResidenceStreetNumber()))
-                                && (snm == null || snm.isBlank() || (r.getResidenceStreetName() != null && r.getResidenceStreetName().toUpperCase().contains(snm.toUpperCase())))
-                                && (ct == null || ct.isBlank() || (r.getResidenceCity() != null && r.getResidenceCity().toUpperCase().contains(ct.toUpperCase()))))
-                        .collect(Collectors.toList());
-            }
         }
 
-        // ── Sort alphabetically by Last Name, First Name ──────────────────
-        recipients.sort((a, b) -> {
-            int cmp = String.valueOf(a.getLastName()).compareToIgnoreCase(String.valueOf(b.getLastName()));
-            return cmp != 0 ? cmp : String.valueOf(a.getFirstName()).compareToIgnoreCase(String.valueOf(b.getFirstName()));
-        });
-
-        // ── Pagination ───────────────────────────────────────────────────────
+        // ── Pagination (client-side after search) ───────────────────────────
         int total = recipients.size();
         int fromIndex = Math.min(page * size, total);
         int toIndex   = Math.min(fromIndex + size, total);
@@ -320,7 +279,7 @@ public class RecipientController {
 
         try {
             // BR OS 11: Create new referral with OPEN_REFERRAL status
-            // EM OS 001/005/006/080: Required-field validation enforced in service
+            // EM-201/205/206/208: Required-field validation enforced in service
             RecipientEntity created = caseManagementService.createReferral(recipient, userId);
             return ResponseEntity.ok(created);
         } catch (IllegalArgumentException e) {
@@ -687,62 +646,5 @@ public class RecipientController {
         public void setPersonType(String personType) { this.personType = personType; }
         public String getReason() { return reason; }
         public void setReason(String reason) { this.reason = reason; }
-    }
-
-    // ==================== Provider Dual Role (Path 1E, BR-18) ====================
-
-    /**
-     * Create a RecipientEntity from a ProviderEntity for dual-role scenarios.
-     * Per DSD BR-18: A Provider who needs IHSS services gets Applicant PersonType
-     * while retaining their Provider record.
-     */
-    @PostMapping("/from-provider/{providerId}")
-    @RequirePermission(resource = "Recipient Resource", scope = "create")
-    public ResponseEntity<?> createRecipientFromProvider(
-            @PathVariable Long providerId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        try {
-            java.util.Optional<com.cmips.entity.ProviderEntity> providerOpt = providerRepository.findById(providerId);
-            if (providerOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(java.util.Map.of("error", "Provider not found: " + providerId));
-            }
-            com.cmips.entity.ProviderEntity provider = providerOpt.get();
-
-            // Check if a recipient already exists with the same SSN (avoid duplicate)
-            if (provider.getSsn() != null && !provider.getSsn().isBlank()) {
-                java.util.List<RecipientEntity> existing = recipientRepository.findAllBySsn(provider.getSsn());
-                if (!existing.isEmpty()) {
-                    // BR-18: Return the existing recipient instead of creating a duplicate
-                    RecipientEntity existingRecipient = existing.get(0);
-                    log.info("BR-18: Provider {} already has a recipient record (ID: {}), returning existing",
-                        providerId, existingRecipient.getId());
-                    return ResponseEntity.ok(existingRecipient);
-                }
-            }
-
-            // Create new recipient from provider demographics
-            RecipientEntity recipient = new RecipientEntity();
-            recipient.setPersonType(RecipientEntity.PersonType.APPLICANT);
-            recipient.setFirstName(provider.getFirstName());
-            recipient.setLastName(provider.getLastName());
-            recipient.setMiddleName(provider.getMiddleName());
-            recipient.setDateOfBirth(provider.getDateOfBirth());
-            recipient.setGender(provider.getGender());
-            recipient.setSsn(provider.getSsn());
-            recipient.setPrimaryPhone(provider.getPrimaryPhone());
-            recipient.setEmail(provider.getEmail());
-            recipient.setResidenceStreetName(provider.getStreetAddress());
-            recipient.setResidenceCity(provider.getCity());
-            recipient.setResidenceState(provider.getState());
-            recipient.setResidenceZip(provider.getZipCode());
-            recipient.setCreatedBy(userId != null ? userId : "system");
-
-            RecipientEntity saved = recipientRepository.save(recipient);
-            log.info("BR-18: Created recipient {} from provider {} for dual-role scenario",
-                saved.getId(), providerId);
-            return ResponseEntity.ok(saved);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
-        }
     }
 }

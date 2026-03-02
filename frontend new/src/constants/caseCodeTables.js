@@ -76,40 +76,6 @@ export const REFERRAL_SOURCES = {
   OTHER: 'Other',
 };
 
-// 6.6 State Hearing Search Status (CI-68051)
-export const STATE_HEARING_SEARCH_STATUS = {
-  SSHS001: 'Requested',
-  SSHS002: 'Scheduled',
-  SSHS003: 'Resolved',
-  SSHS004: 'Requested And Scheduled',
-};
-
-// 6.7 Case Appeal Status (auto-calculated per BR CM 04-06a)
-export const CASE_APPEAL_STATUS = {
-  CS1: 'Requested',
-  CS2: 'Scheduled',
-  CS3: 'Resolved',
-};
-
-// 6.8 Case Appeal Outcome (DSD EO codes)
-export const CASE_APPEAL_OUTCOME = {
-  EO501: 'Pending',                       // Default on Create
-  EO2:   'Grant',
-  EO3:   'Denial',
-  EO502: 'Conditional Withdrawal',
-  EO503: 'Complete Withdrawal',
-  EO504: 'Partial Grant/Partial Denial',
-  EO505: 'Dismissal',
-  EO506: 'Erroneous Entry',
-};
-
-// 6.9 Rescheduled Reason (DSD RS codes)
-export const RESCHEDULED_REASON = {
-  RS001: 'Recipient Request',
-  RS002: 'County Request',
-  RS003: 'Administrative Law Judge Request',
-};
-
 // Meets Residency Requirement
 export const RESIDENCY_REQUIREMENTS = {
   YES: 'Meets Residency Requirement',

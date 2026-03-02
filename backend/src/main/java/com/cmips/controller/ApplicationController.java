@@ -75,13 +75,13 @@ public class ApplicationController {
                     "recipientId is required. Search for or create a person first, then link their ID."));
             }
 
-            // Validate SSN if provided (EM OS 010)
+            // Validate SSN if provided (EM-237/238/240)
             String ssn = (String) request.get("ssn");
             if (ssn != null && !ssn.isBlank()) {
                 applicationService.validateSsn(ssn.replaceAll("[^0-9]", ""));
             }
 
-            // Validate DOB if provided (EM OS 003/004)
+            // Validate DOB if provided (EM-203/204)
             String dob = (String) request.get("dateOfBirth");
             if (dob != null && !dob.isBlank()) {
                 applicationService.validateDob(dob);
@@ -155,7 +155,7 @@ public class ApplicationController {
     }
 
     /**
-     * Select CIN match with demographic comparison (Scenarios 4, 5, 6 / BR 1, BR 13, EM OS 202)
+     * Select CIN match with demographic comparison (Scenarios 4, 5, 6 / BR 1, BR 13, EM-202)
      * Body: { cin, lastName, firstName, gender, dob, aidCode, eligibilityStatus, mediCalActive, effectiveDate }
      */
     @PostMapping("/{applicationId}/select-cin")
@@ -179,7 +179,7 @@ public class ApplicationController {
     }
 
     /**
-     * Save Create Case without CIN (EM OS 176 / EM OS 185 / BR 9)
+     * Save Create Case without CIN (EM-176 / EM-185 / BR 9)
      * Called when user clicks Continue on the CreateCaseWithoutCIN confirmation modal.
      */
     @PostMapping("/{applicationId}/save-without-cin")

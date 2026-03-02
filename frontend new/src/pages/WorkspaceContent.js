@@ -21,16 +21,16 @@ function mapBackendTask(t) {
 }
 
 const SHORTCUTS = [
-  { label: 'New Referral',                            route: '/persons/search/referral',                        icon: '🏠' },
-  { label: 'New Application',                         route: '/persons/search/application',                     icon: '📋' },
-  { label: 'Find a Person',                           route: '/recipients',                                     icon: '👤' },
-  { label: 'Find a State Hearing Case',               route: '/cases/state-hearing',                            icon: '⚖️' },
-  { label: 'Register a Provider',                     route: '/providers/register',                             icon: '👩‍⚕️' },
-  { label: 'Merge Duplicate SSN',                     route: '/recipients/merge',                               icon: '🔗' },
-  { label: 'Enter Warrant Replacements',              route: '/payments/warrant-replacements',                  icon: '💰' },
-  { label: 'Reissue Large Font Timesheet',            route: '/payments/bvi-timesheet',                         icon: '🕐' },
-  { label: 'IRS Live-In Provider Self-Certification', route: '/providers/live-in',                              icon: '🏡' },
-  { label: 'Sick Leave Claim Manual Entry',           route: '/payments/sick-leave',                            icon: '🏥' },
+  { label: 'New Referral',                            route: '/person/duplicate-referral-check',                icon: '🏠' },
+  { label: 'New Application',                         route: '/person/duplicate-registration-check',            icon: '📋' },
+  { label: 'Find a Person',                           route: '/person/search',                                  icon: '👤' },
+  { label: 'Find a State Hearing Case',               route: '/case/search-state-hearing',                      icon: '⚖️' },
+  { label: 'Register a Provider',                     route: '/person/duplicate-provider-check',                icon: '👩‍⚕️' },
+  { label: 'Merge Duplicate SSN',                     route: '/person/merge-duplicate-ssn',                     icon: '🔗' },
+  { label: 'Enter Warrant Replacements',              route: '/payment/list-warrant-replacements',              icon: '💰' },
+  { label: 'Reissue Large Font Timesheet',            route: '/case/reissue-bvi-timesheet',                     icon: '🕐' },
+  { label: 'IRS Live-In Provider Self-Certification', route: '/person/live-in-prov-self-certification-search',  icon: '🏡' },
+  { label: 'Sick Leave Claim Manual Entry',           route: '/person/enter-sick-leave-claim-manual-entry',     icon: '🏥' },
 ];
 
 export const WorkspaceContent = () => {

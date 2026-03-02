@@ -5,7 +5,7 @@
  * Flow:
  *  1. Opens with applicant demographics pre-populated (read-only)
  *  2. Calls GET /api/sci/search (OI transaction, BR 32/33)
- *  3. Shows results (EM OS 186 if matches found, "CIN does not exist" if none)
+ *  3. Shows results (EM-186 if matches found, "CIN does not exist" if none)
  *  4. User clicks "MEDS Eligibility" on a row → calls GET /api/sci/meds-eligibility (EL/OM)
  *  5. MediCalEligibilityModal opens (handled by parent via onShowEligibility)
  *  6. Cancel returns to Create Case

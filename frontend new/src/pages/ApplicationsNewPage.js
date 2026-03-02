@@ -9,7 +9,6 @@ import { CINSearchModal }          from '../components/cin/CINSearchModal';
 import { MediCalEligibilityModal } from '../components/cin/MediCalEligibilityModal';
 import { CINDataMismatchModal }    from '../components/cin/CINDataMismatchModal';
 import { CreateCaseWithoutCINModal } from '../components/cin/CreateCaseWithoutCINModal';
-import { UserSearchModal }         from '../components/UserSearchModal';
 import './WorkQueues.css';
 
 // ── PersonType badge ────────────────────────────────────────────────────────
@@ -101,13 +100,8 @@ export const ApplicationsNewPage = () => {
   // ── Step 2 state: Demographics + addresses ────────────────────────────────
   const [form, setForm] = useState({
     lastName: '', firstName: '', middleName: '',
-    title: '', suffix: '',
-    dateOfBirth: '', gender: '', genderIdentity: '', sexualOrientation: '',
-    ssn: '', blankSsnReason: '',
-    spokenLanguage: '', otherSpokenLanguageDetail: '',
-    writtenLanguage: '', otherWrittenLanguageDetail: '',
-    ethnicity: '', mediCalPseudo: '',
-    residenceAddressType: '', meetsResidencyRequirements: false,
+    dateOfBirth: '', gender: '', ssn: '',
+    spokenLanguage: '', ethnicity: '',
     homePhone: '', cellPhone: '', workPhone: '', email: '',
     // Residence address
     residenceStreetNumber: '', residenceStreetName: '',
@@ -139,13 +133,8 @@ export const ApplicationsNewPage = () => {
   const [caseForm, setCaseForm] = useState({
     programType: '', countyCode: '', caseOwnerId: '',
     caseOpenDate: new Date().toISOString().split('T')[0],
-    writtenLanguage: '', interpreterAvailable: false,
-    ihssReferralDate: new Date().toISOString().split('T')[0],  // DSD: default to today
+    writtenLanguage: '', interpreterAvailable: false, ihssReferralDate: '',
   });
-
-  // Worker Search (DSD CI-67746)
-  const [selectedWorker, setSelectedWorker] = useState(null);
-  const [showWorkerSearch, setShowWorkerSearch] = useState(false);
 
   // ── Load existing recipient if source=existing ────────────────────────────
   useEffect(() => {
@@ -329,44 +318,24 @@ export const ApplicationsNewPage = () => {
   };
 
   const validateStep2 = () => {
-    if (!form.lastName.trim())  { setError('EM OS 005: Last Name is required.'); return false; }
-    if (!form.firstName.trim()) { setError('EM OS 006: First Name is required.'); return false; }
-    // EM OS 003/004: DOB required for Application
-    if (!form.dateOfBirth) { setError('EM OS 003: Date of Birth must be indicated for Application.'); return false; }
+    if (!form.lastName.trim())  { setError('EM-205: Last Name is required.'); return false; }
+    if (!form.firstName.trim()) { setError('EM-206: First Name is required.'); return false; }
     if (form.dateOfBirth) {
       const dob = new Date(form.dateOfBirth);
       const now = new Date();
-      if (dob > now) { setError('EM OS 003: Date of Birth cannot be in the future.'); return false; }
-      if (now.getFullYear() - dob.getFullYear() > 120) { setError('EM OS 004: Date of Birth cannot be more than 120 years ago.'); return false; }
-    }
-    // EM OS 008: Gender required for Application
-    if (!form.gender) { setError('EM OS 008: Gender must be indicated.'); return false; }
-    // EM OS 013: Either SSN or Blank SSN Reason must be indicated for Application
-    if (!form.ssn && !form.blankSsnReason) {
-      setError('EM OS 013: Either SSN or Blank SSN Reason must be indicated.'); return false;
-    }
-    // EM OS 007: SSN + Blank SSN Reason mutual exclusion
-    if (form.ssn && form.blankSsnReason) {
-      setError('EM OS 007: SSN must be blank when Blank SSN Reason is indicated.'); return false;
+      if (dob > now) { setError('EM-203: Date of Birth cannot be in the future.'); return false; }
+      if (now.getFullYear() - dob.getFullYear() > 120) { setError('EM-204: Date of Birth cannot be more than 120 years ago.'); return false; }
     }
     if (form.ssn && form.ssn.replace(/\D/g, '').length !== 9) {
-      setError('EM OS 010: SSN must be 9 digits.'); return false;
+      setError('EM-240: SSN must be 9 digits.'); return false;
     }
     if (form.ssn && /^(.)\1{8}$/.test(form.ssn.replace(/\D/g, ''))) {
-      setError('EM OS 010: Invalid SSN — all same digits.'); return false;
+      setError('EM-238: Invalid SSN — all same digits.'); return false;
     }
     if (form.ssn && form.ssn.replace(/\D/g, '').startsWith('9')) {
-      setError('EM OS 010: SSN cannot begin with 9.'); return false;
+      setError('EM-237: SSN cannot begin with 9.'); return false;
     }
-    // EM OS 009: Ethnicity required for Application
-    if (!form.ethnicity) { setError('EM OS 009: Ethnicity must be indicated.'); return false; }
-    // EM OS 011: Spoken Language required for Application
-    if (!form.spokenLanguage) { setError('EM OS 011: Spoken Language must be indicated.'); return false; }
-    // EM OS 018: Mailing Address or Same as Residence must be indicated
-    if (!form.sameAsResidence && !form.mailingStreetName.trim()) {
-      setError('EM OS 018: Mailing Address or Same as Residence Address must be indicated.'); return false;
-    }
-    // Phone validation (EM OS 264/265 + EM-258)
+    // Phone validation (EM-251/252)
     const phoneFields = [
       { val: form.homePhone, label: 'Home Phone' },
       { val: form.cellPhone, label: 'Cell Phone' },
@@ -376,31 +345,15 @@ export const ApplicationsNewPage = () => {
       if (pf.val && pf.val.trim()) {
         const digits = pf.val.replace(/\D/g, '');
         if (digits.length !== 10) {
-          setError(`EM OS 264/265: ${pf.label} must be 10 digits (area code + 7-digit number).`);
-          return false;
-        }
-        if (digits === '0000000000' || digits === '9999999999') {
-          setError(`EM OS 258: ${pf.label} is not a valid phone number. Please enter valid phone number.`);
+          setError(`EM-251/252: ${pf.label} must be 10 digits (area code + 7-digit number).`);
           return false;
         }
       }
     }
-    // Email validation (EM OS 209-211, EM-216, EM-217)
-    if (form.email && form.email.trim()) {
-      const emailVal = form.email.trim();
-      const atCount = (emailVal.match(/@/g) || []).length;
-      if (atCount !== 1) { setError('EM OS 209: Not a valid email address. Please enter valid email address.'); return false; }
-      const [local, domain] = emailVal.split('@');
-      if (local.length < 2) { setError('EM OS 210: Not a valid email address. Please enter valid email address.'); return false; }
-      if (!domain || !domain.includes('.')) { setError('EM OS 211: Not a valid email address. Please enter valid email address.'); return false; }
-      if (/\.\.|^\.|\.$/.test(domain)) { setError('EM OS 216: Not a valid email address. Please enter valid email address.'); return false; }
-    }
-    // EM-242/243: Other Language fields must contain only alpha characters
-    if (form.spokenLanguage === 'Other' && form.otherSpokenLanguageDetail && /[^a-zA-Z\s\-']/.test(form.otherSpokenLanguageDetail)) {
-      setError('EM OS 243: Other Spoken Language Details field allows only English language alpha characters.'); return false;
-    }
-    if (form.writtenLanguage === 'Other' && form.otherWrittenLanguageDetail && /[^a-zA-Z\s\-']/.test(form.otherWrittenLanguageDetail)) {
-      setError('EM OS 242: Other Written Language Details field allows only English language alpha characters.'); return false;
+    // Email validation (EM-254)
+    if (form.email && form.email.trim() && !/^[^@]+@[^@]+\.[^@]+$/.test(form.email)) {
+      setError('EM-254: Not a valid email address. Please enter a valid email address.');
+      return false;
     }
     return true;
   };
@@ -460,14 +413,14 @@ export const ApplicationsNewPage = () => {
   };
 
   const validateStep3 = () => {
-    if (!caseForm.countyCode.trim()) { setError('EM OS 210: County is required.'); return false; }
-    // EM OS 175: IHSS Referral Date cannot be in the future
+    if (!caseForm.countyCode.trim()) { setError('EM-210: County is required.'); return false; }
+    // EM-175: IHSS Referral Date cannot be in the future
     if (caseForm.ihssReferralDate) {
       const refDate = new Date(caseForm.ihssReferralDate);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       if (refDate > today) {
-        setError('EM OS 175: IHSS Referral Date cannot be in the future.');
+        setError('EM-175: IHSS Referral Date cannot be in the future.');
         return false;
       }
     }
@@ -483,25 +436,14 @@ export const ApplicationsNewPage = () => {
   // ── Step 4 submit ─────────────────────────────────────────────────────────
   const buildApplicationPayload = () => ({
     recipientId:  recipientId || undefined,
-    title:        form.title || null,
     lastName:     form.lastName,
     firstName:    form.firstName,
     middleName:   form.middleName,
-    suffix:       form.suffix || null,
     dateOfBirth:  form.dateOfBirth,
     gender:       form.gender,
-    genderIdentity:     form.genderIdentity || null,
-    sexualOrientation:  form.sexualOrientation || null,
     ssn:          form.ssn,
-    blankSsnReason:     form.blankSsnReason || null,
     spokenLanguage:  form.spokenLanguage,
-    otherSpokenLanguageDetail: form.spokenLanguage === 'Other' ? form.otherSpokenLanguageDetail : null,
-    writtenLanguage: form.writtenLanguage || null,
-    otherWrittenLanguageDetail: form.writtenLanguage === 'Other' ? form.otherWrittenLanguageDetail : null,
     ethnicity:    form.ethnicity,
-    mediCalPseudo: form.mediCalPseudo || null,
-    residenceAddressType: form.residenceAddressType || null,
-    meetsResidencyRequirements: form.meetsResidencyRequirements || null,
     homePhone:    form.homePhone,
     cellPhone:    form.cellPhone,
     workPhone:    form.workPhone,
@@ -555,9 +497,9 @@ export const ApplicationsNewPage = () => {
     setError('');
     if (!validateStep2() || !validateStep3()) return;
 
-    // EM OS 176: CIN clearance must be performed
+    // EM-176: CIN clearance must be performed
     if (!cinClearancePerformed) {
-      setError('EM OS 176: CIN Clearance must be performed before creating a case. Click 🔍 in Step 3.');
+      setError('EM-176: CIN Clearance must be performed before creating a case. Click 🔍 in Step 3.');
       return;
     }
 
@@ -594,23 +536,12 @@ export const ApplicationsNewPage = () => {
         applicantName: `${form.firstName} ${form.lastName}`.trim(),
       };
       const caseData = await casesApi.createCase(casePayload);
-      const caseId = caseData?.id || caseData?.case?.id || '';
-      if (caseData?.infoMessage) {
-        sessionStorage.setItem('caseInfoMessage', caseData.infoMessage);
-      }
-      navigate(`/cases/${caseId}`);
+      navigate(`/cases/${caseData?.id || ''}`);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create application and case.');
+      setError(err?.response?.data?.message || err.message || 'Failed to create application and case.');
     } finally {
       setSaving(false);
     }
-  };
-
-  // ── Worker Search select handler (DSD CI-67746) ─────────────────────────────
-  const handleWorkerSelect = (worker) => {
-    setSelectedWorker(worker);
-    setCaseForm(prev => ({ ...prev, caseOwnerId: worker.workerNumber }));
-    setShowWorkerSearch(false);
   };
 
   // ── CreateCaseWithoutCINModal handler (BR-9) ──────────────────────────────
@@ -640,13 +571,9 @@ export const ApplicationsNewPage = () => {
         createdBy:     username,
         applicantName: `${form.firstName} ${form.lastName}`.trim(),
       });
-      const caseId = caseData?.id || caseData?.case?.id || '';
-      if (caseData?.infoMessage) {
-        sessionStorage.setItem('caseInfoMessage', caseData.infoMessage);
-      }
-      navigate(`/cases/${caseId}`);
+      navigate(`/cases/${caseData?.id || ''}`);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.response?.data?.message || err.message || 'Failed to create case.');
+      setError(err?.response?.data?.message || err.message || 'Failed to create case.');
     } finally {
       setSaving(false);
     }
@@ -801,7 +728,7 @@ export const ApplicationsNewPage = () => {
 
                 {ssnExactMatch ? (
                   <div style={{ background: '#fff5f5', border: '1px solid #fc8181', borderLeft: '4px solid #c53030', padding: '0.75rem 1rem', borderRadius: '4px', color: '#c53030', fontSize: '0.875rem', marginTop: '0.75rem' }}>
-                    <strong>EM OS 010:</strong> An exact SSN match was found. You must use the existing person record. Select "Use This Person" above.
+                    <strong>EM-237:</strong> An exact SSN match was found. You must use the existing person record. Select "Use This Person" above.
                   </div>
                 ) : (
                   <div className="wq-search-actions" style={{ marginTop: '0.75rem' }}>
@@ -827,21 +754,11 @@ export const ApplicationsNewPage = () => {
             </div>
           )}
 
-          {/* Section: Demographics — DSD CI-67788 */}
+          {/* Section: Demographics */}
           <div className="wq-panel">
             <div className="wq-panel-header"><h4>Applicant Demographics</h4></div>
             <div className="wq-panel-body">
               <div className="wq-search-grid">
-                <div className="wq-form-field">
-                  <label>Title</label>
-                  <select value={form.title || ''} onChange={e => handleFormChange('title', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="Mr">Mr</option><option value="Mrs">Mrs</option>
-                    <option value="Ms">Ms</option><option value="Miss">Miss</option>
-                    <option value="Dr">Dr</option><option value="Rev">Rev</option>
-                    <option value="Hon">Hon</option><option value="Other">Other</option>
-                  </select>
-                </div>
                 <div className="wq-form-field">
                   <label>Last Name *</label>
                   <input type="text" value={form.lastName}
@@ -858,23 +775,12 @@ export const ApplicationsNewPage = () => {
                     onChange={e => handleFormChange('middleName', e.target.value)} />
                 </div>
                 <div className="wq-form-field">
-                  <label>Suffix</label>
-                  <select value={form.suffix || ''} onChange={e => handleFormChange('suffix', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="Jr">Jr</option><option value="Sr">Sr</option>
-                    <option value="I">I</option><option value="II">II</option>
-                    <option value="III">III</option><option value="IV">IV</option>
-                    <option value="V">V</option><option value="Esq">Esq</option>
-                    <option value="MD">MD</option><option value="PhD">PhD</option>
-                  </select>
-                </div>
-                <div className="wq-form-field">
-                  <label>Date of Birth *</label>
+                  <label>Date of Birth</label>
                   <input type="date" value={form.dateOfBirth}
                     onChange={e => handleFormChange('dateOfBirth', e.target.value)} />
                 </div>
                 <div className="wq-form-field">
-                  <label>Gender *</label>
+                  <label>Gender</label>
                   <select value={form.gender} onChange={e => handleFormChange('gender', e.target.value)}>
                     <option value="">-- Select --</option>
                     <option value="Male">Male</option>
@@ -884,103 +790,29 @@ export const ApplicationsNewPage = () => {
                   </select>
                 </div>
                 <div className="wq-form-field">
-                  <label>Gender Identity</label>
-                  <select value={form.genderIdentity || ''} onChange={e => handleFormChange('genderIdentity', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="Male">Male</option><option value="Female">Female</option>
-                    <option value="Non-Binary">Non-Binary</option>
-                    <option value="Transgender Male">Transgender Male</option>
-                    <option value="Transgender Female">Transgender Female</option>
-                    <option value="Genderqueer">Genderqueer</option>
-                    <option value="Not Listed">Not Listed</option>
-                    <option value="Decline to State">Decline to State</option>
-                  </select>
-                </div>
-                <div className="wq-form-field">
-                  <label>Sexual Orientation</label>
-                  <select value={form.sexualOrientation || ''} onChange={e => handleFormChange('sexualOrientation', e.target.value)}>
-                    <option value="">Select...</option>
-                    <option value="Straight">Straight</option><option value="Gay">Gay</option>
-                    <option value="Lesbian">Lesbian</option><option value="Bisexual">Bisexual</option>
-                    <option value="Queer">Queer</option>
-                    <option value="Not Listed">Not Listed</option>
-                    <option value="Decline to State">Decline to State</option>
-                  </select>
-                </div>
-                <div className="wq-form-field">
-                  <label>SSN * (or select Blank SSN Reason)</label>
+                  <label>SSN (masked)</label>
                   <input type="text" value={displaySsn}
                     onChange={e => handleSsnChange(e.target.value)}
                     placeholder="XXX-XX-####" maxLength={9}
-                    style={{ fontFamily: 'monospace' }}
-                    disabled={!!form.blankSsnReason} />
+                    style={{ fontFamily: 'monospace' }} />
                 </div>
                 <div className="wq-form-field">
-                  <label>Blank SSN Reason</label>
-                  <select value={form.blankSsnReason || ''}
-                    onChange={e => {
-                      const val = e.target.value;
-                      handleFormChange('blankSsnReason', val);
-                      if (val) { handleFormChange('ssn', ''); setDisplaySsn(''); }
-                    }}
-                    disabled={form.ssn && form.ssn.length > 0}>
-                    <option value="">Select...</option>
-                    <option value="Refused to Provide">Refused to Provide</option>
-                    <option value="Unable to Obtain">Unable to Obtain</option>
-                    <option value="Applied for but not yet received">Applied for but not yet received</option>
-                    <option value="Non-citizen">Non-citizen</option>
-                  </select>
-                </div>
-                <div className="wq-form-field">
-                  <label>Spoken Language *</label>
+                  <label>Spoken Language</label>
                   <select value={form.spokenLanguage}
                     onChange={e => handleFormChange('spokenLanguage', e.target.value)}>
                     <option value="">-- Select --</option>
                     <option value="English">English</option>
                     <option value="Spanish">Spanish</option>
-                    <option value="Cantonese">Cantonese</option>
-                    <option value="Mandarin">Mandarin</option>
+                    <option value="Chinese">Chinese</option>
+                    <option value="Tagalog">Tagalog</option>
                     <option value="Vietnamese">Vietnamese</option>
                     <option value="Korean">Korean</option>
                     <option value="Armenian">Armenian</option>
-                    <option value="Tagalog">Tagalog</option>
-                    <option value="Russian">Russian</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                {form.spokenLanguage === 'Other' && (
-                  <div className="wq-form-field">
-                    <label>Other Spoken Language (specify)</label>
-                    <input type="text" value={form.otherSpokenLanguageDetail || ''}
-                      onChange={e => handleFormChange('otherSpokenLanguageDetail', e.target.value)} />
-                  </div>
-                )}
                 <div className="wq-form-field">
-                  <label>Written Language</label>
-                  <select value={form.writtenLanguage || ''}
-                    onChange={e => handleFormChange('writtenLanguage', e.target.value)}>
-                    <option value="">-- Select --</option>
-                    <option value="English">English</option>
-                    <option value="Spanish">Spanish</option>
-                    <option value="Cantonese">Cantonese</option>
-                    <option value="Mandarin">Mandarin</option>
-                    <option value="Vietnamese">Vietnamese</option>
-                    <option value="Korean">Korean</option>
-                    <option value="Armenian">Armenian</option>
-                    <option value="Tagalog">Tagalog</option>
-                    <option value="Russian">Russian</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                {form.writtenLanguage === 'Other' && (
-                  <div className="wq-form-field">
-                    <label>Other Written Language (specify)</label>
-                    <input type="text" value={form.otherWrittenLanguageDetail || ''}
-                      onChange={e => handleFormChange('otherWrittenLanguageDetail', e.target.value)} />
-                  </div>
-                )}
-                <div className="wq-form-field">
-                  <label>Ethnicity *</label>
+                  <label>Ethnicity</label>
                   <select value={form.ethnicity}
                     onChange={e => handleFormChange('ethnicity', e.target.value)}>
                     <option value="">-- Select --</option>
@@ -993,12 +825,6 @@ export const ApplicationsNewPage = () => {
                     <option value="Two or More Races">Two or More Races</option>
                     <option value="Unknown">Unknown/Decline</option>
                   </select>
-                </div>
-                <div className="wq-form-field">
-                  <label>Medi-Cal Pseudo Number</label>
-                  <input type="text" value={form.mediCalPseudo || ''}
-                    onChange={e => handleFormChange('mediCalPseudo', e.target.value.slice(0, 14))}
-                    maxLength={14} placeholder="Up to 14 characters" />
                 </div>
               </div>
             </div>
@@ -1240,21 +1066,9 @@ export const ApplicationsNewPage = () => {
                 </div>
                 <div className="wq-form-field">
                   <label>Assigned Worker</label>
-                  <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                    <input type="text"
-                      value={selectedWorker
-                        ? `${selectedWorker.lastName}, ${selectedWorker.firstName} (${selectedWorker.workerNumber})`
-                        : ''}
-                      readOnly
-                      placeholder="Search for a worker →"
-                      style={{ flex: 1, backgroundColor: '#f7f9fb', cursor: 'not-allowed' }} />
-                    <button type="button" className="wq-btn wq-btn-outline"
-                      onClick={() => setShowWorkerSearch(true)}
-                      title="Search for a worker (User Search)"
-                      style={{ padding: '0.35rem 0.6rem', fontSize: '1rem', lineHeight: 1 }}>
-                      🔍
-                    </button>
-                  </div>
+                  <input type="text" value={caseForm.caseOwnerId}
+                    onChange={e => setCaseForm(prev => ({ ...prev, caseOwnerId: e.target.value }))}
+                    placeholder="Worker username" />
                 </div>
                 <div className="wq-form-field">
                   <label>IHSS Referral Date</label>
@@ -1323,7 +1137,7 @@ export const ApplicationsNewPage = () => {
                 <div className="wq-detail-row"><span className="wq-detail-label">Program Type</span><span className="wq-detail-value">{caseForm.programType || '—'}</span></div>
                 <div className="wq-detail-row"><span className="wq-detail-label">County</span><span className="wq-detail-value">{caseForm.countyCode}</span></div>
                 <div className="wq-detail-row"><span className="wq-detail-label">Case Opening Date</span><span className="wq-detail-value">{caseForm.caseOpenDate || '—'}</span></div>
-                <div className="wq-detail-row"><span className="wq-detail-label">Assigned Worker</span><span className="wq-detail-value">{selectedWorker ? `${selectedWorker.lastName}, ${selectedWorker.firstName} (${selectedWorker.workerNumber})` : '(unassigned)'}</span></div>
+                <div className="wq-detail-row"><span className="wq-detail-label">Assigned Worker</span><span className="wq-detail-value">{caseForm.caseOwnerId || '(unassigned)'}</span></div>
                 <div className="wq-detail-row"><span className="wq-detail-label">IHSS Referral Date</span><span className="wq-detail-value">{caseForm.ihssReferralDate || '—'}</span></div>
               </div>
             </div>
@@ -1407,18 +1221,7 @@ export const ApplicationsNewPage = () => {
 
       {/* ── Demographic Mismatch Modal ──────────────────────────────────── */}
       {showMismatch && (
-        <CINDataMismatchModal
-          onReturnToCINSelect={handleReturnToCINSelect}
-          onProceedWithoutCIN={() => {
-            setShowMismatch(false);
-            setCinClearanceStatus('WITHOUT_CIN');
-            setShowWithoutCIN(true);
-          }}
-          onCancelCreateCase={() => {
-            setShowMismatch(false);
-            navigate(-1);
-          }}
-        />
+        <CINDataMismatchModal onReturnToCINSelect={handleReturnToCINSelect} />
       )}
 
       {/* ── Create Case Without CIN Modal (BR-9 / S1 to SAWS) ─────────── */}
@@ -1427,14 +1230,6 @@ export const ApplicationsNewPage = () => {
           onContinue={handleWithoutCINContinue}
           onCancel={() => setShowWithoutCIN(false)}
           saving={saving}
-        />
-      )}
-
-      {/* ── User Search Modal (DSD CI-67746 — Assign Case Owner) ─────────── */}
-      {showWorkerSearch && (
-        <UserSearchModal
-          onSelect={handleWorkerSelect}
-          onCancel={() => setShowWorkerSearch(false)}
         />
       )}
     </div>

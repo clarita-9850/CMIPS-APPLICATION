@@ -123,31 +123,6 @@ public class RecipientEntity {
     @Column(name = "written_language", length = 50)
     private String writtenLanguage;
 
-    // DSD CI-67784 / CI-67788: Additional Demographics
-    @Column(name = "title", length = 20)
-    private String title;
-
-    @Column(name = "suffix", length = 20)
-    private String suffix;
-
-    @Column(name = "gender_identity", length = 50)
-    private String genderIdentity;
-
-    @Column(name = "sexual_orientation", length = 50)
-    private String sexualOrientation;
-
-    @Column(name = "other_spoken_language_detail", length = 100)
-    private String otherSpokenLanguageDetail;
-
-    @Column(name = "other_written_language_detail", length = 100)
-    private String otherWrittenLanguageDetail;
-
-    @Column(name = "residence_address_type", length = 50)
-    private String residenceAddressType;
-
-    @Column(name = "meets_residency_requirements")
-    private Boolean meetsResidencyRequirements;
-
     // Accessibility Options
     @Column(name = "blind_visually_impaired")
     private Boolean blindVisuallyImpaired;
@@ -198,7 +173,7 @@ public class RecipientEntity {
     private String emergencyContactRelationship;
 
     // County Assignment
-    @Column(name = "county_code", length = 50)
+    @Column(name = "county_code", length = 10)
     private String countyCode;
 
     @Column(name = "county_name", length = 100)
@@ -520,30 +495,6 @@ public class RecipientEntity {
         this.writtenLanguage = writtenLanguage;
     }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
-
-    public String getSuffix() { return suffix; }
-    public void setSuffix(String suffix) { this.suffix = suffix; }
-
-    public String getGenderIdentity() { return genderIdentity; }
-    public void setGenderIdentity(String genderIdentity) { this.genderIdentity = genderIdentity; }
-
-    public String getSexualOrientation() { return sexualOrientation; }
-    public void setSexualOrientation(String sexualOrientation) { this.sexualOrientation = sexualOrientation; }
-
-    public String getOtherSpokenLanguageDetail() { return otherSpokenLanguageDetail; }
-    public void setOtherSpokenLanguageDetail(String otherSpokenLanguageDetail) { this.otherSpokenLanguageDetail = otherSpokenLanguageDetail; }
-
-    public String getOtherWrittenLanguageDetail() { return otherWrittenLanguageDetail; }
-    public void setOtherWrittenLanguageDetail(String otherWrittenLanguageDetail) { this.otherWrittenLanguageDetail = otherWrittenLanguageDetail; }
-
-    public String getResidenceAddressType() { return residenceAddressType; }
-    public void setResidenceAddressType(String residenceAddressType) { this.residenceAddressType = residenceAddressType; }
-
-    public Boolean getMeetsResidencyRequirements() { return meetsResidencyRequirements; }
-    public void setMeetsResidencyRequirements(Boolean meetsResidencyRequirements) { this.meetsResidencyRequirements = meetsResidencyRequirements; }
-
     public Boolean getBlindVisuallyImpaired() {
         return blindVisuallyImpaired;
     }
@@ -836,14 +787,6 @@ public class RecipientEntity {
         private String mailingZip;
         private String spokenLanguage;
         private String writtenLanguage;
-        private String title;
-        private String suffix;
-        private String genderIdentity;
-        private String sexualOrientation;
-        private String otherSpokenLanguageDetail;
-        private String otherWrittenLanguageDetail;
-        private String residenceAddressType;
-        private Boolean meetsResidencyRequirements;
         private Boolean blindVisuallyImpaired;
         private String noaOption;
         private String noaLanguage;
@@ -1041,15 +984,6 @@ public class RecipientEntity {
             return this;
         }
 
-        public RecipientEntityBuilder title(String title) { this.title = title; return this; }
-        public RecipientEntityBuilder suffix(String suffix) { this.suffix = suffix; return this; }
-        public RecipientEntityBuilder genderIdentity(String genderIdentity) { this.genderIdentity = genderIdentity; return this; }
-        public RecipientEntityBuilder sexualOrientation(String sexualOrientation) { this.sexualOrientation = sexualOrientation; return this; }
-        public RecipientEntityBuilder otherSpokenLanguageDetail(String otherSpokenLanguageDetail) { this.otherSpokenLanguageDetail = otherSpokenLanguageDetail; return this; }
-        public RecipientEntityBuilder otherWrittenLanguageDetail(String otherWrittenLanguageDetail) { this.otherWrittenLanguageDetail = otherWrittenLanguageDetail; return this; }
-        public RecipientEntityBuilder residenceAddressType(String residenceAddressType) { this.residenceAddressType = residenceAddressType; return this; }
-        public RecipientEntityBuilder meetsResidencyRequirements(Boolean meetsResidencyRequirements) { this.meetsResidencyRequirements = meetsResidencyRequirements; return this; }
-
         public RecipientEntityBuilder blindVisuallyImpaired(Boolean blindVisuallyImpaired) {
             this.blindVisuallyImpaired = blindVisuallyImpaired;
             return this;
@@ -1201,14 +1135,6 @@ public class RecipientEntity {
             entity.setMailingZip(mailingZip);
             entity.setSpokenLanguage(spokenLanguage);
             entity.setWrittenLanguage(writtenLanguage);
-            entity.setTitle(title);
-            entity.setSuffix(suffix);
-            entity.setGenderIdentity(genderIdentity);
-            entity.setSexualOrientation(sexualOrientation);
-            entity.setOtherSpokenLanguageDetail(otherSpokenLanguageDetail);
-            entity.setOtherWrittenLanguageDetail(otherWrittenLanguageDetail);
-            entity.setResidenceAddressType(residenceAddressType);
-            entity.setMeetsResidencyRequirements(meetsResidencyRequirements);
             entity.setBlindVisuallyImpaired(blindVisuallyImpaired);
             entity.setNoaOption(noaOption);
             entity.setNoaLanguage(noaLanguage);

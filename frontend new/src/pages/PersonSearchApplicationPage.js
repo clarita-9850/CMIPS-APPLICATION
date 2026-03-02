@@ -1,447 +1,182 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as recipientsApi from '../api/recipientsApi';
-import { createRecipientFromProvider } from '../api/recipientsApi';
 import './WorkQueues.css';
 
-/* ───── California Counties (58 + special options) ───── */
-const CA_COUNTIES = [
-  { code: '', name: 'All' },
-  { code: '01', name: 'Alameda' }, { code: '02', name: 'Alpine' }, { code: '03', name: 'Amador' },
-  { code: '04', name: 'Butte' }, { code: '05', name: 'Calaveras' }, { code: '06', name: 'Colusa' },
-  { code: '07', name: 'Contra Costa' }, { code: '08', name: 'Del Norte' }, { code: '09', name: 'El Dorado' },
-  { code: '10', name: 'Fresno' }, { code: '11', name: 'Glenn' }, { code: '12', name: 'Humboldt' },
-  { code: '13', name: 'Imperial' }, { code: '14', name: 'Inyo' }, { code: '15', name: 'Kern' },
-  { code: '16', name: 'Kings' }, { code: '17', name: 'Lake' }, { code: '18', name: 'Lassen' },
-  { code: '19', name: 'Los Angeles' }, { code: '20', name: 'Madera' }, { code: '21', name: 'Marin' },
-  { code: '22', name: 'Mariposa' }, { code: '23', name: 'Mendocino' }, { code: '24', name: 'Merced' },
-  { code: '25', name: 'Modoc' }, { code: '26', name: 'Mono' }, { code: '27', name: 'Monterey' },
-  { code: '28', name: 'Napa' }, { code: '29', name: 'Nevada' }, { code: '30', name: 'Orange' },
-  { code: '31', name: 'Placer' }, { code: '32', name: 'Plumas' }, { code: '33', name: 'Riverside' },
-  { code: '34', name: 'Sacramento' }, { code: '35', name: 'San Benito' }, { code: '36', name: 'San Bernardino' },
-  { code: '37', name: 'San Diego' }, { code: '38', name: 'San Francisco' }, { code: '39', name: 'San Joaquin' },
-  { code: '40', name: 'San Luis Obispo' }, { code: '41', name: 'San Mateo' }, { code: '42', name: 'Santa Barbara' },
-  { code: '43', name: 'Santa Clara' }, { code: '44', name: 'Santa Cruz' }, { code: '45', name: 'Shasta' },
-  { code: '46', name: 'Sierra' }, { code: '47', name: 'Siskiyou' }, { code: '48', name: 'Solano' },
-  { code: '49', name: 'Sonoma' }, { code: '50', name: 'Stanislaus' }, { code: '51', name: 'Sutter' },
-  { code: '52', name: 'Tehama' }, { code: '53', name: 'Trinity' }, { code: '54', name: 'Tulare' },
-  { code: '55', name: 'Tuolumne' }, { code: '56', name: 'Ventura' }, { code: '57', name: 'Yolo' },
-  { code: '58', name: 'Yuba' },
-  { code: '99', name: 'Out of State' }, { code: '00', name: 'Undetermined' },
-];
-
-const UNIT_TYPES = ['', 'APT', 'STE', 'UNIT', 'RM', 'FL', 'BLDG', 'DEPT', 'LOT', 'SPC'];
-
-const PERSON_TYPES = [
-  { value: '', label: '' },
-  { value: 'OPEN_REFERRAL', label: 'Open Referral' },
-  { value: 'CLOSED_REFERRAL', label: 'Closed Referral' },
-  { value: 'APPLICANT', label: 'Applicant' },
-  { value: 'RECIPIENT', label: 'Recipient' },
-  { value: 'PROVIDER', label: 'Provider' },
-];
-
-const PERSON_TYPE_LABELS = {
-  OPEN_REFERRAL: 'Open Referral', CLOSED_REFERRAL: 'Closed Referral',
-  APPLICANT: 'Applicant', RECIPIENT: 'Recipient', PROVIDER: 'Provider',
+const PERSON_TYPE_STYLES = {
+  OPEN_REFERRAL:   { background: '#bee3f8', color: '#2b6cb0' },
+  CLOSED_REFERRAL: { background: '#e2e8f0', color: '#4a5568' },
+  APPLICANT:       { background: '#feebc8', color: '#c05621' },
+  RECIPIENT:       { background: '#c6f6d5', color: '#276749' },
 };
 
-const PAGE_SIZE = 50;
-
-const countyName = (code) => {
-  const c = CA_COUNTIES.find(x => x.code === code);
-  return c ? c.name : code || '';
+const PersonTypeBadge = ({ type }) => {
+  if (!type) return <span style={{ color: '#999' }}>—</span>;
+  const style = PERSON_TYPE_STYLES[type] || { background: '#e2e8f0', color: '#4a5568' };
+  const label = type.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return <span style={{ ...style, padding: '0.15rem 0.5rem', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }}>{label}</span>;
 };
 
-const maskSsn = (ssn) => {
-  if (!ssn) return '';
-  const digits = ssn.replace(/\D/g, '');
-  if (digits.length < 4) return '';
-  return 'XXX-XX-' + digits.slice(-4);
-};
-
-const formatDob = (dob) => {
-  if (!dob) return '';
-  const d = new Date(dob + 'T00:00:00');
-  if (isNaN(d.getTime())) return dob;
-  return String(d.getMonth() + 1).padStart(2, '0') + '/' +
-         String(d.getDate()).padStart(2, '0') + '/' + d.getFullYear();
-};
-
-const getStatusByPersonType = (r) => {
-  const pt = r.personType;
-  if (pt === 'RECIPIENT') return r.caseStatus || '';
-  if (pt === 'APPLICANT') return r.applicationStatus || 'Pending';
-  if (pt === 'PROVIDER')  return r.providerStatus || '';
-  return '';
-};
+const PAGE_SIZE = 10;
 
 /**
- * Person Search — Application Mode (DSD CI-67788)
- *
- * Identical to PersonSearchReferralPage but with "Continue Application" button.
- * Selecting an existing person pre-fills the application form.
+ * Person Search — Application Path (CI-67788)
+ * "Select existing" → ApplicationsNewPage with pre-filled recipientId
+ * "Create New Application" → ApplicationsNewPage blank
  */
 export const PersonSearchApplicationPage = () => {
   const navigate = useNavigate();
 
-  const [lastName, setLastName] = useState('');
-  const [soundexOn, setSoundexOn] = useState(false);
-  const [firstName, setFirstName] = useState('');
-  const [ssn, setSsn] = useState('');
-  const [allSsn, setAllSsn] = useState(false);
-  const [last4Ssn, setLast4Ssn] = useState(false);
-  const [cin, setCin] = useState('');
-  const [providerNumber, setProviderNumber] = useState('');
-  const [personType, setPersonType] = useState('');
-  const [dob, setDob] = useState('');
-  const [gender, setGender] = useState('');
-  const [county, setCounty] = useState('');
-  const [districtOffice, setDistrictOffice] = useState('');
-
-  const [streetNumber, setStreetNumber] = useState('');
-  const [streetName, setStreetName] = useState('');
-  const [unitType, setUnitType] = useState('');
-  const [unitNumber, setUnitNumber] = useState('');
-  const [addrCity, setAddrCity] = useState('');
-
-  const [phoneAreaCode, setPhoneAreaCode] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [emailAddr, setEmailAddr] = useState('');
-
+  const [form, setForm] = useState({ lastName: '', firstName: '', dob: '', ssn: '', countyCode: '' });
+  const [displaySsn, setDisplaySsn] = useState('');
   const [results, setResults] = useState([]);
-  const [totalElements, setTotalElements] = useState(0);
-  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
-  const [validationErrors, setValidationErrors] = useState([]);
+  const [page, setPage] = useState(0);
 
-  const [creatingFromProvider, setCreatingFromProvider] = useState(null);
+  const handleChange = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
-  const [generalOpen, setGeneralOpen] = useState(true);
-  const [addressOpen, setAddressOpen] = useState(true);
-  const [contactOpen, setContactOpen] = useState(true);
-
-  const handleCreateAppFromProvider = async (providerId) => {
-    setCreatingFromProvider(providerId);
-    try {
-      const recipient = await createRecipientFromProvider(providerId);
-      navigate(`/applications/new?source=existing&recipientId=${recipient.id}`);
-    } catch (err) {
-      const msg = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to create recipient from provider.';
-      setValidationErrors([msg]);
-      setCreatingFromProvider(null);
+  const handleSsnChange = (raw) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    let masked = '';
+    for (let i = 0; i < digits.length; i++) {
+      masked += i < 5 ? 'X' : digits[i];
     }
+    setDisplaySsn(masked);
+    handleChange('ssn', digits);
   };
 
-  const validate = useCallback(() => {
-    const errors = [];
-    const hasSsn = ssn.trim().length > 0;
-    const hasCin = cin.trim().length > 0;
-    const hasProvider = providerNumber.trim().length > 0;
-    const hasLastName = lastName.trim().length > 0;
-    const hasCompleteAddr = streetNumber.trim() && streetName.trim() && addrCity.trim();
-    const hasPhone = phoneAreaCode.trim() || phoneNumber.trim();
-    const hasEmail = emailAddr.trim().length > 0;
-
-    if (!hasSsn && !hasCin && !hasProvider && !hasLastName && !hasCompleteAddr && !hasPhone && !hasEmail) {
-      errors.push('Please enter one or more of these fields: SSN, Full or partial last name, CIN, Complete address, Provider Number, Phone Number, or Email Address.');
-      return errors;
+  const doSearch = async () => {
+    if (!form.lastName.trim()) {
+      alert('Last Name is required to search.');
+      return;
     }
-
-    if (hasSsn) {
-      const ssnDigits = ssn.replace(/\D/g, '');
-      if (last4Ssn) {
-        if (ssnDigits.length !== 4) errors.push('EM OS 279: You must enter only last four digits when "Last 4 SSN" option is checked.');
-      } else if (allSsn) {
-        if (ssnDigits.length !== 9) errors.push('EM OS 281: You must enter all nine digits when "All SSN" option is checked.');
-      } else {
-        if (ssnDigits.length !== 9) errors.push('EM OS 282: SSN must be nine digits.');
-      }
-    }
-
-    if (hasPhone) {
-      const ac = phoneAreaCode.replace(/\D/g, '');
-      const pn = phoneNumber.replace(/\D/g, '');
-      if ((ac.length > 0 && pn.length === 0) || (pn.length > 0 && ac.length === 0)) errors.push("EM OS 266: 'Phone number' must be entered.");
-      if (ac.length > 0 && ac.length !== 3) errors.push('EM OS 264: Area Code must be three numeric digits.');
-      if (pn.length > 0 && pn.length !== 7) errors.push('EM OS 265: Phone Number must be seven numeric digits.');
-      const fullPhone = ac + pn;
-      if (fullPhone === '0000000000' || fullPhone === '9999999999') errors.push('EM OS 268: Not a valid phone number. Please enter valid phone number.');
-    }
-
-    if (hasEmail) {
-      const em = emailAddr.trim();
-      const atCount = (em.match(/@/g) || []).length;
-      const parts = em.split('@');
-      let invalid = false;
-      if (atCount !== 1) invalid = true;
-      else if (parts[0].length < 2) invalid = true;
-      else if (!parts[1] || !parts[1].includes('.')) invalid = true;
-      else { const dp = parts[1].split('.'); if (dp.some(p => p.length === 0)) invalid = true; }
-      if (parts[0] && (/^[*^%$#]/.test(parts[0]) || /[*^%$#]$/.test(parts[0]))) invalid = true;
-      if (invalid) errors.push('EM OS 267: Not a valid email address. Please enter valid email address.');
-    }
-
-    if (unitType && !unitNumber.trim()) errors.push('EM OS 220: Both the Unit Type and Unit Number are required when either is used as search criteria.');
-    if (unitNumber.trim() && !unitType) errors.push('EM OS 221: Both the Unit Type and Unit Number are required when either is used as search criteria.');
-
-    return errors;
-  }, [ssn, cin, providerNumber, lastName, streetNumber, streetName, addrCity, phoneAreaCode, phoneNumber, emailAddr, allSsn, last4Ssn, unitType, unitNumber]);
-
-  const doSearch = async (pageNum = 0) => {
-    const errs = validate();
-    if (errs.length > 0) { setValidationErrors(errs); return; }
-    setValidationErrors([]); setLoading(true); setSearched(true); setPage(pageNum);
+    setLoading(true);
+    setSearched(true);
+    setPage(0);
     try {
       const params = {};
-      if (ssn.trim()) params.ssn = ssn.replace(/\D/g, '');
-      if (cin.trim()) params.cin = cin.trim();
-      if (providerNumber.trim()) params.providerNumber = providerNumber.trim();
-      if (lastName.trim()) params.lastName = lastName.trim();
-      if (firstName.trim()) params.firstName = firstName.trim();
-      if (dob) params.dob = dob;
-      if (gender) params.gender = gender;
-      if (county) params.countyCode = county;
-      if (personType) params.personType = personType;
-      if (streetNumber.trim()) params.streetNumber = streetNumber.trim();
-      if (streetName.trim()) params.streetName = streetName.trim();
-      if (addrCity.trim()) params.city = addrCity.trim();
-      if (soundexOn) params.soundex = 'true';
-      if (allSsn) params.allSsn = 'true';
-      if (last4Ssn) params.last4Ssn = 'true';
-      const ac = phoneAreaCode.replace(/\D/g, '');
-      const pn = phoneNumber.replace(/\D/g, '');
-      if (ac && pn) params.phone = ac + pn;
-      if (emailAddr.trim()) params.email = emailAddr.trim();
-      params.page = String(pageNum);
-      params.size = String(PAGE_SIZE);
-
+      if (form.lastName)   params.lastName   = form.lastName;
+      if (form.firstName)  params.firstName  = form.firstName;
+      if (form.ssn)        params.ssn        = form.ssn;
+      if (form.dob)        params.dob        = form.dob;
+      if (form.countyCode) params.countyCode = form.countyCode;
       const data = await recipientsApi.searchRecipients(params);
-      setResults(data?.content || []);
-      setTotalElements(data?.totalElements || 0);
-    } catch (err) {
-      console.error('[PersonSearchApplication] Search failed:', err);
-      setValidationErrors([err?.response?.data?.error || err?.message || 'Search failed']);
-      setResults([]); setTotalElements(0);
-    } finally { setLoading(false); }
+      const arr = Array.isArray(data) ? data : (data?.content || []);
+      setResults(arr);
+    } catch {
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleReset = () => {
-    setLastName(''); setSoundexOn(false); setFirstName('');
-    setSsn(''); setAllSsn(false); setLast4Ssn(false);
-    setCin(''); setProviderNumber('');
-    setPersonType(''); setDob(''); setGender('');
-    setCounty(''); setDistrictOffice('');
-    setStreetNumber(''); setStreetName('');
-    setUnitType(''); setUnitNumber(''); setAddrCity('');
-    setPhoneAreaCode(''); setPhoneNumber(''); setEmailAddr('');
-    setResults([]); setTotalElements(0);
-    setSearched(false); setValidationErrors([]); setPage(0);
+  const handleClear = () => {
+    setForm({ lastName: '', firstName: '', dob: '', ssn: '', countyCode: '' });
+    setDisplaySsn('');
+    setResults([]);
+    setSearched(false);
   };
 
-  const totalPages = Math.ceil(totalElements / PAGE_SIZE);
-  const fieldStyle = { display: 'flex', flexDirection: 'column', gap: '0.2rem' };
-  const labelStyle = { fontSize: '0.8rem', fontWeight: 600, color: '#333' };
-  const inputStyle = { padding: '0.35rem 0.5rem', border: '1px solid #cbd5e0', borderRadius: '3px', fontSize: '0.85rem' };
-  const checkStyle = { display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.8rem', cursor: 'pointer' };
-  const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem 1rem' };
+  const totalPages = Math.ceil(results.length / PAGE_SIZE);
+  const paginated  = results.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <div className="wq-page">
       <div className="wq-page-header">
-        <h2>New Application – Duplicate Check</h2>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {searched && (
-            <button className="wq-btn wq-btn-primary" onClick={() => navigate('/applications/new?source=new')}>
-              Continue Application
+        <h2>Person Search — New Application</h2>
+        <button className="wq-btn wq-btn-outline" onClick={() => navigate('/cases')}>Cancel</button>
+      </div>
+
+      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '0.6rem 1rem', marginBottom: '1rem', fontSize: '0.875rem', color: '#1e40af' }}>
+        Search for an existing person before starting a new application. Select a match to pre-fill the application form, or click "Create New Application" to start fresh.
+      </div>
+
+      <div className="wq-panel">
+        <div className="wq-panel-header"><h4>Search Criteria</h4></div>
+        <div className="wq-panel-body">
+          <div className="wq-search-grid">
+            <div className="wq-form-field">
+              <label>Last Name *</label>
+              <input type="text" value={form.lastName} onChange={e => handleChange('lastName', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && doSearch()} autoFocus />
+            </div>
+            <div className="wq-form-field">
+              <label>First Name</label>
+              <input type="text" value={form.firstName} onChange={e => handleChange('firstName', e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && doSearch()} />
+            </div>
+            <div className="wq-form-field">
+              <label>Date of Birth</label>
+              <input type="date" value={form.dob} onChange={e => handleChange('dob', e.target.value)} />
+            </div>
+            <div className="wq-form-field">
+              <label>SSN (masked)</label>
+              <input type="text" value={displaySsn} onChange={e => handleSsnChange(e.target.value)}
+                placeholder="XXX-XX-####" maxLength={9} style={{ fontFamily: 'monospace' }} />
+            </div>
+            <div className="wq-form-field">
+              <label>County</label>
+              <input type="text" value={form.countyCode} onChange={e => handleChange('countyCode', e.target.value)} />
+            </div>
+          </div>
+          <div className="wq-search-actions">
+            <button className="wq-btn wq-btn-primary" onClick={doSearch} disabled={loading}>
+              {loading ? 'Searching...' : 'Search'}
             </button>
-          )}
-          <button className="wq-btn wq-btn-outline" onClick={() => navigate('/workspace')}>Cancel</button>
-        </div>
-      </div>
-
-      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '4px', padding: '0.5rem 1rem', marginBottom: '1rem', fontSize: '0.825rem', color: '#1e40af' }}>
-        Search for an existing person before starting a new application. Select a match to pre-fill the application, or click "Continue Application" to start fresh.
-      </div>
-
-      {validationErrors.length > 0 && (
-        <div style={{ background: '#fff5f5', border: '1px solid #fc8181', borderRadius: '4px', padding: '0.75rem 1rem', marginBottom: '1rem' }}>
-          {validationErrors.map((e, i) => (
-            <div key={i} style={{ color: '#c53030', fontSize: '0.85rem', marginBottom: i < validationErrors.length - 1 ? '0.3rem' : 0 }}>{e}</div>
-          ))}
-        </div>
-      )}
-
-      {/* General */}
-      <div className="wq-panel" style={{ marginBottom: '0.75rem' }}>
-        <div className="wq-panel-header" onClick={() => setGeneralOpen(!generalOpen)}>
-          <h4>General</h4>
-          <span className="wq-panel-toggle">{generalOpen ? '\u25B2' : '\u25BC'}</span>
-        </div>
-        {generalOpen && (
-          <div className="wq-panel-body">
-            <div style={gridStyle}>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Last Name</label>
-                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                  <input style={{ ...inputStyle, flex: 1 }} type="text" value={lastName}
-                    onChange={e => setLastName(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} />
-                  <label style={checkStyle} title="Soundex phonetic matching"><input type="checkbox" checked={soundexOn} onChange={e => setSoundexOn(e.target.checked)} /> SX</label>
-                </div>
-              </div>
-              <div style={fieldStyle}><label style={labelStyle}>First Name</label>
-                <input style={inputStyle} type="text" value={firstName} onChange={e => setFirstName(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} /></div>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>SSN</label>
-                <input style={{ ...inputStyle, fontFamily: 'monospace' }} type="text" value={ssn}
-                  onChange={e => setSsn(e.target.value.replace(/\D/g, '').slice(0, 9))} maxLength={9}
-                  placeholder={last4Ssn ? '####' : '#########'} onKeyDown={e => e.key === 'Enter' && doSearch()} />
-                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.15rem' }}>
-                  <label style={checkStyle}><input type="checkbox" checked={allSsn} onChange={e => { setAllSsn(e.target.checked); if (e.target.checked) setLast4Ssn(false); }} /> All SSN</label>
-                  <label style={checkStyle}><input type="checkbox" checked={last4Ssn} onChange={e => { setLast4Ssn(e.target.checked); if (e.target.checked) setAllSsn(false); }} /> Last 4 SSN</label>
-                </div>
-              </div>
-              <div style={fieldStyle}><label style={labelStyle}>CIN</label>
-                <input style={inputStyle} type="text" value={cin} onChange={e => setCin(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>Provider Number</label>
-                <input style={inputStyle} type="text" value={providerNumber} onChange={e => setProviderNumber(e.target.value)} onKeyDown={e => e.key === 'Enter' && doSearch()} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>Person Type</label>
-                <select style={inputStyle} value={personType} onChange={e => setPersonType(e.target.value)}>
-                  {PERSON_TYPES.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}</select></div>
-              <div style={fieldStyle}><label style={labelStyle}>Date of Birth</label>
-                <input style={inputStyle} type="date" value={dob} onChange={e => setDob(e.target.value)} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>Gender</label>
-                <select style={inputStyle} value={gender} onChange={e => setGender(e.target.value)}>
-                  <option value=""></option><option value="Male">Male</option><option value="Female">Female</option></select></div>
-              <div style={fieldStyle}><label style={labelStyle}>County</label>
-                <select style={inputStyle} value={county} onChange={e => { setCounty(e.target.value); setDistrictOffice(''); }}>
-                  {CA_COUNTIES.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}</select></div>
-              <div style={fieldStyle}><label style={labelStyle}>District Office</label>
-                <select style={inputStyle} value={districtOffice} onChange={e => setDistrictOffice(e.target.value)} disabled={!county}>
-                  <option value="">{county ? '(Select District Office)' : '(Select County first)'}</option>
-                  {county && <option value="MAIN">Main Office</option>}
-                  {county && <option value="BRANCH">Branch Office</option>}</select></div>
-            </div>
+            <button className="wq-btn wq-btn-outline" onClick={handleClear}>Clear</button>
           </div>
-        )}
-      </div>
-
-      {/* Address */}
-      <div className="wq-panel" style={{ marginBottom: '0.75rem' }}>
-        <div className="wq-panel-header" onClick={() => setAddressOpen(!addressOpen)}>
-          <h4>Address</h4>
-          <span className="wq-panel-toggle">{addressOpen ? '\u25B2' : '\u25BC'}</span>
         </div>
-        {addressOpen && (
-          <div className="wq-panel-body">
-            <div style={gridStyle}>
-              <div style={fieldStyle}><label style={labelStyle}>Street Number</label><input style={inputStyle} type="text" value={streetNumber} onChange={e => setStreetNumber(e.target.value)} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>Street Name</label><input style={inputStyle} type="text" value={streetName} onChange={e => setStreetName(e.target.value)} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>Unit Type</label>
-                <select style={inputStyle} value={unitType} onChange={e => setUnitType(e.target.value)}>
-                  {UNIT_TYPES.map(u => <option key={u} value={u}>{u || '(None)'}</option>)}</select></div>
-              <div style={fieldStyle}><label style={labelStyle}>Unit Number</label><input style={inputStyle} type="text" value={unitNumber} onChange={e => setUnitNumber(e.target.value)} /></div>
-              <div style={fieldStyle}><label style={labelStyle}>City</label><input style={inputStyle} type="text" value={addrCity} onChange={e => setAddrCity(e.target.value)} /></div>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* Other Contact Information */}
-      <div className="wq-panel" style={{ marginBottom: '0.75rem' }}>
-        <div className="wq-panel-header" onClick={() => setContactOpen(!contactOpen)}>
-          <h4>Other Contact Information</h4>
-          <span className="wq-panel-toggle">{contactOpen ? '\u25B2' : '\u25BC'}</span>
-        </div>
-        {contactOpen && (
-          <div className="wq-panel-body">
-            <div style={gridStyle}>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>Phone Number</label>
-                <div style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-                  <input style={{ ...inputStyle, width: '70px' }} type="text" placeholder="Area" value={phoneAreaCode} maxLength={3}
-                    onChange={e => setPhoneAreaCode(e.target.value.replace(/\D/g, '').slice(0, 3))} />
-                  <span style={{ color: '#666' }}>-</span>
-                  <input style={{ ...inputStyle, width: '110px' }} type="text" placeholder="Number" value={phoneNumber} maxLength={7}
-                    onChange={e => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 7))} />
-                </div>
-              </div>
-              <div style={fieldStyle}><label style={labelStyle}>Email Address</label>
-                <input style={inputStyle} type="text" value={emailAddr} onChange={e => setEmailAddr(e.target.value)} /></div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Action Buttons */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-        <button className="wq-btn wq-btn-primary" onClick={() => doSearch(0)} disabled={loading}>
-          {loading ? 'Searching...' : 'Search'}
-        </button>
-        <button className="wq-btn wq-btn-outline" onClick={handleReset}>Reset</button>
-      </div>
-
-      {/* Search Results */}
       {searched && (
         <div className="wq-panel">
           <div className="wq-panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h4>Search Results {totalElements > 0 ? `(${totalElements})` : ''}</h4>
-            <button className="wq-btn wq-btn-primary" onClick={() => navigate('/applications/new?source=new')}>
-              Continue Application
+            <h4>Results ({results.length})</h4>
+            <button className="wq-btn wq-btn-primary"
+              onClick={() => navigate('/applications/new?source=new')}>
+              Create New Application
             </button>
           </div>
           <div className="wq-panel-body" style={{ padding: 0 }}>
             {results.length === 0 ? (
-              <div style={{ padding: '2rem', textAlign: 'center', color: '#4a5568', fontSize: '0.9rem' }}>No Match Found</div>
+              <div style={{ padding: '1.5rem', textAlign: 'center' }}>
+                <p style={{ color: '#4a5568', marginBottom: '1rem' }}>No matching persons found. Click "Create New Application" to proceed.</p>
+              </div>
             ) : (
               <>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="wq-table" style={{ minWidth: '1100px' }}>
-                    <thead>
-                      <tr>
-                        <th>Full Name</th><th>SSN</th><th>Type</th><th>CIN</th><th>Date of Birth</th>
-                        <th>Gender</th><th>Person Type</th><th>Status</th><th>Residence Address</th><th>City</th><th>County</th><th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {results.map((r, i) => (
-                        <tr key={r.id || i}>
-                          <td>
-                            <a href="#" className="action-link" style={{ fontWeight: 600 }}
-                              onClick={e => { e.preventDefault(); navigate(`/applications/new?recipientId=${r.id}&source=existing`); }}>
-                              {[r.lastName, r.firstName].filter(Boolean).join(', ')}
-                            </a>
-                          </td>
-                          <td style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{maskSsn(r.ssn)}</td>
-                          <td style={{ fontSize: '0.8rem' }}>{r.ssnType === 'DUPLICATE_SSN' ? 'Duplicate SSN' : r.ssnType === 'SUSPECT_SSN' ? 'Suspect SSN' : ''}</td>
-                          <td>{r.cin || ''}</td>
-                          <td>{formatDob(r.dateOfBirth)}</td>
-                          <td>{r.gender || ''}</td>
-                          <td>{PERSON_TYPE_LABELS[r.personType] || r.personType || ''}</td>
-                          <td>{getStatusByPersonType(r)}</td>
-                          <td style={{ fontSize: '0.8rem' }}>{[r.residenceStreetNumber, r.residenceStreetName].filter(Boolean).join(' ')}</td>
-                          <td>{r.residenceCity || ''}</td>
-                          <td>{countyName(r.countyCode)}</td>
-                          <td>
-                            {r.personType === 'PROVIDER' && (
-                              <button className="wq-btn wq-btn-primary" style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem' }}
-                                disabled={creatingFromProvider === r.id}
-                                onClick={() => handleCreateAppFromProvider(r.id)}>
-                                {creatingFromProvider === r.id ? 'Creating...' : 'Create Application'}
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div style={{ background: '#fffbeb', border: '1px solid #f6ad55', padding: '0.5rem 1rem', margin: '0.75rem', borderRadius: '4px', fontSize: '0.8rem', color: '#c05621' }}>
+                  Review matches below. Select an existing person to pre-fill the application, or create a new one.
                 </div>
+                <table className="wq-table">
+                  <thead>
+                    <tr><th>Name</th><th>DOB</th><th>CIN</th><th>County</th><th>Person Type</th><th>Address</th><th>Action</th></tr>
+                  </thead>
+                  <tbody>
+                    {paginated.map((r, i) => (
+                      <tr key={r.id || i}>
+                        <td><strong>{[r.lastName, r.firstName].filter(Boolean).join(', ')}</strong></td>
+                        <td>{r.dateOfBirth ? new Date(r.dateOfBirth).toLocaleDateString() : '—'}</td>
+                        <td>{r.cin || '—'}</td>
+                        <td>{r.countyCode || '—'}</td>
+                        <td><PersonTypeBadge type={r.personType} /></td>
+                        <td style={{ fontSize: '0.8rem' }}>{[r.residenceStreetNumber, r.residenceStreetName, r.residenceCity].filter(Boolean).join(' ') || '—'}</td>
+                        <td>
+                          <button className="wq-btn wq-btn-outline"
+                            onClick={() => navigate(`/applications/new?recipientId=${r.id}&source=existing`)}>
+                            Select
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
                 {totalPages > 1 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', borderTop: '1px solid #e2e8f0' }}>
-                    <div>{page > 0 && <a href="#" className="action-link" onClick={e => { e.preventDefault(); doSearch(page - 1); }}>&laquo;&laquo;Previous</a>}</div>
-                    <span style={{ fontSize: '0.825rem', color: '#4a5568' }}>Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, totalElements)} of {totalElements}</span>
-                    <div>{page < totalPages - 1 && <a href="#" className="action-link" onClick={e => { e.preventDefault(); doSearch(page + 1); }}>Next&raquo;&raquo;</a>}</div>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '0.5rem', padding: '1rem' }}>
+                    <button className="wq-btn wq-btn-outline" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>Previous</button>
+                    <span style={{ padding: '0.4rem 0.75rem', fontSize: '0.875rem', color: '#4a5568' }}>Page {page + 1} of {totalPages}</span>
+                    <button className="wq-btn wq-btn-outline" onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}>Next</button>
                   </div>
                 )}
               </>

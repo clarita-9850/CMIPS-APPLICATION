@@ -138,54 +138,6 @@ public final class CaseCodeTables {
         };
     }
 
-    // ==================== 6.6 State Hearing Status Codes (CI-68051) ====================
-    // Per DSD Section 20: Code Table Definitions/State Hearing Status
-    public static final Map<String, String> STATE_HEARING_STATUS = new LinkedHashMap<>() {{
-        put("SSHS001", "Requested");
-        put("SSHS002", "Scheduled");
-        put("SSHS003", "Resolved");
-        put("SSHS004", "Requested And Scheduled");
-    }};
-
-    // ==================== 6.7 Case Appeal Status (auto-calculated per BR CM 04-06a) ====================
-    // DSD Code Table: CS1=Requested, CS2=Scheduled, CS3=Resolved
-    public static final Map<String, String> CASE_APPEAL_STATUS = new LinkedHashMap<>() {{
-        put("CS1", "Requested");   // Scheduled Hearing Date blank + Outcome Reason blank
-        put("CS2", "Scheduled");   // Scheduled Hearing Date not blank + Outcome Reason blank
-        put("CS3", "Resolved");    // Outcome + Outcome Date not blank
-    }};
-
-    // ==================== 6.8 Case Appeal Outcome Codes ====================
-    // DSD Code Table: EO2, EO3, EO501-EO506
-    public static final Map<String, String> CASE_APPEAL_OUTCOME = new LinkedHashMap<>() {{
-        put("EO501", "Pending");                          // Default on Create
-        put("EO2",   "Grant");
-        put("EO3",   "Denial");
-        put("EO502", "Conditional Withdrawal");
-        put("EO503", "Complete Withdrawal");
-        put("EO504", "Partial Grant/Partial Denial");
-        put("EO505", "Dismissal");
-        put("EO506", "Erroneous Entry");
-    }};
-
-    // Outcomes that do NOT require a Scheduled Hearing Date (EM CM 032)
-    public static final java.util.Set<String> OUTCOMES_NO_HEARING_DATE_REQUIRED = java.util.Set.of(
-        "EO502", "EO506", "EO503"  // Conditional Withdrawal, Erroneous Entry, Complete Withdrawal
-    );
-
-    // Outcomes that do NOT require an Outcome Date (EM CM 036)
-    public static final java.util.Set<String> OUTCOMES_NO_OUTCOME_DATE_REQUIRED = java.util.Set.of(
-        "EO501", "EO506"  // Pending, Erroneous Entry
-    );
-
-    // ==================== 6.9 Rescheduled Reason Codes ====================
-    // DSD Code Table: RS001-RS003
-    public static final Map<String, String> RESCHEDULED_REASON = new LinkedHashMap<>() {{
-        put("RS001", "Recipient Request");
-        put("RS002", "County Request");
-        put("RS003", "Administrative Law Judge Request");
-    }};
-
     // ==================== Referral Source Codes (40 values per DSD spec) ====================
     public static final Map<String, String> REFERRAL_SOURCES = new LinkedHashMap<>() {{
         put("SELF", "Self");

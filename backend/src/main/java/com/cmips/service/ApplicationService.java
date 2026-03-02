@@ -177,7 +177,7 @@ public class ApplicationService {
      *
      * Scenario 4 (BR 1)  – demographics match  → assign CIN, save MEDS info
      * Scenario 5         – demographics mismatch → return MISMATCH, do NOT assign
-     * Scenario 6 (EM OS 202)– CIN in use elsewhere → return CIN_IN_USE
+     * Scenario 6 (EM-202)– CIN in use elsewhere → return CIN_IN_USE
      * BR 13              – if Medi-Cal active → log IH18 Pending Application
      */
     @Transactional
@@ -224,21 +224,21 @@ public class ApplicationService {
         // ── PERSISTED PATH: application already exists in DB ──────────────────
         ApplicationEntity application = getApplicationById(applicationId);
 
-        // Scenario 6 / EM OS 233 or EM OS 234: CIN already assigned to a different record.
-        //   EM OS 233: CIN is on an APPLICANT (application-stage recipient)
-        //   EM OS 234: CIN is on a RECIPIENT (active case recipient)
-        //   EM OS 202: kept for generic "duplicate application" conflicts (not CIN-in-use)
+        // Scenario 6 / EM-233 or EM-234: CIN already assigned to a different record.
+        //   EM-233: CIN is on an APPLICANT (application-stage recipient)
+        //   EM-234: CIN is on a RECIPIENT (active case recipient)
+        //   EM-202: kept for generic "duplicate application" conflicts (not CIN-in-use)
         boolean takenByOtherApp = applicationRepository.findByCin(selectedCin)
                 .map(a -> !a.getId().equals(applicationId))
                 .orElse(false);
         if (takenByOtherApp) {
             // Determine whether the CIN holder is an Applicant or Recipient for correct EM code
             RecipientEntity cinHolder = recipientRepository.findByCin(selectedCin).orElse(null);
-            String errorCode = "EM OS 233";
+            String errorCode = "EM-233";
             String msg = "This Client Index Number (CIN) is already associated with an Applicant. " +
                          "Please resolve the conflict and perform CIN clearance again.";
             if (cinHolder != null && cinHolder.getPersonType() == com.cmips.entity.RecipientEntity.PersonType.RECIPIENT) {
-                errorCode = "EM OS 234";
+                errorCode = "EM-234";
                 msg = "This Client Index Number (CIN) is already associated with an active Recipient. " +
                       "Please resolve the conflict and perform CIN clearance again.";
             }
@@ -323,13 +323,13 @@ public class ApplicationService {
                                 "message", "CIN selected successfully");
     }
 
-    // ==================== SAVE WITHOUT CIN (EM OS 176 / EM OS 185 / BR 9) ====================
+    // ==================== SAVE WITHOUT CIN (EM-176 / EM-185 / BR 9) ====================
 
     /**
      * Validates and handles a "Save" attempt on Create Case when CIN is blank.
      *
-     * EM OS 176: CIN clearance was NOT performed → block the save.
-     * EM OS 185 / BR 9: Clearance WAS performed (no match or inactive Medi-Cal)
+     * EM-176: CIN clearance was NOT performed → block the save.
+     * EM-185 / BR 9: Clearance WAS performed (no match or inactive Medi-Cal)
      *               → allow save, trigger S1 IHSS Referral to SAWS.
      */
     @Transactional
@@ -337,14 +337,14 @@ public class ApplicationService {
         ApplicationEntity application = getApplicationById(applicationId);
         CINClearanceStatus clearStatus = application.getCinClearanceStatus();
 
-        // EM OS 176: clearance not performed at all
+        // EM-176: clearance not performed at all
         if (clearStatus == null || clearStatus == CINClearanceStatus.NOT_STARTED) {
             return java.util.Map.of(
-                "result", "BLOCKED", "errorCode", "EM OS 176",
+                "result", "BLOCKED", "errorCode", "EM-176",
                 "message", "Client Index Number search is required.");
         }
 
-        // EM OS 185 / BR-9: clearance was done, no active Medi-Cal → send S1 to SAWS via CMSD4XXB
+        // EM-185 / BR-9: clearance was done, no active Medi-Cal → send S1 to SAWS via CMSD4XXB
         // Note: S1 goes to SAWS (CMSD4XXB), NOT through SCI (CMOO106A) — these are separate interfaces
         RecipientEntity recipient = application.getRecipientId() != null
                 ? recipientRepository.findById(application.getRecipientId()).orElse(null)
@@ -363,7 +363,7 @@ public class ApplicationService {
         application.setUpdatedBy(userId);
         applicationRepository.save(application);
         return java.util.Map.of(
-            "result", "S1_SENT", "errorCode", "EM OS 185",
+            "result", "S1_SENT", "errorCode", "EM-185",
             "message", "CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS.",
             "applicationId", applicationId);
     }
@@ -747,41 +747,41 @@ public class ApplicationService {
 
     /**
      * Validate SSN per DSD rules.
-     * EM OS 010: SSN cannot start with 9
-     * EM OS 010: SSN cannot have all same digits
-     * EM OS 010: SSN must be exactly 9 digits
+     * EM-237: SSN cannot start with 9
+     * EM-238: SSN cannot have all same digits
+     * EM-240: SSN must be exactly 9 digits
      */
     public void validateSsn(String ssn) {
         if (ssn == null || ssn.isBlank()) return; // SSN is optional at referral stage
         if (!ssn.matches("\\d{9}")) {
-            throw new IllegalArgumentException("EM OS 010: SSN must be exactly 9 digits");
+            throw new IllegalArgumentException("EM-240: SSN must be exactly 9 digits");
         }
         if (ssn.startsWith("9")) {
-            throw new IllegalArgumentException("EM OS 010: SSN cannot begin with digit 9");
+            throw new IllegalArgumentException("EM-237: SSN cannot begin with digit 9");
         }
         if (ssn.matches("(\\d)\\1{8}")) {
-            throw new IllegalArgumentException("EM OS 010: SSN cannot consist of all identical digits");
+            throw new IllegalArgumentException("EM-238: SSN cannot consist of all identical digits");
         }
     }
 
     /**
      * Validate date of birth per DSD rules.
-     * EM OS 003: DOB cannot be in the future
-     * EM OS 004: DOB cannot be more than 120 years ago
+     * EM-203: DOB cannot be in the future
+     * EM-204: DOB cannot be more than 120 years ago
      */
     public void validateDob(String dobString) {
         if (dobString == null || dobString.isBlank()) return;
         LocalDate dob = LocalDate.parse(dobString);
         if (dob.isAfter(LocalDate.now())) {
-            throw new IllegalArgumentException("EM OS 003: Date of birth cannot be in the future");
+            throw new IllegalArgumentException("EM-203: Date of birth cannot be in the future");
         }
         if (LocalDate.now().getYear() - dob.getYear() > 120) {
-            throw new IllegalArgumentException("EM OS 004: Date of birth cannot be more than 120 years ago");
+            throw new IllegalArgumentException("EM-204: Date of birth cannot be more than 120 years ago");
         }
     }
 
     private String generateSimulatedCIN() {
-        // Generate simulated CIN: 8 digits + 1 letter (EM OS 188 format)
+        // Generate simulated CIN: 8 digits + 1 letter (EM-188 format)
         long digits = (long) (Math.random() * 100000000);
         char letter = (char) ('A' + (int) (Math.random() * 26));
         return String.format("%08d%c", digits, letter);

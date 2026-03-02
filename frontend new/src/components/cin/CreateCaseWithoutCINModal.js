@@ -5,7 +5,7 @@
  * Scenario 7: User clicks Save on Create Case with no CIN, but CIN clearance
  * WAS performed (no match found or no active Medi-Cal).
  *
- * EM OS 185 informational message:
+ * EM-185 informational message:
  *   "CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS."
  * User can Continue (triggers S1 via BR 9) or Cancel (saves person as Open-Referral).
  */
@@ -53,7 +53,7 @@ export const CreateCaseWithoutCINModal = ({ onContinue, onCancel, saving }) => (
       <h2 style={title}>Create Case without CIN</h2>
 
       <div style={em185banner}>
-        <strong>EM OS 185:</strong> CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS.
+        <strong>EM-185:</strong> CIN not selected, Medi-Cal Eligibility Referral will be sent to SAWS.
       </div>
 
       <p style={detail}>

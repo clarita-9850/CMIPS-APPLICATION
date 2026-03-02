@@ -29,8 +29,8 @@ import static org.mockito.Mockito.*;
  * Unit tests for ApplicationService CIN Clearance flow.
  *
  * Covers DSD Section 20 business rules:
- *  - selectCINWithDemographicCheck: Scenarios 4, 5, 6 (BR 1, BR 13, EM OS 202)
- *  - saveWithoutCIN: EM OS 176, EM OS 185 / BR 9
+ *  - selectCINWithDemographicCheck: Scenarios 4, 5, 6 (BR 1, BR 13, EM-202)
+ *  - saveWithoutCIN: EM-176, EM-185 / BR 9
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -80,7 +80,7 @@ class ApplicationServiceCINTest {
     // ── selectCINWithDemographicCheck ─────────────────────────────────────────
 
     @Test
-    @DisplayName("Scenario 6 / EM OS 202: CIN already assigned to a DIFFERENT application → CIN_IN_USE")
+    @DisplayName("Scenario 6 / EM-202: CIN already assigned to a DIFFERENT application → CIN_IN_USE")
     void selectCIN_scenario6_cinInUse() {
         ApplicationEntity caller   = buildApp(CINClearanceStatus.IN_PROGRESS);
         ApplicationEntity conflict = buildApp(CINClearanceStatus.CLEARED);
@@ -93,7 +93,7 @@ class ApplicationServiceCINTest {
                 APP_ID, CIN, buildMediCalData("Smith", "John", "Male", true, "1X"), USER_ID);
 
         assertEquals("CIN_IN_USE", result.get("result"));
-        assertEquals("EM OS 202",     result.get("errorCode"));
+        assertEquals("EM-202",     result.get("errorCode"));
         verify(applicationRepository, never()).save(any());
     }
 
@@ -217,7 +217,7 @@ class ApplicationServiceCINTest {
     // ── saveWithoutCIN ────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("EM OS 176: clearance status NOT_STARTED → BLOCKED")
+    @DisplayName("EM-176: clearance status NOT_STARTED → BLOCKED")
     void saveWithoutCIN_em176_notStarted() {
         ApplicationEntity app = buildApp(CINClearanceStatus.NOT_STARTED);
 
@@ -226,12 +226,12 @@ class ApplicationServiceCINTest {
         Map<String, Object> result = applicationService.saveWithoutCIN(APP_ID, USER_ID);
 
         assertEquals("BLOCKED", result.get("result"));
-        assertEquals("EM OS 176",  result.get("errorCode"));
+        assertEquals("EM-176",  result.get("errorCode"));
         verify(applicationRepository, never()).save(any());
     }
 
     @Test
-    @DisplayName("EM OS 176: clearance status null → BLOCKED")
+    @DisplayName("EM-176: clearance status null → BLOCKED")
     void saveWithoutCIN_em176_nullStatus() {
         ApplicationEntity app = buildApp(null);
 
@@ -240,11 +240,11 @@ class ApplicationServiceCINTest {
         Map<String, Object> result = applicationService.saveWithoutCIN(APP_ID, USER_ID);
 
         assertEquals("BLOCKED", result.get("result"));
-        assertEquals("EM OS 176",  result.get("errorCode"));
+        assertEquals("EM-176",  result.get("errorCode"));
     }
 
     @Test
-    @DisplayName("EM OS 185 / BR 9: clearance performed (IN_PROGRESS) → S1_SENT, PENDING_SAWS")
+    @DisplayName("EM-185 / BR 9: clearance performed (IN_PROGRESS) → S1_SENT, PENDING_SAWS")
     void saveWithoutCIN_em185_br9_clearanceDone() {
         ApplicationEntity app = buildApp(CINClearanceStatus.IN_PROGRESS);
 
@@ -254,12 +254,12 @@ class ApplicationServiceCINTest {
         Map<String, Object> result = applicationService.saveWithoutCIN(APP_ID, USER_ID);
 
         assertEquals("S1_SENT", result.get("result"));
-        assertEquals("EM OS 185",  result.get("errorCode"));
+        assertEquals("EM-185",  result.get("errorCode"));
         verify(applicationRepository).save(argThat(a -> "PENDING_SAWS".equals(a.getMediCalStatus())));
     }
 
     @Test
-    @DisplayName("EM OS 185 / BR 9: clearance status POSSIBLE_MATCHES → S1_SENT")
+    @DisplayName("EM-185 / BR 9: clearance status POSSIBLE_MATCHES → S1_SENT")
     void saveWithoutCIN_em185_possibleMatches() {
         ApplicationEntity app = buildApp(CINClearanceStatus.POSSIBLE_MATCHES);
 

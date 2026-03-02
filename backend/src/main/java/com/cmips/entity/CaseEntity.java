@@ -16,7 +16,7 @@ public class CaseEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "case_number", unique = true, nullable = false, length = 50)
+    @Column(name = "case_number", unique = true, nullable = false, length = 20)
     private String caseNumber;
 
     // Recipient Reference
@@ -34,7 +34,7 @@ public class CaseEntity {
     private CaseType caseType;
 
     // County Information
-    @Column(name = "county_code", length = 50)
+    @Column(name = "county_code", length = 10)
     private String countyCode;
 
     @Column(name = "county_name", length = 100)
@@ -55,7 +55,7 @@ public class CaseEntity {
     private String cin;
 
     // Medi-Cal Information
-    @Column(name = "medi_cal_aid_code", length = 50)
+    @Column(name = "medi_cal_aid_code", length = 10)
     private String mediCalAidCode;
 
     @Column(name = "medi_cal_status")
@@ -138,10 +138,10 @@ public class CaseEntity {
     @Column(name = "transfer_status", length = 50)
     private String transferStatus;
 
-    @Column(name = "sending_county_code", length = 50)
+    @Column(name = "sending_county_code", length = 10)
     private String sendingCountyCode;
 
-    @Column(name = "receiving_county_code", length = 50)
+    @Column(name = "receiving_county_code", length = 10)
     private String receivingCountyCode;
 
     @Column(name = "transfer_date")
@@ -175,14 +175,14 @@ public class CaseEntity {
     @Column(name = "withdrawal_date")
     private LocalDate withdrawalDate;
 
-    @Column(name = "withdrawal_reason", length = 50)
+    @Column(name = "withdrawal_reason", length = 10)
     private String withdrawalReason;
 
     // Leave tracking (DSD Section 3.2)
     @Column(name = "leave_date")
     private LocalDate leaveDate;
 
-    @Column(name = "leave_reason", length = 50)
+    @Column(name = "leave_reason", length = 10)
     private String leaveReason;
 
     @Column(name = "resource_suspension_end_date")
@@ -192,7 +192,7 @@ public class CaseEntity {
     @Column(name = "rescind_date")
     private LocalDate rescindDate;
 
-    @Column(name = "rescind_reason", length = 50)
+    @Column(name = "rescind_reason", length = 10)
     private String rescindReason;
 
     // Previous status before lifecycle action (for rescind restore)
@@ -207,52 +207,9 @@ public class CaseEntity {
     @Column(name = "previous_auth_end_date")
     private LocalDate previousAuthEndDate;
 
-    // County Use Fields (DSD Case Home: 4 separate fields + comments)
-    @Column(name = "county_use_1", length = 200)
-    private String countyUse1;
-
-    @Column(name = "county_use_2", length = 200)
-    private String countyUse2;
-
-    @Column(name = "county_use_3", length = 200)
-    private String countyUse3;
-
-    @Column(name = "county_use_4", length = 200)
-    private String countyUse4;
-
+    // County Use Notes
     @Column(name = "county_use_notes", columnDefinition = "TEXT")
     private String countyUseNotes;
-
-    // DSD Case Home fields (Gap 10/11)
-    @Column(name = "district_office", length = 50)
-    private String districtOffice;
-
-    @Column(name = "medi_cal_eligibility_referral_date")
-    private LocalDate mediCalEligibilityReferralDate;
-
-    @Column(name = "medi_cal_initial_eligibility_notification_date")
-    private LocalDate mediCalInitialEligibilityNotificationDate;
-
-    @Column(name = "companion_case", length = 20)
-    private String companionCase;
-
-    @Column(name = "state_hearing", length = 50)
-    private String stateHearing;
-
-    @Column(name = "number_of_household_members")
-    private Integer numberOfHouseholdMembers;
-
-    @Column(name = "mail_designee", length = 200)
-    private String mailDesignee;
-
-    @Column(name = "interpreter_available")
-    private Boolean interpreterAvailable;
-
-    @Column(name = "referral_source", length = 50)
-    private String referralSource;
-
-    @Column(name = "meets_residency_requirement", length = 20)
-    private String meetsResidencyRequirement;
 
     // Audit Fields
     @Column(name = "created_at")
@@ -422,38 +379,8 @@ public class CaseEntity {
     public Double getAdvancePayRate() { return advancePayRate; }
     public void setAdvancePayRate(Double advancePayRate) { this.advancePayRate = advancePayRate; }
 
-    public String getCountyUse1() { return countyUse1; }
-    public void setCountyUse1(String countyUse1) { this.countyUse1 = countyUse1; }
-    public String getCountyUse2() { return countyUse2; }
-    public void setCountyUse2(String countyUse2) { this.countyUse2 = countyUse2; }
-    public String getCountyUse3() { return countyUse3; }
-    public void setCountyUse3(String countyUse3) { this.countyUse3 = countyUse3; }
-    public String getCountyUse4() { return countyUse4; }
-    public void setCountyUse4(String countyUse4) { this.countyUse4 = countyUse4; }
-
     public String getCountyUseNotes() { return countyUseNotes; }
     public void setCountyUseNotes(String countyUseNotes) { this.countyUseNotes = countyUseNotes; }
-
-    public String getDistrictOffice() { return districtOffice; }
-    public void setDistrictOffice(String districtOffice) { this.districtOffice = districtOffice; }
-    public LocalDate getMediCalEligibilityReferralDate() { return mediCalEligibilityReferralDate; }
-    public void setMediCalEligibilityReferralDate(LocalDate mediCalEligibilityReferralDate) { this.mediCalEligibilityReferralDate = mediCalEligibilityReferralDate; }
-    public LocalDate getMediCalInitialEligibilityNotificationDate() { return mediCalInitialEligibilityNotificationDate; }
-    public void setMediCalInitialEligibilityNotificationDate(LocalDate mediCalInitialEligibilityNotificationDate) { this.mediCalInitialEligibilityNotificationDate = mediCalInitialEligibilityNotificationDate; }
-    public String getCompanionCase() { return companionCase; }
-    public void setCompanionCase(String companionCase) { this.companionCase = companionCase; }
-    public String getStateHearing() { return stateHearing; }
-    public void setStateHearing(String stateHearing) { this.stateHearing = stateHearing; }
-    public Integer getNumberOfHouseholdMembers() { return numberOfHouseholdMembers; }
-    public void setNumberOfHouseholdMembers(Integer numberOfHouseholdMembers) { this.numberOfHouseholdMembers = numberOfHouseholdMembers; }
-    public String getMailDesignee() { return mailDesignee; }
-    public void setMailDesignee(String mailDesignee) { this.mailDesignee = mailDesignee; }
-    public Boolean getInterpreterAvailable() { return interpreterAvailable; }
-    public void setInterpreterAvailable(Boolean interpreterAvailable) { this.interpreterAvailable = interpreterAvailable; }
-    public String getReferralSource() { return referralSource; }
-    public void setReferralSource(String referralSource) { this.referralSource = referralSource; }
-    public String getMeetsResidencyRequirement() { return meetsResidencyRequirement; }
-    public void setMeetsResidencyRequirement(String meetsResidencyRequirement) { this.meetsResidencyRequirement = meetsResidencyRequirement; }
 
     public LocalDate getWithdrawalDate() { return withdrawalDate; }
     public void setWithdrawalDate(LocalDate withdrawalDate) { this.withdrawalDate = withdrawalDate; }
@@ -541,19 +468,7 @@ public class CaseEntity {
         private Boolean recipientDeclinesCfco;
         private Boolean advancePayIndicator;
         private Double advancePayRate;
-        private String countyUse1;
-        private String countyUse2;
-        private String countyUse3;
-        private String countyUse4;
         private String countyUseNotes;
-        private String districtOffice;
-        private LocalDate mediCalEligibilityReferralDate;
-        private LocalDate mediCalInitialEligibilityNotificationDate;
-        private String companionCase;
-        private String stateHearing;
-        private Integer numberOfHouseholdMembers;
-        private String mailDesignee;
-        private Boolean interpreterAvailable;
         private String createdBy;
         private String updatedBy;
 
@@ -603,19 +518,7 @@ public class CaseEntity {
         public CaseEntityBuilder recipientDeclinesCfco(Boolean recipientDeclinesCfco) { this.recipientDeclinesCfco = recipientDeclinesCfco; return this; }
         public CaseEntityBuilder advancePayIndicator(Boolean advancePayIndicator) { this.advancePayIndicator = advancePayIndicator; return this; }
         public CaseEntityBuilder advancePayRate(Double advancePayRate) { this.advancePayRate = advancePayRate; return this; }
-        public CaseEntityBuilder countyUse1(String countyUse1) { this.countyUse1 = countyUse1; return this; }
-        public CaseEntityBuilder countyUse2(String countyUse2) { this.countyUse2 = countyUse2; return this; }
-        public CaseEntityBuilder countyUse3(String countyUse3) { this.countyUse3 = countyUse3; return this; }
-        public CaseEntityBuilder countyUse4(String countyUse4) { this.countyUse4 = countyUse4; return this; }
         public CaseEntityBuilder countyUseNotes(String countyUseNotes) { this.countyUseNotes = countyUseNotes; return this; }
-        public CaseEntityBuilder districtOffice(String districtOffice) { this.districtOffice = districtOffice; return this; }
-        public CaseEntityBuilder mediCalEligibilityReferralDate(LocalDate mediCalEligibilityReferralDate) { this.mediCalEligibilityReferralDate = mediCalEligibilityReferralDate; return this; }
-        public CaseEntityBuilder mediCalInitialEligibilityNotificationDate(LocalDate mediCalInitialEligibilityNotificationDate) { this.mediCalInitialEligibilityNotificationDate = mediCalInitialEligibilityNotificationDate; return this; }
-        public CaseEntityBuilder companionCase(String companionCase) { this.companionCase = companionCase; return this; }
-        public CaseEntityBuilder stateHearing(String stateHearing) { this.stateHearing = stateHearing; return this; }
-        public CaseEntityBuilder numberOfHouseholdMembers(Integer numberOfHouseholdMembers) { this.numberOfHouseholdMembers = numberOfHouseholdMembers; return this; }
-        public CaseEntityBuilder mailDesignee(String mailDesignee) { this.mailDesignee = mailDesignee; return this; }
-        public CaseEntityBuilder interpreterAvailable(Boolean interpreterAvailable) { this.interpreterAvailable = interpreterAvailable; return this; }
         public CaseEntityBuilder createdBy(String createdBy) { this.createdBy = createdBy; return this; }
         public CaseEntityBuilder updatedBy(String updatedBy) { this.updatedBy = updatedBy; return this; }
 
@@ -667,19 +570,7 @@ public class CaseEntity {
             entity.recipientDeclinesCfco = this.recipientDeclinesCfco;
             entity.advancePayIndicator = this.advancePayIndicator;
             entity.advancePayRate = this.advancePayRate;
-            entity.countyUse1 = this.countyUse1;
-            entity.countyUse2 = this.countyUse2;
-            entity.countyUse3 = this.countyUse3;
-            entity.countyUse4 = this.countyUse4;
             entity.countyUseNotes = this.countyUseNotes;
-            entity.districtOffice = this.districtOffice;
-            entity.mediCalEligibilityReferralDate = this.mediCalEligibilityReferralDate;
-            entity.mediCalInitialEligibilityNotificationDate = this.mediCalInitialEligibilityNotificationDate;
-            entity.companionCase = this.companionCase;
-            entity.stateHearing = this.stateHearing;
-            entity.numberOfHouseholdMembers = this.numberOfHouseholdMembers;
-            entity.mailDesignee = this.mailDesignee;
-            entity.interpreterAvailable = this.interpreterAvailable;
             entity.createdBy = this.createdBy;
             entity.updatedBy = this.updatedBy;
             return entity;

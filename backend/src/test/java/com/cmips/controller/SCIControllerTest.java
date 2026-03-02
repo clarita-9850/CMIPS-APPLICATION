@@ -24,9 +24,9 @@ import static org.mockito.Mockito.*;
  * Unit tests for SCIController.
  *
  * Covers:
- *  - GET /api/sci/search     : MATCHES_FOUND (EM OS 186), NO_MATCH, service exception
+ *  - GET /api/sci/search     : MATCHES_FOUND (EM-186), NO_MATCH, service exception
  *  - GET /api/sci/meds-eligibility : SUCCESS, FAILED (Scenario 3), exception
- *  - GET /api/sci/check-cin  : available=true, available=false (EM OS 202), exception
+ *  - GET /api/sci/check-cin  : available=true, available=false (EM-202), exception
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -45,7 +45,7 @@ class SCIControllerTest {
     void sciSearch_matchesFound_returns200() {
         Map<String, Object> serviceResponse = Map.of(
                 "status",  "MATCHES_FOUND",
-                "message", "EM OS 186: Valid matches were found",
+                "message", "EM-186: Valid matches were found",
                 "results", List.of(Map.of("cin", CIN))
         );
         when(sciService.sciSearch(anyString(), anyString(), anyString(),
@@ -184,11 +184,11 @@ class SCIControllerTest {
     }
 
     @Test
-    @DisplayName("CIN availability / EM OS 202: taken by other → { available: false, errorCode: EM OS 202 }")
+    @DisplayName("CIN availability / EM-202: taken by other → { available: false, errorCode: EM-202 }")
     void checkCinAvailability_em202_taken() {
         when(sciService.checkCinAvailability(CIN, "app-002")).thenReturn(Map.of(
                 "available",  false,
-                "errorCode",  "EM OS 202",
+                "errorCode",  "EM-202",
                 "message",    "Person record with indicated CIN already exists."
         ));
 
@@ -198,7 +198,7 @@ class SCIControllerTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) response.getBody();
         assertEquals(false,   body.get("available"));
-        assertEquals("EM OS 202", body.get("errorCode"));
+        assertEquals("EM-202", body.get("errorCode"));
     }
 
     @Test
