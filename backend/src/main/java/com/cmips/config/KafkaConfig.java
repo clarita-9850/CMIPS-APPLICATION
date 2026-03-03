@@ -47,6 +47,14 @@ public class KafkaConfig {
             .replicas(1)
             .build();
     }
+
+    @Bean
+    public NewTopic caseMaintenanceEventsTopic() {
+        return TopicBuilder.name("cmips-case-maintenance-events")
+            .partitions(3)
+            .replicas(1)
+            .build();
+    }
 }
 
 

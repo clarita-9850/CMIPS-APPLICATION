@@ -5,6 +5,7 @@ import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity.CaseStatus;
 import com.cmips.entity.RecipientEntity.PersonType;
 import com.cmips.repository.*;
+import com.cmips.util.BusinessDayCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,9 @@ public class CaseManagementService {
     private final SAWSService sawsService;              // BR-9: S1 referral when no CIN found
     private final MEDSService medsService;              // BR-13: IH18 on active Medi-Cal case create
     private final PayrollIntegrationService payrollIntegrationService; // BR-15: PR00901A on case create
+    private final CaseMaintenanceTaskService cmTaskService; // DSD Section 30 — Case Maintenance tasks/notifications
+    private final TaskAutoCloseService taskAutoCloseService; // DSD GAP 3 — Auto-close tasks on business events
+    private final BusinessDayCalculator businessDayCalc;
 
     // Aid codes excluded from S8 notification per BR OS 16
     private static final Set<String> EXCLUDED_AID_CODES = Set.of("10", "20", "60");
@@ -61,7 +65,10 @@ public class CaseManagementService {
             NotificationService notificationService,
             SAWSService sawsService,
             MEDSService medsService,
-            PayrollIntegrationService payrollIntegrationService) {
+            PayrollIntegrationService payrollIntegrationService,
+            CaseMaintenanceTaskService cmTaskService,
+            TaskAutoCloseService taskAutoCloseService,
+            BusinessDayCalculator businessDayCalc) {
         this.caseRepository = caseRepository;
         this.recipientRepository = recipientRepository;
         this.serviceEligibilityRepository = serviceEligibilityRepository;
@@ -77,6 +84,9 @@ public class CaseManagementService {
         this.sawsService = sawsService;
         this.medsService = medsService;
         this.payrollIntegrationService = payrollIntegrationService;
+        this.cmTaskService = cmTaskService;
+        this.taskAutoCloseService = taskAutoCloseService;
+        this.businessDayCalc = businessDayCalc;
     }
 
     // ==================== CASE CREATION ====================
@@ -626,6 +636,9 @@ public class CaseManagementService {
         recordStatusHistory(caseEntity, "TERMINATE", terminationReason,
                 CaseCodeTables.TERMINATION_REASONS.get(terminationReason), effectiveDate, userId);
 
+        // Auto-close tasks triggered by case termination (DSD GAP 3)
+        taskAutoCloseService.onBusinessEvent(TaskAutoCloseService.EVENT_CASE_TERMINATED, caseEntity.getCaseNumber());
+
         log.info("Case {} terminated with reason {}: {}", caseEntity.getCaseNumber(),
                 terminationReason, CaseCodeTables.TERMINATION_REASONS.get(terminationReason));
 
@@ -702,6 +715,11 @@ public class CaseManagementService {
         recordStatusHistory(caseEntity, "LEAVE", reason,
                 CaseCodeTables.LEAVE_REASONS.get(reason), authorizationEndDate, userId);
 
+        // CM 38 — If case has WPCS hours, create task to verify WPCS status
+        if (cmTaskService.hasWpcsHours(caseEntity)) {
+            cmTaskService.onCaseOnLeaveWithWpcsHours(caseEntity);
+        }
+
         log.info("Case {} placed on leave with reason {}", caseEntity.getCaseNumber(), reason);
         return caseEntity;
     }
@@ -751,6 +769,9 @@ public class CaseManagementService {
         // Record status history
         recordStatusHistory(caseEntity, "WITHDRAW", reason,
                 CaseCodeTables.WITHDRAWAL_REASONS.get(reason), effDate, userId);
+
+        // CM 11 — Application withdrawal notification
+        cmTaskService.onApplicationWithdrawn(caseEntity);
 
         log.info("Case {} withdrawn with reason {}", caseEntity.getCaseNumber(), reason);
         return caseEntity;
@@ -871,6 +892,19 @@ public class CaseManagementService {
                             .notificationType(Notification.NotificationType.INFO)
                             .readStatus(false)
                             .build());
+        }
+
+        // CM 78 — Notify supervisor of case rescission
+        cmTaskService.onCaseRescindedNotifySupervisor(caseEntity);
+
+        // CM 61 — If case had WPCS hours, create WPCS task
+        if (cmTaskService.hasWpcsHours(caseEntity)) {
+            cmTaskService.onCaseRescindedWithWpcsHours(caseEntity);
+        }
+
+        // CM 64 — If case has companion cases, create companion rescission tasks
+        if (caseEntity.getCompanionCase() != null && !caseEntity.getCompanionCase().isBlank()) {
+            cmTaskService.onCompanionCaseRescinded(caseEntity);
         }
 
         log.info("Case {} rescinded with reason {}, restored to {}", caseEntity.getCaseNumber(),
@@ -1292,7 +1326,17 @@ public class CaseManagementService {
         caseEntity.setTransferDate(LocalDate.now());
         caseEntity.setUpdatedBy(userId);
 
-        return caseRepository.save(caseEntity);
+        caseEntity = caseRepository.save(caseEntity);
+
+        // CM 06 — ICT referral task to ICT coordinator
+        cmTaskService.onIctCreated(caseEntity, receivingCountyCode);
+
+        // CM 50 — If case has WPCS hours, notify WPCS queue
+        if (cmTaskService.hasWpcsHours(caseEntity)) {
+            cmTaskService.onIctCreatedWithWpcsHours(caseEntity);
+        }
+
+        return caseEntity;
     }
 
     /**
@@ -1314,7 +1358,70 @@ public class CaseManagementService {
         recipient.setCountyCode(caseEntity.getReceivingCountyCode());
         recipientRepository.save(recipient);
 
-        return caseRepository.save(caseEntity);
+        caseEntity = caseRepository.save(caseEntity);
+
+        // Auto-close ICT-related tasks (DSD GAP 3) — closes CM-006, CM-023-T
+        taskAutoCloseService.onBusinessEvent(TaskAutoCloseService.EVENT_ICT_COMPLETED, caseEntity.getCaseNumber());
+
+        // CM 25 — Notify new case owner of assignment
+        cmTaskService.onIctCaseAssigned(caseEntity, newCaseOwnerId);
+
+        // CM 49, 52 — If case has WPCS hours, create WPCS tasks
+        if (cmTaskService.hasWpcsHours(caseEntity)) {
+            cmTaskService.onIctAuthCompleteWpcs(caseEntity);
+            cmTaskService.onIctCompleteWithWpcsHours(caseEntity);
+        }
+
+        return caseEntity;
+    }
+
+    /**
+     * Cancel inter-county transfer — DSD Section 25, CM 23/51
+     */
+    @Transactional
+    public CaseEntity cancelInterCountyTransfer(Long caseId, String userId) {
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found"));
+
+        if (!"INITIATED".equals(caseEntity.getTransferStatus())) {
+            throw new RuntimeException("Only in-progress transfers can be cancelled");
+        }
+
+        caseEntity.setTransferStatus("CANCELLED");
+        caseEntity.setUpdatedBy(userId);
+        caseEntity = caseRepository.save(caseEntity);
+
+        // CM 23 — ICT cancelled task/notifications
+        cmTaskService.onIctCancelled(caseEntity, userId);
+
+        // CM 51 — If case has WPCS hours, create WPCS task
+        if (cmTaskService.hasWpcsHours(caseEntity)) {
+            cmTaskService.onIctCancelledWithWpcsHours(caseEntity);
+        }
+
+        recordStatusHistory(caseEntity, "ICT_CANCEL", null, "Inter-County Transfer cancelled", LocalDate.now(), userId);
+        log.info("ICT cancelled for case {}", caseEntity.getCaseNumber());
+        return caseEntity;
+    }
+
+    /**
+     * Update funding source — DSD Section 25, CM 65
+     */
+    @Transactional
+    public CaseEntity updateFundingSource(Long caseId, String newFundingSource, String userId) {
+        CaseEntity caseEntity = caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found"));
+
+        String oldFunding = caseEntity.getFundingSource();
+        caseEntity.setFundingSource(newFundingSource);
+        caseEntity.setUpdatedBy(userId);
+        caseEntity = caseRepository.save(caseEntity);
+
+        // CM 65 — Notify companion cases of funding source update
+        cmTaskService.onFundingSourceUpdated(caseEntity);
+
+        log.info("Funding source updated for case {} from {} to {}", caseEntity.getCaseNumber(), oldFunding, newFundingSource);
+        return caseEntity;
     }
 
     // ==================== COMPANION CASES ====================
@@ -1356,7 +1463,7 @@ public class CaseManagementService {
                 .workQueue("CASE_MANAGEMENT")
                 .status(Task.TaskStatus.OPEN)
                 .priority(Task.TaskPriority.MEDIUM)
-                .dueDate(LocalDate.now().plusDays(5).atStartOfDay())
+                .dueDate(businessDayCalc.addBusinessDays(LocalDateTime.now(), 5))
                 .build();
 
         taskService.createTask(task);

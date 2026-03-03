@@ -2,9 +2,11 @@ package com.cmips.service;
 
 import com.cmips.entity.Task;
 import com.cmips.entity.TaskHistory;
+import com.cmips.entity.TaskType;
 import com.cmips.entity.Notification;
 import com.cmips.repository.TaskRepository;
 import com.cmips.repository.TaskHistoryRepository;
+import com.cmips.repository.TaskTypeRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -21,13 +23,16 @@ public class TaskLifecycleService {
 
     private final TaskRepository taskRepository;
     private final TaskHistoryRepository historyRepository;
+    private final TaskTypeRepository taskTypeRepository;
     private final NotificationService notificationService;
 
     public TaskLifecycleService(TaskRepository taskRepository,
                                 TaskHistoryRepository historyRepository,
+                                TaskTypeRepository taskTypeRepository,
                                 NotificationService notificationService) {
         this.taskRepository = taskRepository;
         this.historyRepository = historyRepository;
+        this.taskTypeRepository = taskTypeRepository;
         this.notificationService = notificationService;
     }
 
@@ -177,13 +182,27 @@ public class TaskLifecycleService {
     }
 
     /**
-     * Close task
+     * Close task — per DSD Section 30, validates required action for closure if defined.
+     * If the task type defines a requiredActionForClosure, the close comment must be provided
+     * (documenting that the required action was performed).
      */
     @Transactional
     public Task closeTask(Long taskId, String username, String comments) {
         Task task = getTaskOrThrow(taskId);
         if (task.getStatus() == Task.TaskStatus.CLOSED) {
             throw new IllegalStateException("Task is already closed");
+        }
+
+        // DSD GAP 2: Validate required closure action
+        if (task.getTaskTypeCode() != null) {
+            taskTypeRepository.findByTaskTypeCode(task.getTaskTypeCode()).ifPresent(tt -> {
+                if (tt.getRequiredActionForClosure() != null && !tt.getRequiredActionForClosure().isBlank()) {
+                    if (comments == null || comments.isBlank()) {
+                        throw new IllegalStateException(
+                                "Cannot close this task without comments. Required action: " + tt.getRequiredActionForClosure());
+                    }
+                }
+            });
         }
 
         String previousStatus = task.getStatus().name();
@@ -198,6 +217,17 @@ public class TaskLifecycleService {
                 "Closed by " + username);
         log.info("Task {} closed by {}", taskId, username);
         return saved;
+    }
+
+    /**
+     * Get the required action for closure text for a task, or null if none.
+     */
+    public String getRequiredActionForClosure(Long taskId) {
+        Task task = getTaskOrThrow(taskId);
+        if (task.getTaskTypeCode() == null) return null;
+        return taskTypeRepository.findByTaskTypeCode(task.getTaskTypeCode())
+                .map(TaskType::getRequiredActionForClosure)
+                .orElse(null);
     }
 
     /**

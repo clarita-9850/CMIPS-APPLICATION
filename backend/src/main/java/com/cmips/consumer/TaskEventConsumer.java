@@ -5,6 +5,7 @@ import com.cmips.entity.Task;
 import com.cmips.event.BaseEvent;
 import com.cmips.service.NotificationService;
 import com.cmips.service.TaskService;
+import com.cmips.util.BusinessDayCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -20,10 +21,13 @@ public class TaskEventConsumer {
 
     private final TaskService taskService;
     private final NotificationService notificationService;
+    private final BusinessDayCalculator businessDayCalc;
 
-    public TaskEventConsumer(TaskService taskService, NotificationService notificationService) {
+    public TaskEventConsumer(TaskService taskService, NotificationService notificationService,
+                             BusinessDayCalculator businessDayCalc) {
         this.taskService = taskService;
         this.notificationService = notificationService;
+        this.businessDayCalc = businessDayCalc;
     }
 
     @KafkaListener(topics = "cmips-case-events", groupId = "task-consumer-group")
@@ -60,7 +64,7 @@ public class TaskEventConsumer {
             .triggerCondition("Case created and assigned")
             .actionLink("/cases/" + payload.get("caseId"))
             .relatedEntityType("CASE")
-            .dueDate(LocalDateTime.now().plusDays(5))
+            .dueDate(businessDayCalc.addBusinessDays(LocalDateTime.now(), 5))
             .createdAt(LocalDateTime.now())
             .build();
 
@@ -108,7 +112,7 @@ public class TaskEventConsumer {
             .triggerCondition("Provider address changed outside CA")
             .actionLink("/cases/" + payload.get("caseId"))
             .relatedEntityType("CASE")
-            .dueDate(LocalDateTime.now().plusDays(2))
+            .dueDate(businessDayCalc.addBusinessDays(LocalDateTime.now(), 2))
             .createdAt(LocalDateTime.now())
             .build();
 
@@ -130,7 +134,7 @@ public class TaskEventConsumer {
             .actionLink("/timesheets/" + payload.get("timesheetId"))
             .relatedEntityType("TIMESHEET")
             .relatedEntityId((Long) payload.get("timesheetId"))
-            .dueDate(LocalDateTime.now().plusDays(1))
+            .dueDate(businessDayCalc.addBusinessDays(LocalDateTime.now(), 1))
             .createdAt(LocalDateTime.now())
             .build();
 
@@ -163,7 +167,7 @@ public class TaskEventConsumer {
             .actionLink("/timesheets/" + payload.get("timesheetId"))
             .relatedEntityType("TIMESHEET")
             .relatedEntityId((Long) payload.get("timesheetId"))
-            .dueDate(LocalDateTime.now().plusDays(3))
+            .dueDate(businessDayCalc.addBusinessDays(LocalDateTime.now(), 3))
             .createdAt(LocalDateTime.now())
             .build();
 

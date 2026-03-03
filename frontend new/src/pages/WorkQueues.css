@@ -487,6 +487,246 @@
   font-style: italic;
 }
 
+/* ============================================
+   CMIPS 3.0 Task Home — UIM Design System
+   Clusters with dark blue headers, manage toolbar,
+   enhanced badges, and tab navigation
+   ============================================ */
+
+/* --- Page title with underline --- */
+.wq-page-title {
+  color: #153554;
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  padding-top: 0.25rem;
+  padding-bottom: 0.375rem;
+  border-bottom: 3px solid #153554;
+}
+
+/* --- Cluster panel (dark blue header) --- */
+.wq-cluster {
+  background: #fff;
+  border: 1px solid #c8d6e0;
+  border-radius: 4px;
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+}
+
+.wq-cluster-title,
+.wq-page .wq-cluster-title {
+  background: #153554;
+  color: #fff;
+  padding: 0.6rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.wq-cluster-body {
+  padding: 1rem 1.25rem;
+}
+
+/* --- Manage toolbar (inline button row) --- */
+.wq-manage-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+
+.wq-manage-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #c8d6e0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #333;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+
+.wq-manage-btn:hover {
+  background: rgba(21, 53, 84, 0.08);
+  border-color: #153554;
+  color: #153554;
+}
+
+.wq-manage-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.wq-manage-btn .btn-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* --- UIM-style form grid (2 columns) --- */
+.wq-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.625rem 2rem;
+}
+
+.wq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.wq-field-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #555;
+}
+
+.wq-field-value {
+  font-size: 0.875rem;
+  color: #333;
+  padding: 0.2rem 0;
+}
+
+/* --- Enhanced priority badges --- */
+.wq-badge-high { background: #fff5f5; color: #c53030; }
+.wq-badge-medium, .wq-badge-med { background: #fffbeb; color: #b7791f; }
+.wq-badge-low { background: #f0fff4; color: #276749; }
+.wq-badge-normal { background: #ebf8ff; color: #2b6cb0; }
+.wq-badge-escalated { background: #fed7d7; color: #9b2c2c; }
+.wq-badge-assigned { background: #bee3f8; color: #2b6cb0; }
+
+/* --- UIM-style table (dark blue header) --- */
+.wq-table-uim {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.wq-table-uim th {
+  background: #153554;
+  color: #fff;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.wq-table-uim td {
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+  color: #333;
+}
+
+.wq-table-uim tbody tr:nth-child(even) td {
+  background: #f8f9fa;
+}
+
+.wq-table-uim tbody tr:hover td {
+  background: rgba(21, 53, 84, 0.05);
+}
+
+/* --- History timeline --- */
+.wq-timeline {
+  position: relative;
+  padding-left: 1.5rem;
+}
+
+.wq-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.5rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #c8d6e0;
+}
+
+.wq-timeline-item {
+  position: relative;
+  padding-bottom: 1.25rem;
+}
+
+.wq-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.15rem;
+  top: 0.25rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2b6cb0;
+  border: 2px solid #fff;
+}
+
+.wq-timeline-date {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.wq-timeline-action {
+  font-size: 0.875rem;
+  color: #333;
+  font-weight: 500;
+}
+
+.wq-timeline-by {
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.wq-timeline-notes {
+  font-size: 0.8rem;
+  color: #666;
+  font-style: italic;
+  margin-top: 0.15rem;
+}
+
+/* --- Status transition arrow --- */
+.wq-status-transition {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+/* --- Action link (blue underline) --- */
+.wq-link {
+  background: none;
+  border: none;
+  color: #153554;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+  padding: 0;
+}
+
+.wq-link:hover {
+  color: #0d2a3a;
+}
+
+/* --- Close modal overlay for task actions --- */
+.wq-close-modal-required {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+  color: #856404;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   .wq-shortcuts-grid {
@@ -497,6 +737,12 @@
   }
   .wq-task-columns {
     grid-template-columns: 1fr;
+  }
+  .wq-form-grid {
+    grid-template-columns: 1fr;
+  }
+  .wq-manage-toolbar {
+    gap: 0.375rem;
   }
   .wq-modal {
     min-width: auto;

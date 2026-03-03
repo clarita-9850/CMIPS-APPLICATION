@@ -385,6 +385,28 @@ public class CaseManagementController {
         return ResponseEntity.ok(caseEntity);
     }
 
+    @PostMapping("/{id}/transfer/cancel")
+    @RequirePermission(resource = "Case Resource", scope = "transfer")
+    public ResponseEntity<CaseEntity> cancelTransfer(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        CaseEntity caseEntity = caseManagementService.cancelInterCountyTransfer(id, userId);
+        return ResponseEntity.ok(caseEntity);
+    }
+
+    @PutMapping("/{id}/funding-source")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<CaseEntity> updateFundingSource(
+            @PathVariable Long id,
+            @RequestBody FundingSourceRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        CaseEntity caseEntity = caseManagementService.updateFundingSource(
+                id, request.getFundingSource(), userId);
+        return ResponseEntity.ok(caseEntity);
+    }
+
     // ==================== COMPANION CASES ====================
 
     @GetMapping("/{recipientId}/companion-cases")
@@ -505,5 +527,10 @@ public class CaseManagementController {
     @lombok.Data
     public static class CompleteTransferRequest {
         private String newCaseOwnerId;
+    }
+
+    @lombok.Data
+    public static class FundingSourceRequest {
+        private String fundingSource;
     }
 }

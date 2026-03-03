@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { useBreadcrumbs } from '../lib/BreadcrumbContext';
-import * as workspaceApi from '../api/workspaceApi';
 import http from '../api/httpClient';
 import './WorkQueues.css';
 import './WorkspaceContent.css';
@@ -16,7 +15,10 @@ function mapBackendTask(t) {
       hour: '2-digit', minute: '2-digit'
     }) : '',
     priority: t.priority || 'Normal',
-    status: t.status || ''
+    status: t.status || '',
+    taskTypeCode: t.taskTypeCode || '',
+    caseNumber: t.caseNumber || '',
+    isOverdue: t.dueDate ? new Date(t.dueDate) < new Date() && t.status !== 'CLOSED' : false,
   };
 }
 
@@ -33,17 +35,19 @@ const SHORTCUTS = [
   { label: 'Sick Leave Claim Manual Entry',           route: '/payments/sick-leave',                            icon: '🏥' },
 ];
 
+const badgeClass = (val) => {
+  if (!val) return '';
+  return `wq-badge wq-badge-${val.toLowerCase().replace(/\s/g, '_')}`;
+};
+
 export const WorkspaceContent = () => {
-  const { user, roles } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const { setBreadcrumbs } = useBreadcrumbs();
   const username = user?.username || user?.preferred_username || '';
 
-  const isSupervisor = roles.some(r => r.includes('SUPERVISOR'));
-
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState([]);
-  const [approvals, setApprovals] = useState([]);
 
   useEffect(() => {
     setBreadcrumbs([]);
@@ -60,18 +64,13 @@ export const WorkspaceContent = () => {
       const allTasks = Array.isArray(tasksRes.data)
         ? tasksRes.data
         : (tasksRes.data?.content || []);
-      setTasks(allTasks.slice(0, 10).map(mapBackendTask));
-
-      if (isSupervisor) {
-        const approvalsData = await workspaceApi.fetchPendingApprovals(username).catch(() => ({}));
-        setApprovals(approvalsData.timesheets || []);
-      }
+      setTasks(allTasks.slice(0, 15).map(mapBackendTask));
     } catch (err) {
       console.warn('[WorkspaceContent] Dashboard load error:', err?.message);
     } finally {
       setLoading(false);
     }
-  }, [username, isSupervisor]);
+  }, [username]);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
@@ -90,46 +89,57 @@ export const WorkspaceContent = () => {
     <div className="wq-page">
 
       {/* Page heading */}
-      <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: '#153554', marginBottom: '1.5rem', borderBottom: '2px solid #153554', paddingBottom: '0.5rem' }}>
+      <h1 className="wq-page-title">
         My Workspace: Welcome to CMIPS
+      </h1>
+
+      {/* My Tasks heading */}
+      <h2 style={{ color: '#153554', fontSize: '1.25rem', fontWeight: 600, margin: '1rem 0 0.75rem' }}>
+        My Tasks ({tasks.length})
       </h2>
 
       {/* Two-column layout: Tasks | Shortcuts */}
       <div className="workspace-main-columns">
 
         {/* ── Left: My Tasks ── */}
-        <div className="wq-panel">
-          <div className="wq-panel-header">
-            <h4>My Tasks</h4>
-          </div>
-          <div className="wq-panel-body" style={{ padding: 0 }}>
+        <section className="wq-cluster">
+          <div className="wq-cluster-body" style={{ padding: 0 }}>
             {tasks.length === 0 ? (
-              <p style={{ padding: '1rem 1.25rem', color: '#888', fontSize: '0.875rem' }}>No tasks assigned.</p>
+              <p style={{ padding: '1.5rem', color: '#888', fontSize: '0.875rem', textAlign: 'center', fontStyle: 'italic' }}>
+                No tasks assigned.
+              </p>
             ) : (
-              <table className="wq-table">
+              <table className="wq-table-uim">
                 <thead>
                   <tr>
                     <th>Task</th>
                     <th>Subject</th>
+                    <th>Status</th>
                     <th>Due Date</th>
                     <th>Priority</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tasks.map(t => (
-                    <tr key={t.id}>
+                    <tr key={t.id} className="wq-clickable-row" onClick={() => navigate(`/tasks/${t.id}`)}>
                       <td>
                         <button
-                          onClick={() => navigate(`/tasks/${t.id}`)}
-                          style={{ background: 'none', border: 'none', color: '#153554', cursor: 'pointer', padding: 0, fontWeight: 600, textDecoration: 'underline' }}
+                          className="wq-link"
+                          onClick={(e) => { e.stopPropagation(); navigate(`/tasks/${t.id}`); }}
                         >
                           {t.id}
                         </button>
                       </td>
                       <td>{t.subject}</td>
-                      <td>{t.dueDate}</td>
                       <td>
-                        <span className={`wq-badge wq-badge-${t.priority.toLowerCase()}`}>{t.priority}</span>
+                        <span className={badgeClass(t.status)}>{t.status || '\u2014'}</span>
+                      </td>
+                      <td style={t.isOverdue ? { color: '#c53030', fontWeight: 600 } : {}}>
+                        {t.dueDate || '\u2014'}
+                        {t.isOverdue && <span style={{ marginLeft: '0.35rem', fontSize: '0.7rem' }}>OVERDUE</span>}
+                      </td>
+                      <td>
+                        <span className={badgeClass(t.priority)}>{t.priority}</span>
                       </td>
                     </tr>
                   ))}
@@ -137,14 +147,12 @@ export const WorkspaceContent = () => {
               </table>
             )}
           </div>
-        </div>
+        </section>
 
         {/* ── Right: My Shortcuts ── */}
-        <div className="wq-panel">
-          <div className="wq-panel-header">
-            <h4>My Shortcuts</h4>
-          </div>
-          <div className="wq-panel-body" style={{ padding: '0.75rem' }}>
+        <section className="wq-cluster">
+          <h2 className="wq-cluster-title">My Shortcuts</h2>
+          <div className="wq-cluster-body" style={{ padding: '0.75rem' }}>
             <div className="workspace-shortcuts-list">
               {SHORTCUTS.map(({ label, route, icon }) => (
                 <button
@@ -158,44 +166,9 @@ export const WorkspaceContent = () => {
               ))}
             </div>
           </div>
-        </div>
+        </section>
 
       </div>
-
-      {/* Supervisor: Pending Approvals */}
-      {isSupervisor && approvals.length > 0 && (
-        <div className="wq-panel" style={{ marginTop: '1rem' }}>
-          <div className="wq-panel-header">
-            <h4>Pending Approvals</h4>
-            <button
-              className="wq-btn wq-btn-outline"
-              style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
-              onClick={() => navigate('/supervisor/approvals')}
-            >
-              View All
-            </button>
-          </div>
-          <div className="wq-panel-body" style={{ padding: 0 }}>
-            <table className="wq-table">
-              <thead>
-                <tr><th>ID</th><th>Type</th><th>Employee</th><th>Status</th><th>Hours</th><th>Period</th></tr>
-              </thead>
-              <tbody>
-                {approvals.slice(0, 5).map(a => (
-                  <tr key={a.id}>
-                    <td>{a.id}</td>
-                    <td>{a.type}</td>
-                    <td>{a.employeeName}</td>
-                    <td><span className={`wq-badge wq-badge-${(a.status || '').toLowerCase()}`}>{a.status}</span></td>
-                    <td>{a.totalHours}</td>
-                    <td>{a.payPeriodStart} – {a.payPeriodEnd}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
     </div>
   );

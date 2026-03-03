@@ -1,10 +1,12 @@
 package com.cmips.controller;
 
 import com.cmips.annotation.RequirePermission;
+import com.cmips.dto.TaskResponseDTO;
 import com.cmips.entity.Task;
 import com.cmips.entity.TaskHistory;
 import com.cmips.entity.WorkQueue;
 import com.cmips.repository.WorkQueueRepository;
+import com.cmips.service.KeycloakPolicyEvaluationService;
 import com.cmips.service.TaskService;
 import com.cmips.service.TaskLifecycleService;
 import com.cmips.service.WorkQueueSubscriptionService;
@@ -15,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -25,15 +28,18 @@ public class TaskController {
     private final TaskLifecycleService lifecycleService;
     private final WorkQueueSubscriptionService subscriptionService;
     private final WorkQueueRepository workQueueRepository;
+    private final KeycloakPolicyEvaluationService policyEvaluationService;
 
     public TaskController(TaskService taskService,
                           TaskLifecycleService lifecycleService,
                           WorkQueueSubscriptionService subscriptionService,
-                          WorkQueueRepository workQueueRepository) {
+                          WorkQueueRepository workQueueRepository,
+                          KeycloakPolicyEvaluationService policyEvaluationService) {
         this.taskService = taskService;
         this.lifecycleService = lifecycleService;
         this.subscriptionService = subscriptionService;
         this.workQueueRepository = workQueueRepository;
+        this.policyEvaluationService = policyEvaluationService;
     }
 
     /**
@@ -116,11 +122,20 @@ public class TaskController {
         return ResponseEntity.ok(List.of());
     }
 
+    /**
+     * Get task by ID — returns DTO with field-level masking (DSD GAP 7)
+     * and includes requiredActionForClosure (DSD GAP 2).
+     */
     @GetMapping("/{id}")
     @RequirePermission(resource = "Task Resource", scope = "view")
-    public ResponseEntity<Task> getTaskById(@PathVariable Long id) {
+    public ResponseEntity<?> getTaskById(@PathVariable Long id) {
         return taskService.getTaskById(id)
-                .map(ResponseEntity::ok)
+                .map(task -> {
+                    Set<String> roles = policyEvaluationService.getCurrentUserRoles();
+                    String requiredAction = lifecycleService.getRequiredActionForClosure(id);
+                    TaskResponseDTO dto = TaskResponseDTO.fromTask(task, roles, requiredAction);
+                    return ResponseEntity.ok((Object) dto);
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -132,6 +147,10 @@ public class TaskController {
         }
         if (task.getAssignedTo() == null || task.getAssignedTo().isBlank()) {
             task.setAssignedTo("UNASSIGNED");
+        }
+        // DSD GAP 1: Mark tasks created via API as USER-created
+        if (task.getCreationType() == null) {
+            task.setCreationType(Task.CreationType.USER);
         }
         // Auto-set workQueue if assignedTo matches a known queue name
         if (task.getWorkQueue() == null || task.getWorkQueue().isBlank()) {

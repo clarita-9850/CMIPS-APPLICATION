@@ -51,6 +51,12 @@ public class TaskType {
     @Column(name = "auto_close_days")
     private Integer autoCloseDays;
 
+    @Column(name = "required_action_for_closure", columnDefinition = "TEXT")
+    private String requiredActionForClosure;
+
+    @Column(name = "auto_close_event")
+    private String autoCloseEvent;
+
     @Column(name = "priority_default")
     @Enumerated(EnumType.STRING)
     private Task.TaskPriority priorityDefault = Task.TaskPriority.MEDIUM;
@@ -132,6 +138,12 @@ public class TaskType {
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public String getRequiredActionForClosure() { return requiredActionForClosure; }
+    public void setRequiredActionForClosure(String requiredActionForClosure) { this.requiredActionForClosure = requiredActionForClosure; }
+
+    public String getAutoCloseEvent() { return autoCloseEvent; }
+    public void setAutoCloseEvent(String autoCloseEvent) { this.autoCloseEvent = autoCloseEvent; }
 
     public enum EscalationCheckType {
         NOT_RESERVED,

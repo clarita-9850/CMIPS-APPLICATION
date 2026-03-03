@@ -72,12 +72,15 @@ public class WorkQueueController {
 
     /**
      * Get tasks in a specific queue
-     * GET /api/work-queues/{id}/tasks
+     * GET /api/work-queues/{id}/tasks?county=XX&districtOffice=YY
      * Supervisor-only queues require supervisor role.
+     * DSD GAP 6: Location-based filtering — tasks filtered by county/district if provided.
      */
     @GetMapping("/{id}/tasks")
     @RequirePermission(resource = "Work Queue Resource", scope = "view")
-    public ResponseEntity<?> getQueueTasks(@PathVariable Long id) {
+    public ResponseEntity<?> getQueueTasks(@PathVariable Long id,
+                                            @RequestParam(required = false) String county,
+                                            @RequestParam(required = false) String districtOffice) {
         return workQueueRepository.findById(id)
                 .map(queue -> {
                     if (queue.isSupervisorOnly()) {
@@ -87,6 +90,19 @@ public class WorkQueueController {
                         }
                     }
                     List<Task> tasks = taskService.getQueueTasks(queue.getName());
+
+                    // DSD GAP 6: Location-based queue access filtering
+                    if (county != null && !county.isBlank()) {
+                        tasks = tasks.stream()
+                                .filter(t -> t.getCounty() == null || county.equalsIgnoreCase(t.getCounty()))
+                                .toList();
+                    }
+                    if (districtOffice != null && !districtOffice.isBlank()) {
+                        tasks = tasks.stream()
+                                .filter(t -> t.getDistrictOffice() == null || districtOffice.equalsIgnoreCase(t.getDistrictOffice()))
+                                .toList();
+                    }
+
                     return ResponseEntity.ok(tasks);
                 })
                 .orElse(ResponseEntity.notFound().build());

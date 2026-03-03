@@ -113,6 +113,10 @@ public class Task {
     @Column(name = "subject")
     private String subject;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "creation_type")
+    private CreationType creationType = CreationType.SYSTEM;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -312,11 +316,18 @@ public class Task {
         }
     }
 
+    public CreationType getCreationType() { return creationType; }
+    public void setCreationType(CreationType creationType) { this.creationType = creationType; }
+
     public enum TaskStatus {
         OPEN, RESERVED, ASSIGNED, DEFERRED, CLOSED, ESCALATED
     }
 
     public enum TaskPriority {
         HIGH, MEDIUM, LOW
+    }
+
+    public enum CreationType {
+        SYSTEM, USER, BATCH, INTERFACE
     }
 }

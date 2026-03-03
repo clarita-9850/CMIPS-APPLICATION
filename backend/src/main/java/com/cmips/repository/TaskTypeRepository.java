@@ -27,4 +27,6 @@ public interface TaskTypeRepository extends JpaRepository<TaskType, Long> {
     List<TaskType> findByAutoCloseEnabledTrue();
 
     boolean existsByTaskTypeCode(String taskTypeCode);
+
+    List<TaskType> findByAutoCloseEvent(String autoCloseEvent);
 }

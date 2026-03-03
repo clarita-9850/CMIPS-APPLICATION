@@ -28,6 +28,7 @@ public class ProviderManagementService {
     private final OvertimeViolationRepository overtimeViolationRepository;
     private final CaseRepository caseRepository;
     private final TaskService taskService;
+    private final TaskAutoCloseService taskAutoCloseService;
 
     public ProviderManagementService(
             ProviderRepository providerRepository,
@@ -35,13 +36,15 @@ public class ProviderManagementService {
             ProviderAssignmentRepository providerAssignmentRepository,
             OvertimeViolationRepository overtimeViolationRepository,
             CaseRepository caseRepository,
-            TaskService taskService) {
+            TaskService taskService,
+            TaskAutoCloseService taskAutoCloseService) {
         this.providerRepository = providerRepository;
         this.providerCoriRepository = providerCoriRepository;
         this.providerAssignmentRepository = providerAssignmentRepository;
         this.overtimeViolationRepository = overtimeViolationRepository;
         this.caseRepository = caseRepository;
         this.taskService = taskService;
+        this.taskAutoCloseService = taskAutoCloseService;
     }
 
     // ==================== PROVIDER ENROLLMENT ====================
@@ -249,6 +252,9 @@ public class ProviderManagementService {
         if (assignment.getImpactsFundingSource()) {
             updateCaseFundingSource(caseId, relationship, userId);
         }
+
+        // Auto-close CM-013 (Case Has No Assigned Providers) — DSD GAP 3
+        taskAutoCloseService.onBusinessEvent(TaskAutoCloseService.EVENT_PROVIDER_ASSIGNED, caseEntity.getCaseNumber());
 
         log.info("Provider {} assigned to case {}", providerId, caseId);
         return assignment;

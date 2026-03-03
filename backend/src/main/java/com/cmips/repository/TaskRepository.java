@@ -69,4 +69,7 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     // Auto-close eligible tasks
     @Query("SELECT t FROM Task t WHERE t.isNotification = false AND t.autoCloseOn IS NOT NULL AND t.status IN ('OPEN', 'RESERVED')")
     List<Task> findAutoCloseEligibleTasks();
+
+    // Idempotency check: does an open task already exist for this case + task type?
+    List<Task> findByCaseNumberAndTaskTypeCodeAndStatusIn(String caseNumber, String taskTypeCode, List<Task.TaskStatus> statuses);
 }
