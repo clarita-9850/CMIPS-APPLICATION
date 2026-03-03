@@ -87,23 +87,25 @@ services:
       - cmips-network
 
   # Keycloak Authorization Setup (one-time init)
-  # Runs setup_keycloak_authorization.py to create all 51 DSD role policies,
-  # resources, scopes, and permissions. Idempotent - safe to re-run.
+  # Imports the cmips realm from JSON export (52 resources, 49 scopes,
+  # 52 role policies, 1496 permissions) and creates application users.
+  # Idempotent — safe to re-run on existing setup.
   keycloak-setup:
     image: python:3.12-slim
     container_name: cmips-keycloak-setup
     working_dir: /setup
     volumes:
-      - ../setup_keycloak_authorization.py:/setup/setup_keycloak_authorization.py:ro
+      - ./keycloak/setup_keycloak_authorization.py:/setup/setup_keycloak_authorization.py:ro
+      - ./keycloak/cmips-realm-export.json:/setup/cmips-realm-export.json:ro
     environment:
       KC_URL: http://keycloak:8080
       KC_REALM: cmips
       KC_CLIENT_ID: cmips-backend
       KC_ADMIN_USER: admin
       KC_ADMIN_PASS: admin123
+      REALM_JSON_PATH: /setup/cmips-realm-export.json
     command: >
       bash -c "
-        pip install --quiet requests &&
         python setup_keycloak_authorization.py --wait
       "
     depends_on:
