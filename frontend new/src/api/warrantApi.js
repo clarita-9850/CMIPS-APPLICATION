@@ -22,3 +22,10 @@ export const requestReplacement = (warrantNumber, data) => http.post(`${base}/${
 export const getWarrantHistory = (warrantNumber) => http.get(`${base}/${warrantNumber}/history`).then(r => r.data);
 
 export const getWarrantStats = () => http.get(`${base}/stats`).then(r => r.data);
+
+// Enter Warrant Replacement (DSD Section 27)
+export const listReplacements = () => http.get(`${base}/replacements`).then(r => r.data);
+
+export const lookupForReplacement = (data) => http.post(`${base}/enter-replacement/lookup`, data).then(r => r.data);
+
+export const saveWarrantReplacement = (data) => http.post(`${base}/enter-replacement/save`, data).then(r => r.data);

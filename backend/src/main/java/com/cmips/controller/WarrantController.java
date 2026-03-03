@@ -1,8 +1,12 @@
 package com.cmips.controller;
 
 import com.cmips.annotation.RequirePermission;
+import com.cmips.dto.WarrantReplacementDetailResponse;
+import com.cmips.dto.WarrantReplacementLookupRequest;
+import com.cmips.dto.WarrantReplacementSaveRequest;
 import com.cmips.entity.WarrantEntity;
 import com.cmips.repository.WarrantRepository;
+import com.cmips.service.WarrantReplacementService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -14,9 +18,12 @@ import java.util.*;
 public class WarrantController {
 
     private final WarrantRepository warrantRepository;
+    private final WarrantReplacementService warrantReplacementService;
 
-    public WarrantController(WarrantRepository warrantRepository) {
+    public WarrantController(WarrantRepository warrantRepository,
+                             WarrantReplacementService warrantReplacementService) {
         this.warrantRepository = warrantRepository;
+        this.warrantReplacementService = warrantReplacementService;
     }
 
     @GetMapping
@@ -67,6 +74,48 @@ public class WarrantController {
 
         return ResponseEntity.ok(results);
     }
+
+    // ========================================
+    // Enter Warrant Replacement (DSD Section 27, CI-459396/459400/459401)
+    // ========================================
+
+    @GetMapping("/replacements")
+    @RequirePermission(resource = "Warrant Resource", scope = "view")
+    public ResponseEntity<?> listReplacements() {
+        return ResponseEntity.ok(warrantReplacementService.listReplacements());
+    }
+
+    @PostMapping("/enter-replacement/lookup")
+    @RequirePermission(resource = "Warrant Resource", scope = "create")
+    public ResponseEntity<?> lookupForReplacement(@RequestBody WarrantReplacementLookupRequest request) {
+        try {
+            WarrantReplacementDetailResponse detail = warrantReplacementService.lookupWarrant(request);
+            return ResponseEntity.ok(detail);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/enter-replacement/save")
+    @RequirePermission(resource = "Warrant Resource", scope = "create")
+    public ResponseEntity<?> saveReplacement(@RequestBody WarrantReplacementSaveRequest request) {
+        try {
+            WarrantEntity saved = warrantReplacementService.saveReplacement(request);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Warrant replacement saved successfully.",
+                    "warrantNumber", saved.getWarrantNumber(),
+                    "status", saved.getStatus().name()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // ========================================
 
     @GetMapping("/{warrantNumber}")
     @RequirePermission(resource = "Warrant Resource", scope = "view")

@@ -32,7 +32,8 @@ import java.time.LocalDateTime;
     @Index(name = "idx_warrant_case", columnList = "case_number"),
     @Index(name = "idx_warrant_status", columnList = "status"),
     @Index(name = "idx_warrant_county", columnList = "county_code"),
-    @Index(name = "idx_warrant_paid_date", columnList = "paid_date")
+    @Index(name = "idx_warrant_paid_date", columnList = "paid_date"),
+    @Index(name = "idx_warrant_replacement_date", columnList = "replacement_date")
 })
 @Data
 @NoArgsConstructor
@@ -89,7 +90,7 @@ public class WarrantEntity {
     /**
      * Current warrant status.
      */
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 30)
     @Enumerated(EnumType.STRING)
     private WarrantStatus status;
 
@@ -104,6 +105,35 @@ public class WarrantEntity {
      */
     @Column(name = "pay_period_end")
     private LocalDate payPeriodEnd;
+
+    // ── DSD Section 27: Enter Warrant Replacement fields ──
+
+    @Column(name = "replacement_date")
+    private LocalDate replacementDate;
+
+    @Column(name = "replacement_entry_date")
+    private LocalDate replacementEntryDate;
+
+    @Column(name = "status_date")
+    private LocalDate statusDate;
+
+    @Column(name = "funding_source", length = 50)
+    private String fundingSource;
+
+    @Column(name = "void_replacement_type", length = 30)
+    private String voidReplacementType;
+
+    @Column(name = "void_replacement_reason", length = 30)
+    private String voidReplacementReason;
+
+    @Column(name = "pay_type", length = 30)
+    private String payType;
+
+    @Column(name = "payee_name", length = 200)
+    private String payeeName;
+
+    @Column(name = "recipient_name", length = 200)
+    private String recipientName;
 
     /**
      * File reference from BAW when this record was imported.
@@ -135,9 +165,10 @@ public class WarrantEntity {
      * Warrant status enum matching STO file codes.
      */
     public enum WarrantStatus {
-        ISSUED,    // Initial state - warrant created
-        PAID,      // P - Warrant cashed/deposited
-        VOIDED,    // V - Warrant canceled
-        STALE      // S - Warrant expired (not cashed in time)
+        ISSUED,              // Initial state - warrant created
+        PAID,                // P - Warrant cashed/deposited
+        VOIDED,              // V - Warrant canceled
+        STALE,               // S - Warrant expired (not cashed in time)
+        PENDING_REPLACEMENT  // Awaiting replacement confirmation from SCO
     }
 }

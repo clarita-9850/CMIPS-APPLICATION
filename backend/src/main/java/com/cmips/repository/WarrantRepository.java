@@ -82,6 +82,16 @@ public interface WarrantRepository extends JpaRepository<WarrantEntity, Long> {
     List<WarrantEntity> findPotentiallyStaleWarrants(@Param("cutoffDate") LocalDate cutoffDate);
 
     // ========================================
+    // Warrant Replacement Queries (DSD Section 27)
+    // ========================================
+
+    Optional<WarrantEntity> findByWarrantNumberAndIssueDate(String warrantNumber, LocalDate issueDate);
+
+    @Query("SELECT w FROM WarrantEntity w WHERE w.replacementEntryDate IS NOT NULL " +
+           "ORDER BY w.replacementEntryDate DESC")
+    List<WarrantEntity> findAllWithReplacementEntry();
+
+    // ========================================
     // Date Range Queries
     // ========================================
 
