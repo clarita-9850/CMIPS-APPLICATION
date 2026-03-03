@@ -12,14 +12,21 @@ const PERSON_TYPE_STYLES = {
   APPLICANT:       { background: '#feebc8', color: '#c05621' },
   RECIPIENT:       { background: '#c6f6d5', color: '#276749' },
 };
-const PersonTypeBadge = ({ type }) => {
+const PROVIDER_BADGE_STYLE = { background: '#e9d5ff', color: '#6b21a8' };
+const PersonTypeBadge = ({ type, linkedProviderId }) => {
   if (!type) return null;
   const style = PERSON_TYPE_STYLES[type] || { background: '#e2e8f0', color: '#4a5568' };
   const label = type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const badgeStyle = { padding: '0.2rem 0.75rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700, marginLeft: '0.75rem', whiteSpace: 'nowrap' };
   return (
-    <span style={{ ...style, padding: '0.2rem 0.75rem', borderRadius: '12px', fontSize: '0.8rem', fontWeight: 700, marginLeft: '0.75rem', whiteSpace: 'nowrap' }}>
-      {label}
-    </span>
+    <>
+      {linkedProviderId && (
+        <span style={{ ...PROVIDER_BADGE_STYLE, ...badgeStyle }}>Provider</span>
+      )}
+      <span style={{ ...style, ...badgeStyle }}>
+        {label}
+      </span>
+    </>
   );
 };
 
@@ -194,7 +201,7 @@ export const RecipientDetailPage = () => {
       <div className="wq-page-header">
         <h2 style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.25rem' }}>
           {[p.lastName, p.firstName].filter(Boolean).join(', ') || p.name || 'Person Detail'}
-          <PersonTypeBadge type={p.personType} />
+          <PersonTypeBadge type={p.personType} linkedProviderId={p.linkedProviderId} />
         </h2>
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           {/* Edit always available */}
@@ -381,7 +388,7 @@ export const RecipientDetailPage = () => {
                     <span className="wq-detail-label">Person Type:</span>
                     <span className="wq-detail-value">
                       {p.personType
-                        ? <PersonTypeBadge type={p.personType} />
+                        ? <PersonTypeBadge type={p.personType} linkedProviderId={p.linkedProviderId} />
                         : '\u2014'}
                     </span>
                   </div>

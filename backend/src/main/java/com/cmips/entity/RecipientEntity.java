@@ -230,6 +230,12 @@ public class RecipientEntity {
     @Column(name = "date_of_death")
     private LocalDate dateOfDeath;
 
+    // Provider Dual Role (BR-17/BR-18)
+    // When a Provider becomes a referral/applicant, this links back to their ProviderEntity.
+    // Enables the "Provider + Open Referral" or "Provider + Applicant" dual role per DSD Entry Path 5.
+    @Column(name = "linked_provider_id")
+    private Long linkedProviderId;
+
     // Audit Fields
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -745,6 +751,9 @@ public class RecipientEntity {
 
     public Boolean getMailingCassFailed() { return mailingCassFailed; }
     public void setMailingCassFailed(Boolean mailingCassFailed) { this.mailingCassFailed = mailingCassFailed; }
+
+    public Long getLinkedProviderId() { return linkedProviderId; }
+    public void setLinkedProviderId(Long linkedProviderId) { this.linkedProviderId = linkedProviderId; }
 
     @PrePersist
     protected void onCreate() {

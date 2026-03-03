@@ -205,13 +205,13 @@ export const CaseCreatePage = () => {
       return;
     }
 
-    // IHSS Referral Date: DSD allows post-dating up to 2 weeks from today
+    // EM OS 175: IHSS Referral Date may not be more than 2 weeks in the future
     if (form.ihssReferralDate) {
       const refDate = new Date(form.ihssReferralDate + 'T00:00:00');
       const today = new Date(); today.setHours(0,0,0,0);
       const maxDate = new Date(today); maxDate.setDate(maxDate.getDate() + 14);
       if (refDate > maxDate) {
-        setError('IHSS Referral Date cannot be more than 2 weeks from today.');
+        setError('EM OS 175: IHSS Referral Date may not be more than two weeks in the future.');
         return;
       }
     }

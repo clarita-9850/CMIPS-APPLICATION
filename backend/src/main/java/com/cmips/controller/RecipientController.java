@@ -714,7 +714,12 @@ public class RecipientController {
                 if (!existing.isEmpty()) {
                     // BR-18: Return the existing recipient instead of creating a duplicate
                     RecipientEntity existingRecipient = existing.get(0);
-                    log.info("BR-18: Provider {} already has a recipient record (ID: {}), returning existing",
+                    // Ensure provider link is set even on existing records
+                    if (existingRecipient.getLinkedProviderId() == null) {
+                        existingRecipient.setLinkedProviderId(providerId);
+                        recipientRepository.save(existingRecipient);
+                    }
+                    log.info("[BR-18] Provider {} already has a recipient record (ID: {}), returning existing with provider link",
                         providerId, existingRecipient.getId());
                     return ResponseEntity.ok(existingRecipient);
                 }
@@ -735,11 +740,12 @@ public class RecipientController {
             recipient.setResidenceCity(provider.getCity());
             recipient.setResidenceState(provider.getState());
             recipient.setResidenceZip(provider.getZipCode());
+            recipient.setLinkedProviderId(providerId);
             recipient.setCreatedBy(userId != null ? userId : "system");
 
             RecipientEntity saved = recipientRepository.save(recipient);
-            log.info("BR-18: Created recipient {} from provider {} for dual-role scenario",
-                saved.getId(), providerId);
+            log.info("[BR-18] Created recipient {} from provider {} (providerNumber={}) for dual-role scenario: Provider + Applicant",
+                saved.getId(), providerId, provider.getProviderNumber());
             return ResponseEntity.ok(saved);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));

@@ -461,13 +461,16 @@ export const ApplicationsNewPage = () => {
 
   const validateStep3 = () => {
     if (!caseForm.countyCode.trim()) { setError('EM OS 210: County is required.'); return false; }
-    // EM OS 175: IHSS Referral Date cannot be in the future
+    // EM OS 175: IHSS Referral Date may not be more than 2 weeks in the future
+    // (EM-175 strict no-future rule was CANCELLED in ASR Sprint 43; DSD screen design allows post-dating up to 2 weeks)
     if (caseForm.ihssReferralDate) {
-      const refDate = new Date(caseForm.ihssReferralDate);
+      const refDate = new Date(caseForm.ihssReferralDate + 'T00:00:00');
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      if (refDate > today) {
-        setError('EM OS 175: IHSS Referral Date cannot be in the future.');
+      const maxDate = new Date(today);
+      maxDate.setDate(maxDate.getDate() + 14);
+      if (refDate > maxDate) {
+        setError('EM OS 175: IHSS Referral Date may not be more than two weeks in the future.');
         return false;
       }
     }

@@ -186,12 +186,17 @@ public class CaseManagementService {
         }
 
         // BR-19: Transition existing Open Referral to Applicant on case creation
+        // BR-18: If recipient was created from a Provider, this is a dual-role scenario
         if (recipientId != null) {
             RecipientEntity existingRecipient = recipientRepository.findById(recipientId).orElse(null);
             if (existingRecipient != null && existingRecipient.getPersonType() == PersonType.OPEN_REFERRAL) {
                 existingRecipient.setPersonType(PersonType.APPLICANT);
                 recipientRepository.save(existingRecipient);
                 log.info("[BR-19] Transitioned recipient {} from OPEN_REFERRAL to APPLICANT", recipientId);
+            }
+            if (existingRecipient != null && existingRecipient.getLinkedProviderId() != null) {
+                log.info("[BR-18] Dual-role case creation: recipient {} linked to provider {} — now Provider + APPLICANT",
+                         recipientId, existingRecipient.getLinkedProviderId());
             }
         }
 
@@ -466,6 +471,12 @@ public class CaseManagementService {
         recipient.setPersonType(PersonType.OPEN_REFERRAL);
         recipient.setReferralDate(LocalDate.now());
         recipient.setCreatedBy(userId);
+
+        // BR-17: If this recipient is linked to a Provider, log the dual-role scenario
+        if (recipient.getLinkedProviderId() != null) {
+            log.info("[BR-17] Dual-role referral: recipient linked to provider {} — now Provider + OPEN_REFERRAL",
+                     recipient.getLinkedProviderId());
+        }
 
         // Names are converted to uppercase in @PrePersist
         return recipientRepository.save(recipient);
