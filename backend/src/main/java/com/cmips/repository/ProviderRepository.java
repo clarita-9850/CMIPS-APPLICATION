@@ -22,6 +22,9 @@ public interface ProviderRepository extends JpaRepository<ProviderEntity, Long> 
     // Find by SSN
     Optional<ProviderEntity> findBySsn(String ssn);
 
+    // Find all providers by SSN — handles duplicate SSN cases
+    List<ProviderEntity> findAllBySsn(String ssn);
+
     // Find by DOJ County
     List<ProviderEntity> findByDojCountyCode(String dojCountyCode);
 

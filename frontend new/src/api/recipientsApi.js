@@ -43,3 +43,10 @@ export const updatePersonType = (id, data) =>
 
 export const createRecipientFromProvider = (providerId) =>
   http.post(`/recipients/from-provider/${providerId}`).then(r => r.data);
+
+// Merge Duplicate SSN (DSD CI-446456)
+export const verifyMergeSsn = (data) =>
+  http.post('/merge-duplicate-ssn/verify', data).then(r => r.data);
+
+export const saveMergeSsn = (data) =>
+  http.post('/merge-duplicate-ssn/save', data).then(r => r.data);

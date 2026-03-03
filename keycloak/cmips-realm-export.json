@@ -2560,6 +2560,9 @@
               },
               {
                 "name": "create"
+              },
+              {
+                "name": "merge"
               }
             ]
           },
@@ -16162,7 +16165,7 @@
             "decisionStrategy": "UNANIMOUS",
             "config": {
               "resources": "[\"Recipient Resource\"]",
-              "scopes": "[\"edit\",\"create\",\"view\"]",
+              "scopes": "[\"edit\",\"create\",\"view\",\"merge\"]",
               "applyPolicies": "[\"Policy-CASEMGMTPROVMGMTROLE\"]"
             }
           },
@@ -16863,7 +16866,7 @@
             "decisionStrategy": "UNANIMOUS",
             "config": {
               "resources": "[\"Recipient Resource\"]",
-              "scopes": "[\"edit\",\"create\",\"view\"]",
+              "scopes": "[\"edit\",\"create\",\"view\",\"merge\"]",
               "applyPolicies": "[\"Policy-CASEMGMTPROVMGMTPAYROLLROLE\"]"
             }
           },
@@ -21899,7 +21902,7 @@
             "decisionStrategy": "UNANIMOUS",
             "config": {
               "resources": "[\"Recipient Resource\"]",
-              "scopes": "[\"edit\",\"create\",\"view\"]",
+              "scopes": "[\"edit\",\"create\",\"view\",\"merge\"]",
               "applyPolicies": "[\"Policy-CDSSPROGRAMMGMTROLE\"]"
             }
           },
@@ -23220,6 +23223,9 @@
           {
             "id": "276991e1-2b79-45cb-b30d-8bcce7dc736c",
             "name": "reactivate"
+          },
+          {
+            "name": "merge"
           }
         ],
         "decisionStrategy": "UNANIMOUS"
