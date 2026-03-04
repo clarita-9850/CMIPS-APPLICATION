@@ -1,193 +1,263 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useBreadcrumbs } from '../lib/BreadcrumbContext';
-import http from '../api/httpClient';
+import * as providersApi from '../api/providersApi';
 import './WorkQueues.css';
 
+/**
+ * IRS Live-In Provider Self-Certification — DSD Section 32 (CI-718023, CI-718024)
+ *
+ * Two-screen flow:
+ *   1. SEARCH — Provider Number + Case Number → Continue/Cancel
+ *   2. ENTRY  — Read-only details + Self-Certification Status dropdown → Save/Cancel
+ */
 export const LiveInProviderPage = () => {
   const navigate = useNavigate();
   const { setBreadcrumbs } = useBreadcrumbs();
 
-  const [activeTab, setActiveTab] = useState('search');
-  const [providerId, setProviderId] = useState('');
-  const [providerName, setProviderName] = useState('');
-  const [countyCode, setCountyCode] = useState('');
-  const [results, setResults] = useState([]);
-  const [searched, setSearched] = useState(false);
+  // View state: 'search' | 'entry'
+  const [view, setView] = useState('search');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Self-certification form
-  const [certForm, setCertForm] = useState({
-    providerId: '', recipientName: '', caseNumber: '', certificationDate: '', hoursPerWeek: ''
-  });
-  const [submitting, setSubmitting] = useState(false);
+  // Screen 1: Search form
+  const [searchForm, setSearchForm] = useState({ providerNumber: '', caseNumber: '' });
 
+  // Screen 2: Entry details + editable status
+  const [detail, setDetail] = useState(null);
+  const [certStatus, setCertStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  // Update breadcrumbs based on current view
   useEffect(() => {
-    setBreadcrumbs([{ label: 'Providers', path: '/providers' }, { label: 'Live-In Provider Certification' }]);
+    const crumbs = [
+      { label: 'My Workspace', path: '/workspace' },
+      { label: 'IRS Live-In Provider Self-Certification', path: '/providers/live-in' },
+    ];
+    if (view === 'entry') crumbs.push({ label: 'Certification Entry' });
+    setBreadcrumbs(crumbs);
     return () => setBreadcrumbs([]);
-  }, [setBreadcrumbs]);
+  }, [view, setBreadcrumbs]);
 
-  const handleSearch = () => {
-    setLoading(true);
-    setSearched(true);
-    const params = {};
-    if (providerId) params.providerId = providerId;
-    if (providerName) params.name = providerName;
-    if (countyCode) params.countyCode = countyCode;
-    const qs = new URLSearchParams(params).toString();
-    http.get(`/providers/search?${qs}`)
-      .then(res => {
-        const d = res?.data;
-        setResults(Array.isArray(d) ? d : (d?.content || d?.providers || []));
-      })
-      .catch(() => setResults([]))
-      .finally(() => setLoading(false));
-  };
-
-  const handleReset = () => {
-    setProviderId('');
-    setProviderName('');
-    setCountyCode('');
-    setResults([]);
-    setSearched(false);
-  };
-
-  const handleSubmitCertification = async () => {
-    if (!certForm.providerId || !certForm.caseNumber) {
-      setError('Provider ID and Case Number are required.');
-      return;
-    }
+  // ── Screen 1: Continue handler ──
+  const handleContinue = async () => {
     setError('');
-    setSuccess('');
-    setSubmitting(true);
+    if (!searchForm.providerNumber.trim()) { setError('Provider Number is required.'); return; }
+    if (!searchForm.caseNumber.trim()) { setError('Case Number is required.'); return; }
+
+    setLoading(true);
     try {
-      await http.post('/providers/live-in-certification', {
-        providerId: certForm.providerId,
-        recipientName: certForm.recipientName,
-        caseNumber: certForm.caseNumber,
-        certificationDate: certForm.certificationDate || new Date().toISOString().split('T')[0],
-        hoursPerWeek: certForm.hoursPerWeek ? parseFloat(certForm.hoursPerWeek) : null
+      const resp = await providersApi.lookupLiveInCert({
+        providerNumber: searchForm.providerNumber.trim(),
+        caseNumber: searchForm.caseNumber.trim(),
       });
-      setSuccess('Live-in self-certification submitted successfully.');
-      setCertForm({ providerId: '', recipientName: '', caseNumber: '', certificationDate: '', hoursPerWeek: '' });
+      setDetail(resp);
+      setCertStatus(resp.currentCertificationStatus || '');
+      setView('entry');
     } catch (err) {
-      setError('Submission failed: ' + (err?.message || 'Unknown error'));
+      const msg = err?.response?.data?.message || err?.message || 'Lookup failed.';
+      setError(msg);
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
+
+  // ── Screen 2: Save handler ──
+  const handleSave = async () => {
+    setError('');
+    if (!certStatus) { setError('Self-Certification Status is required.'); return; }
+
+    setSaving(true);
+    try {
+      await providersApi.saveLiveInCert({
+        providerId: detail.providerId,
+        caseId: detail.caseId,
+        certificationStatus: certStatus,
+      });
+      setSuccess('Self-certification saved successfully.');
+      setDetail(null);
+      setCertStatus('');
+      setSearchForm({ providerNumber: '', caseNumber: '' });
+      setView('search');
+    } catch (err) {
+      const msg = err?.response?.data?.message || err?.message || 'Save failed.';
+      setError(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancelSearch = () => {
+    setSearchForm({ providerNumber: '', caseNumber: '' });
+    setError('');
+  };
+
+  const handleCancelEntry = () => {
+    setDetail(null);
+    setCertStatus('');
+    setError('');
+    setView('search');
+  };
+
+  // Format date for display
+  const formatDate = (d) => {
+    if (!d) return '\u2014';
+    const date = new Date(d + (d.length === 10 ? 'T00:00:00' : ''));
+    return isNaN(date.getTime()) ? d : date.toLocaleDateString('en-US');
+  };
+
+  const todayFormatted = new Date().toLocaleDateString('en-US');
+
+  const pageTitle = view === 'search'
+    ? 'IRS Live-In Provider Self-Certification Search'
+    : 'IRS Live-In Provider Self-Certification Entry';
 
   return (
     <div className="wq-page">
+      {/* Page Header */}
       <div className="wq-page-header">
-        <h2>Live-In Provider Self-Certification</h2>
-        <button className="wq-btn wq-btn-outline" onClick={() => navigate('/providers')}>Back to Providers</button>
+        <h2>{pageTitle}</h2>
+        {view === 'search' && (
+          <button className="wq-btn wq-btn-outline" onClick={() => navigate('/workspace')}>Back to Workspace</button>
+        )}
       </div>
 
-      {error && <div style={{ background: '#fff5f5', border: '1px solid #fc8181', padding: '0.5rem 1rem', borderRadius: '4px', marginBottom: '1rem', color: '#c53030', fontSize: '0.875rem' }}>{error}</div>}
-      {success && <div style={{ background: '#f0fff4', border: '1px solid #68d391', padding: '0.5rem 1rem', borderRadius: '4px', marginBottom: '1rem', color: '#276749', fontSize: '0.875rem' }}>{success}</div>}
-
-      <div className="wq-tabs">
-        <button className={`wq-tab ${activeTab === 'search' ? 'active' : ''}`} onClick={() => setActiveTab('search')}>Search Providers</button>
-        <button className={`wq-tab ${activeTab === 'certify' ? 'active' : ''}`} onClick={() => setActiveTab('certify')}>New Certification</button>
-      </div>
-
-      {activeTab === 'search' && (
-        <>
-          <div className="wq-panel">
-            <div className="wq-panel-header"><h4>Search Live-In Providers</h4></div>
-            <div className="wq-panel-body">
-              <div className="wq-search-grid">
-                <div className="wq-form-field">
-                  <label>Provider ID</label>
-                  <input type="text" value={providerId} onChange={e => setProviderId(e.target.value)} placeholder="Enter provider ID" />
-                </div>
-                <div className="wq-form-field">
-                  <label>Provider Name</label>
-                  <input type="text" value={providerName} onChange={e => setProviderName(e.target.value)} placeholder="Last name, First name" />
-                </div>
-                <div className="wq-form-field">
-                  <label>County Code</label>
-                  <input type="text" value={countyCode} onChange={e => setCountyCode(e.target.value)} placeholder="e.g. 19" />
-                </div>
-              </div>
-              <div className="wq-search-actions">
-                <button className="wq-btn wq-btn-primary" onClick={handleSearch} disabled={loading}>
-                  {loading ? 'Searching...' : 'Search'}
-                </button>
-                <button className="wq-btn wq-btn-outline" onClick={handleReset}>Reset</button>
-              </div>
-            </div>
-          </div>
-
-          {searched && (
-            <div className="wq-panel">
-              <div className="wq-panel-header"><h4>Results ({results.length})</h4></div>
-              <div className="wq-panel-body" style={{ padding: 0 }}>
-                {loading ? (
-                  <p style={{ padding: '1rem', color: '#888' }}>Searching...</p>
-                ) : results.length === 0 ? (
-                  <p style={{ padding: '1rem', color: '#888' }}>No providers found.</p>
-                ) : (
-                  <table className="wq-table">
-                    <thead>
-                      <tr><th>Provider ID</th><th>Name</th><th>County</th><th>Status</th><th>Enrollment Date</th></tr>
-                    </thead>
-                    <tbody>
-                      {results.map((p, i) => (
-                        <tr key={i} className="wq-clickable-row" onClick={() => navigate(`/providers/${p.id || p.providerId}`)}>
-                          <td>{p.providerId || p.id || '\u2014'}</td>
-                          <td>{[p.firstName, p.lastName].filter(Boolean).join(' ') || p.name || '\u2014'}</td>
-                          <td>{p.countyCode || '\u2014'}</td>
-                          <td><span className={`wq-badge wq-badge-${(p.status || '').toLowerCase()}`}>{p.status || '\u2014'}</span></td>
-                          <td>{p.enrollmentDate || p.createdAt || '\u2014'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          )}
-        </>
+      {/* Success Banner */}
+      {success && (
+        <div style={{ background: '#f0fff4', border: '1px solid #68d391', padding: '0.75rem 1rem', borderRadius: '6px', marginBottom: '1rem', color: '#276749', fontSize: '0.875rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{success}</span>
+          <button onClick={() => setSuccess('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#276749' }}>&times;</button>
+        </div>
       )}
 
-      {activeTab === 'certify' && (
+      {/* Error Banner */}
+      {error && (
+        <div style={{ background: '#fff5f5', border: '1px solid #fc8181', padding: '0.75rem 1rem', borderRadius: '6px', marginBottom: '1rem', color: '#c53030', fontSize: '0.875rem' }}>
+          {error}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* SCREEN 1: SEARCH (CI-718023)               */}
+      {/* ═══════════════════════════════════════════ */}
+      {view === 'search' && (
         <div className="wq-panel">
-          <div className="wq-panel-header"><h4>Submit Live-In Self-Certification</h4></div>
+          <div className="wq-panel-header"><h4>Search by Provider Number and Case Number</h4></div>
           <div className="wq-panel-body">
-            <div className="wq-search-grid">
+            <p style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '1rem' }}>
+              Enter the Provider Number and Case Number from the Self-Certification form (SOC 2298 / SOC 2299)
+              to locate the provider-case assignment in CMIPS.
+            </p>
+            <div style={{ fontSize: '0.8rem', color: '#c53030', marginBottom: '1rem' }}>* = required field</div>
+            <div className="wq-search-grid" style={{ maxWidth: '500px' }}>
               <div className="wq-form-field">
-                <label>Provider ID *</label>
-                <input type="text" value={certForm.providerId} onChange={e => setCertForm(p => ({ ...p, providerId: e.target.value }))} placeholder="Enter provider ID" />
+                <label>Provider Number <span style={{ color: '#c53030' }}>*</span></label>
+                <input
+                  type="text"
+                  value={searchForm.providerNumber}
+                  onChange={e => setSearchForm(f => ({ ...f, providerNumber: e.target.value }))}
+                  placeholder="Enter provider number"
+                />
               </div>
               <div className="wq-form-field">
-                <label>Recipient Name</label>
-                <input type="text" value={certForm.recipientName} onChange={e => setCertForm(p => ({ ...p, recipientName: e.target.value }))} placeholder="Recipient name" />
-              </div>
-              <div className="wq-form-field">
-                <label>Case Number *</label>
-                <input type="text" value={certForm.caseNumber} onChange={e => setCertForm(p => ({ ...p, caseNumber: e.target.value }))} placeholder="Case number" />
-              </div>
-              <div className="wq-form-field">
-                <label>Certification Date</label>
-                <input type="date" value={certForm.certificationDate} onChange={e => setCertForm(p => ({ ...p, certificationDate: e.target.value }))} />
-              </div>
-              <div className="wq-form-field">
-                <label>Hours Per Week</label>
-                <input type="number" value={certForm.hoursPerWeek} onChange={e => setCertForm(p => ({ ...p, hoursPerWeek: e.target.value }))} placeholder="e.g. 40" />
+                <label>Case Number <span style={{ color: '#c53030' }}>*</span></label>
+                <input
+                  type="text"
+                  value={searchForm.caseNumber}
+                  onChange={e => setSearchForm(f => ({ ...f, caseNumber: e.target.value }))}
+                  placeholder="Enter case number"
+                />
               </div>
             </div>
-            <div className="wq-search-actions">
-              <button className="wq-btn wq-btn-primary" onClick={handleSubmitCertification} disabled={submitting}>
-                {submitting ? 'Submitting...' : 'Submit Certification'}
+            <div className="wq-search-actions" style={{ marginTop: '1.5rem' }}>
+              <button className="wq-btn wq-btn-primary" onClick={handleContinue} disabled={loading}>
+                {loading ? 'Validating...' : 'Continue'}
               </button>
+              <button className="wq-btn wq-btn-outline" onClick={handleCancelSearch}>Cancel</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ═══════════════════════════════════════════ */}
+      {/* SCREEN 2: ENTRY (CI-718024)                */}
+      {/* ═══════════════════════════════════════════ */}
+      {view === 'entry' && detail && (
+        <>
+          <p style={{ fontSize: '0.85rem', color: '#4a5568', marginBottom: '1rem' }}>
+            Verify the provider and case details below. Set the Self-Certification Status and click Save to complete the entry.
+          </p>
+
+          {/* Details Section */}
+          <div className="wq-panel">
+            <div className="wq-panel-header"><h4>Provider &amp; Case Details</h4></div>
+            <div className="wq-panel-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 2rem' }}>
+                <DetailField label="Provider County" value={detail.providerCounty} />
+                <DetailField label="Provider Number" value={detail.providerNumber} />
+                <DetailField label="Provider Name" value={detail.providerName} />
+                <DetailField label="Case Number" value={detail.caseNumber} />
+                <DetailField label="Recipient Name" value={detail.recipientName} />
+              </div>
+            </div>
+          </div>
+
+          {/* Certification Section */}
+          <div className="wq-panel">
+            <div className="wq-panel-header"><h4>Self-Certification</h4></div>
+            <div className="wq-panel-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem 2rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.25rem' }}>
+                    Self-Certification Status <span style={{ color: '#c53030' }}>*</span>
+                  </div>
+                  <select
+                    value={certStatus}
+                    onChange={e => setCertStatus(e.target.value)}
+                    style={{ padding: '0.375rem 0.5rem', border: '1px solid #cbd5e0', borderRadius: '4px', fontSize: '0.875rem', minWidth: '180px' }}
+                  >
+                    <option value="">-- Select --</option>
+                    <option value="YES">Yes</option>
+                    <option value="NO">No</option>
+                  </select>
+                  <div style={{ fontSize: '0.75rem', color: '#718096', marginTop: '0.25rem' }}>
+                    Yes = Live-In Excluded (wages excluded from federal/state gross income).
+                    No = Cancel prior certification.
+                  </div>
+                </div>
+                <DetailField label="Status Date" value={todayFormatted} />
+              </div>
+              {detail.currentCertificationStatus && (
+                <div style={{ marginTop: '1rem', padding: '0.5rem 0.75rem', background: '#ebf8ff', border: '1px solid #90cdf4', borderRadius: '4px', fontSize: '0.8rem', color: '#2b6cb0' }}>
+                  Current certification status: <strong>{detail.currentCertificationStatus}</strong>
+                  {detail.statusDate && <> (as of {formatDate(detail.statusDate.toString ? detail.statusDate.toString() : detail.statusDate)})</>}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+            <button className="wq-btn wq-btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+            <button className="wq-btn wq-btn-outline" onClick={handleCancelEntry}>Cancel</button>
+          </div>
+        </>
+      )}
     </div>
   );
 };
+
+/** Read-only detail field */
+const DetailField = ({ label, value }) => (
+  <div>
+    <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.03em', marginBottom: '0.25rem' }}>
+      {label}
+    </div>
+    <div style={{ fontSize: '0.875rem', color: '#1a202c' }}>
+      {value || '\u2014'}
+    </div>
+  </div>
+);

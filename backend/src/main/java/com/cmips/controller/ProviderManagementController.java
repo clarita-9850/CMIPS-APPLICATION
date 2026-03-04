@@ -1,11 +1,15 @@
 package com.cmips.controller;
 
 import com.cmips.annotation.RequirePermission;
+import com.cmips.dto.LiveInCertEntryResponse;
+import com.cmips.dto.LiveInCertLookupRequest;
+import com.cmips.dto.LiveInCertSaveRequest;
 import com.cmips.entity.*;
 import com.cmips.entity.ProviderEntity.ProviderStatus;
 import com.cmips.repository.ProviderRepository;
 import com.cmips.repository.ProviderAssignmentRepository;
 import com.cmips.repository.OvertimeViolationRepository;
+import com.cmips.service.LiveInSelfCertificationService;
 import com.cmips.service.ProviderManagementService;
 import com.cmips.service.FieldLevelAuthorizationService;
 import org.slf4j.Logger;
@@ -33,17 +37,20 @@ public class ProviderManagementController {
     private final ProviderAssignmentRepository assignmentRepository;
     private final OvertimeViolationRepository violationRepository;
     private final FieldLevelAuthorizationService fieldAuthService;
+    private final LiveInSelfCertificationService liveInCertService;
 
     public ProviderManagementController(ProviderManagementService providerService,
                                         ProviderRepository providerRepository,
                                         ProviderAssignmentRepository assignmentRepository,
                                         OvertimeViolationRepository violationRepository,
-                                        FieldLevelAuthorizationService fieldAuthService) {
+                                        FieldLevelAuthorizationService fieldAuthService,
+                                        LiveInSelfCertificationService liveInCertService) {
         this.providerService = providerService;
         this.providerRepository = providerRepository;
         this.assignmentRepository = assignmentRepository;
         this.violationRepository = violationRepository;
         this.fieldAuthService = fieldAuthService;
+        this.liveInCertService = liveInCertService;
     }
 
     // ==================== PROVIDER CRUD ====================
@@ -421,5 +428,40 @@ public class ProviderManagementController {
     public static class SupervisorReviewRequest {
         private String outcome;
         private String comments;
+    }
+
+    // ========================================
+    // IRS Live-In Provider Self-Certification (DSD Section 32, CI-718023/718024)
+    // ========================================
+
+    @PostMapping("/live-in-cert/lookup")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> lookupLiveInCert(@RequestBody LiveInCertLookupRequest request) {
+        try {
+            LiveInCertEntryResponse detail = liveInCertService.lookupProviderCase(request);
+            return ResponseEntity.ok(detail);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/live-in-cert/save")
+    @RequirePermission(resource = "Provider Resource", scope = "create")
+    public ResponseEntity<?> saveLiveInCert(@RequestBody LiveInCertSaveRequest request) {
+        try {
+            LiveInSelfCertificationEntity saved = liveInCertService.saveCertification(request);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Self-certification saved successfully.",
+                    "certificationStatus", saved.getCertificationStatus(),
+                    "statusDate", saved.getStatusDate().toString(),
+                    "id", saved.getId()
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
     }
 }

@@ -54,3 +54,8 @@ export const createViolation = (id, data) =>
 
 export const getEligibleProviders = (countyCode) =>
   http.get(`/providers/eligible${countyCode ? '?countyCode=' + countyCode : ''}`).then(r => r.data);
+
+// IRS Live-In Provider Self-Certification (DSD Section 32)
+export const lookupLiveInCert = (data) => http.post('/providers/live-in-cert/lookup', data).then(r => r.data);
+
+export const saveLiveInCert = (data) => http.post('/providers/live-in-cert/save', data).then(r => r.data);
