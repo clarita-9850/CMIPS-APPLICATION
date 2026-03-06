@@ -76,6 +76,12 @@ export const ProviderDetailPage = () => {
   // Monthly paid hours
   const [monthlyHours, setMonthlyHours] = useState(null);
 
+  // Qualification
+  const [qualSummary, setQualSummary] = useState(null);
+  const [trainingRecords, setTrainingRecords] = useState([]);
+  const [showTrainingForm, setShowTrainingForm] = useState(false);
+  const [trainingForm, setTrainingForm] = useState({ trainingType: 'ANNUAL_REFRESHER', completionDate: '', hoursCompletedMinutes: '', certificateNumber: '', notes: '' });
+
   // CORI inline edit/inactivate
   const [editingCori, setEditingCori] = useState(null);
   const [coriEditForm, setCoriEditForm] = useState({});
@@ -117,6 +123,9 @@ export const ProviderDetailPage = () => {
       providersApi.getBackupProviderHours(id).then(d => setBackupHours(Array.isArray(d) ? d : [])).catch(() => setBackupHours([]));
     } else if (activeTab === 'monthlyhours') {
       providersApi.getMonthlyPaidHours(id).then(d => setMonthlyHours(d)).catch(() => setMonthlyHours(null));
+    } else if (activeTab === 'qualification') {
+      providersApi.getQualificationSummary(id).then(d => setQualSummary(d)).catch(() => setQualSummary(null));
+      providersApi.getProviderTraining(id).then(d => setTrainingRecords(Array.isArray(d) ? d : [])).catch(() => setTrainingRecords([]));
     }
   }, [id, activeTab]);
 
@@ -300,9 +309,9 @@ export const ProviderDetailPage = () => {
 
       {/* Tabs */}
       <div className="wq-tabs" style={{ flexWrap: 'wrap' }}>
-        {['overview','enrollment','assignments','cori','violations','exemptions','workweek','traveltime','benefits','attachments','backuphours','monthlyhours','notes'].map(tab => (
+        {['overview','enrollment','qualification','assignments','cori','violations','exemptions','workweek','traveltime','benefits','attachments','backuphours','monthlyhours','notes'].map(tab => (
           <button key={tab} className={`wq-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
-            {{ overview:'Overview', enrollment:'Enrollment', assignments:'Assignments', cori:'CORI', violations:'Violations', exemptions:'OT Exemptions', workweek:'Workweek Agmt', traveltime:'Travel Time', benefits:'Benefits', attachments:'Attachments', backuphours:'Backup Hours', monthlyhours:'Paid Hours', notes:'Notes' }[tab]}
+            {{ overview:'Overview', enrollment:'Enrollment', qualification:'Qualification', assignments:'Assignments', cori:'CORI', violations:'Violations', exemptions:'OT Exemptions', workweek:'Workweek Agmt', traveltime:'Travel Time', benefits:'Benefits', attachments:'Attachments', backuphours:'Backup Hours', monthlyhours:'Paid Hours', notes:'Notes' }[tab]}
           </button>
         ))}
       </div>
@@ -1032,6 +1041,199 @@ export const ProviderDetailPage = () => {
       )}
 
       {/* ── NOTES ── */}
+      {activeTab === 'qualification' && (() => {
+        const check = (val, label) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+            <span style={{ fontSize: 16 }}>{val ? '✅' : '❌'}</span>
+            <span style={{ flex: 1, fontSize: 13, color: '#2d3748' }}>{label}</span>
+          </div>
+        );
+        const fmtMins = (m) => {
+          if (!m) return '0:00';
+          return `${Math.floor(m/60)}:${String(m%60).padStart(2,'0')}`;
+        };
+        const handleRecordTraining = async () => {
+          setSaving(true); setActionError(''); setActionSuccess('');
+          try {
+            await providersApi.recordProviderTraining(id, {
+              ...trainingForm,
+              hoursCompletedMinutes: trainingForm.hoursCompletedMinutes ? Number(trainingForm.hoursCompletedMinutes) : null
+            });
+            setActionSuccess('Training record saved.');
+            setShowTrainingForm(false);
+            setTrainingForm({ trainingType: 'ANNUAL_REFRESHER', completionDate: '', hoursCompletedMinutes: '', certificateNumber: '', notes: '' });
+            providersApi.getQualificationSummary(id).then(d => setQualSummary(d)).catch(() => {});
+            providersApi.getProviderTraining(id).then(d => setTrainingRecords(Array.isArray(d) ? d : [])).catch(() => {});
+          } catch (err) {
+            setActionError(err?.response?.data?.error || 'Failed to save training record.');
+          } finally {
+            setSaving(false);
+          }
+        };
+        const qs = qualSummary;
+        return (
+          <div className="wq-panel">
+            <div className="wq-panel-header">
+              <h4>Provider Qualification — DSD Section 23</h4>
+              <button className="wq-btn wq-btn-primary" onClick={() => setShowTrainingForm(true)}>+ Record Training</button>
+            </div>
+            <div className="wq-panel-body">
+              {!qs ? (
+                <p className="wq-empty">Loading qualification summary…</p>
+              ) : (
+                <>
+                  {/* Overall status banner */}
+                  <div style={{
+                    padding: '10px 14px', borderRadius: 6, marginBottom: 16,
+                    background: qs.qualificationMet ? '#c6f6d5' : '#fed7d7',
+                    color: qs.qualificationMet ? '#276749' : '#9b2335',
+                    fontWeight: 700, fontSize: 14
+                  }}>
+                    {qs.qualificationMet ? '✅ All qualification requirements met' : '❌ Qualification requirements not fully met'}
+                    {qs.ineligibleReason && <span style={{ marginLeft: 12, fontWeight: 400, fontSize: 13 }}>Reason: {qs.ineligibleReason}</span>}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                    {/* Enrollment Requirements */}
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Enrollment Requirements</div>
+                      {check(qs.soc426Completed, `SOC 426 Completed${qs.soc426Date ? ' — ' + fmt(qs.soc426Date) : ''}`)}
+                      {check(qs.orientationCompleted, `Provider Orientation${qs.orientationDate ? ' — ' + fmt(qs.orientationDate) : ''}`)}
+                      {check(qs.backgroundCheckCompleted, `Background Check${qs.backgroundCheckDate ? ' — ' + fmt(qs.backgroundCheckDate) : ''}${qs.backgroundCheckStatus ? ' (' + qs.backgroundCheckStatus + ')' : ''}`)}
+                      {check(qs.providerAgreementSigned, 'Provider Agreement Signed')}
+                    </div>
+
+                    {/* PA & CORI */}
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>PA Registration & CORI</div>
+                      {check(qs.paRegistered, 'PA Registered')}
+                      {check(qs.paTrainingCompleted, 'PA Training Completed')}
+                      {check(qs.paFingerprintingCompleted, 'PA Fingerprinting Completed')}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
+                        <span style={{ fontSize: 16 }}>
+                          {qs.coriStatus === 'CLEAR' || qs.coriStatus === 'TIER_2_WAIVED' ? '✅' : '❌'}
+                        </span>
+                        <span style={{ flex: 1, fontSize: 13, color: '#2d3748' }}>
+                          CORI Status: <span style={{ fontWeight: 600 }}>{qs.coriStatus}</span>
+                          {qs.activeCoriCount > 0 && <span style={{ marginLeft: 6, color: '#718096' }}>({qs.activeCoriCount} active record{qs.activeCoriCount > 1 ? 's' : ''})</span>}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Annual Training */}
+                  <div style={{ marginTop: 16 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Annual Training — FY {qs.currentFiscalYear}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '10px 14px', background: '#f7fafc', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                      <div>
+                        <span style={{ fontSize: 12, color: '#718096' }}>Completed</span>
+                        <div style={{ fontWeight: 700, fontSize: 20, color: '#2d3748' }}>{fmtMins(qs.trainingCompletedMinutes)}</div>
+                      </div>
+                      <div style={{ color: '#a0aec0', fontSize: 20 }}>/</div>
+                      <div>
+                        <span style={{ fontSize: 12, color: '#718096' }}>Required</span>
+                        <div style={{ fontWeight: 700, fontSize: 20, color: '#2d3748' }}>{fmtMins(qs.trainingRequiredMinutes)}</div>
+                      </div>
+                      <div style={{ marginLeft: 16 }}>
+                        <span style={{
+                          background: qs.trainingStatus === 'COMPLETE' ? '#c6f6d5' : qs.trainingStatus === 'INCOMPLETE' ? '#feebc8' : '#e2e8f0',
+                          color: qs.trainingStatus === 'COMPLETE' ? '#276749' : qs.trainingStatus === 'INCOMPLETE' ? '#c05621' : '#4a5568',
+                          padding: '3px 10px', borderRadius: 12, fontSize: 13, fontWeight: 700
+                        }}>{qs.trainingStatus}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Training History */}
+              <div style={{ marginTop: 20 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: '#4a5568', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Training History</div>
+                {trainingRecords.length === 0 ? (
+                  <p className="wq-empty">No training records.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead>
+                      <tr>
+                        <th>Type</th><th>Fiscal Year</th><th>Completion Date</th>
+                        <th>Completed (hrs)</th><th>Required (hrs)</th><th>Certificate #</th><th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {trainingRecords.map(t => (
+                        <tr key={t.id}>
+                          <td>{t.trainingType?.replace(/_/g, ' ')}</td>
+                          <td>{t.fiscalYear || '—'}</td>
+                          <td>{fmt(t.completionDate)}</td>
+                          <td>{fmtMins(t.hoursCompletedMinutes)}</td>
+                          <td>{t.hoursRequiredMinutes ? fmtMins(t.hoursRequiredMinutes) : '—'}</td>
+                          <td>{t.certificateNumber || '—'}</td>
+                          <td><span style={badgeStyle(t.status?.toLowerCase())}>{t.status}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            {/* Add Training Modal */}
+            {showTrainingForm && (
+              <div className="wq-modal-overlay">
+                <div className="wq-modal">
+                  <div className="wq-modal-header">
+                    <h3>Record Training Completion</h3>
+                    <button className="wq-modal-close" onClick={() => setShowTrainingForm(false)}>✕</button>
+                  </div>
+                  <div className="wq-modal-body">
+                    <div className="wq-form-grid">
+                      <div className="wq-form-group">
+                        <label className="wq-label">Training Type *</label>
+                        <select className="wq-input" value={trainingForm.trainingType}
+                          onChange={e => setTrainingForm(f => ({ ...f, trainingType: e.target.value }))}>
+                          <option value="INITIAL_ORIENTATION">Initial Orientation</option>
+                          <option value="ANNUAL_REFRESHER">Annual Refresher</option>
+                          <option value="VIOLATION_REMEDIATION">Violation Remediation</option>
+                        </select>
+                      </div>
+                      <div className="wq-form-group">
+                        <label className="wq-label">Completion Date *</label>
+                        <input type="date" className="wq-input" value={trainingForm.completionDate}
+                          onChange={e => setTrainingForm(f => ({ ...f, completionDate: e.target.value }))} />
+                      </div>
+                      <div className="wq-form-group">
+                        <label className="wq-label">Hours Completed (minutes)</label>
+                        <input type="number" className="wq-input" min="0" value={trainingForm.hoursCompletedMinutes}
+                          onChange={e => setTrainingForm(f => ({ ...f, hoursCompletedMinutes: e.target.value }))}
+                          placeholder="e.g. 1440 = 24:00 hrs" />
+                      </div>
+                      <div className="wq-form-group">
+                        <label className="wq-label">Certificate Number</label>
+                        <input className="wq-input" value={trainingForm.certificateNumber}
+                          onChange={e => setTrainingForm(f => ({ ...f, certificateNumber: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div className="wq-form-group" style={{ marginTop: 8 }}>
+                      <label className="wq-label">Notes</label>
+                      <textarea className="wq-input" rows={2} value={trainingForm.notes}
+                        onChange={e => setTrainingForm(f => ({ ...f, notes: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="wq-modal-footer">
+                    <button className="wq-btn wq-btn-secondary" onClick={() => setShowTrainingForm(false)}>Cancel</button>
+                    <button className="wq-btn wq-btn-primary" onClick={handleRecordTraining} disabled={saving || !trainingForm.completionDate}>
+                      {saving ? 'Saving…' : 'Save'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {activeTab === 'notes' && (
         <div className="wq-panel">
           <div className="wq-panel-header">

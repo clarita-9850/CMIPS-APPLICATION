@@ -154,3 +154,11 @@ export const triggerSsnVerification = (id) =>
   http.put(`/providers/${id}/verify-ssn`).then(r => r.data);
 export const updateSsnVerificationResult = (id, data) =>
   http.put(`/providers/${id}/ssn-verification-result`, data).then(r => r.data);
+
+// ── Provider Qualification / Training (CI-117545 / CI-67804) ─────────────────
+export const getQualificationSummary = (id) =>
+  http.get(`/providers/${id}/qualification-summary`).then(r => r.data);
+export const getProviderTraining = (id) =>
+  http.get(`/providers/${id}/training`).then(r => r.data);
+export const recordProviderTraining = (id, data) =>
+  http.post(`/providers/${id}/training`, data).then(r => r.data);
