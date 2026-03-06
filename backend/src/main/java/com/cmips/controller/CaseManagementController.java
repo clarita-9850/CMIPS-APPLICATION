@@ -148,45 +148,57 @@ public class CaseManagementController {
 
     @PutMapping("/{id}/terminate")
     @RequirePermission(resource = "Case Resource", scope = "terminate")
-    public ResponseEntity<CaseEntity> terminateCase(
+    public ResponseEntity<?> terminateCase(
             @PathVariable Long id,
             @RequestBody TerminationRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-
-        LocalDate authEndDate = request.getAuthorizationEndDate() != null
-                ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
-        CaseEntity caseEntity = caseManagementService.terminateCase(id, request.getReason(), authEndDate, userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            LocalDate authEndDate = request.getAuthorizationEndDate() != null
+                    ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
+            CaseEntity caseEntity = caseManagementService.terminateCase(id, request.getReason(), authEndDate, userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (RuntimeException e) {
+            log.warn("[terminateCase] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/leave")
     @RequirePermission(resource = "Case Resource", scope = "edit")
-    public ResponseEntity<CaseEntity> placeCaseOnLeave(
+    public ResponseEntity<?> placeCaseOnLeave(
             @PathVariable Long id,
             @RequestBody LeaveRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-
-        LocalDate authEndDate = request.getAuthorizationEndDate() != null
-                ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
-        LocalDate suspEndDate = request.getResourceSuspensionEndDate() != null
-                ? LocalDate.parse(request.getResourceSuspensionEndDate()) : null;
-        CaseEntity caseEntity = caseManagementService.placeCaseOnLeave(
-                id, request.getReason(), authEndDate, suspEndDate, userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            LocalDate authEndDate = request.getAuthorizationEndDate() != null
+                    ? LocalDate.parse(request.getAuthorizationEndDate()) : null;
+            LocalDate suspEndDate = request.getResourceSuspensionEndDate() != null
+                    ? LocalDate.parse(request.getResourceSuspensionEndDate()) : null;
+            CaseEntity caseEntity = caseManagementService.placeCaseOnLeave(
+                    id, request.getReason(), authEndDate, suspEndDate, userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (RuntimeException e) {
+            log.warn("[placeCaseOnLeave] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/withdraw")
     @RequirePermission(resource = "Case Resource", scope = "edit")
-    public ResponseEntity<CaseEntity> withdrawApplication(
+    public ResponseEntity<?> withdrawApplication(
             @PathVariable Long id,
             @RequestBody WithdrawalRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-
-        LocalDate withdrawalDate = request.getWithdrawalDate() != null
-                ? LocalDate.parse(request.getWithdrawalDate()) : null;
-        CaseEntity caseEntity = caseManagementService.withdrawApplication(
-                id, request.getReason(), withdrawalDate, userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            LocalDate withdrawalDate = request.getWithdrawalDate() != null
+                    ? LocalDate.parse(request.getWithdrawalDate()) : null;
+            CaseEntity caseEntity = caseManagementService.withdrawApplication(
+                    id, request.getReason(), withdrawalDate, userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (RuntimeException e) {
+            log.warn("[withdrawApplication] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ==================== RESCIND (DSD Section 3.4) ====================
