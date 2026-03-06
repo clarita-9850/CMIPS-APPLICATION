@@ -4,6 +4,8 @@ import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity;
 import com.cmips.entity.CountyContractorInvoiceEntity.InvoiceStatus;
 import com.cmips.entity.ElectronicFormEntity.*;
+import com.cmips.entity.NoticeOfActionEntity.NoaType;
+import com.cmips.entity.NoticeOfActionEntity.NoaStatus;
 import com.cmips.entity.OvertimeAgreementEntity.AgreementStatus;
 import com.cmips.entity.OvertimeAgreementEntity.AgreementType;
 import com.cmips.entity.WPCSHoursEntity.FundingSource;
@@ -48,6 +50,8 @@ public class CaseMaintenanceService {
     private final ESPRegistrationRepository espRegistrationRepository;
     private final CaseRepository caseRepository;
     private final ProviderRepository providerRepository;
+    private final HealthCareCertificationRepository healthCareCertRepository;
+    private final NoticeOfActionRepository noaRepository;
 
     public CaseMaintenanceService(WorkweekAgreementRepository workweekAgreementRepository,
                                    OvertimeAgreementRepository overtimeAgreementRepository,
@@ -57,7 +61,9 @@ public class CaseMaintenanceService {
                                    ElectronicFormRepository formRepository,
                                    ESPRegistrationRepository espRegistrationRepository,
                                    CaseRepository caseRepository,
-                                   ProviderRepository providerRepository) {
+                                   ProviderRepository providerRepository,
+                                   HealthCareCertificationRepository healthCareCertRepository,
+                                   NoticeOfActionRepository noaRepository) {
         this.workweekAgreementRepository = workweekAgreementRepository;
         this.overtimeAgreementRepository = overtimeAgreementRepository;
         this.wpcsHoursRepository = wpcsHoursRepository;
@@ -67,6 +73,8 @@ public class CaseMaintenanceService {
         this.espRegistrationRepository = espRegistrationRepository;
         this.caseRepository = caseRepository;
         this.providerRepository = providerRepository;
+        this.healthCareCertRepository = healthCareCertRepository;
+        this.noaRepository = noaRepository;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -638,6 +646,147 @@ public class CaseMaintenanceService {
 
         log.info("[CaseMaint] Medi-Cal SOC updated: caseId={}", caseId);
         return caseRepository.save(c);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Health Care Certification (DSD Section 21 — BR SE 28-50)
+    // ─────────────────────────────────────────────────────────────
+
+    public List<HealthCareCertificationEntity> getHealthCareCertifications(Long caseId) {
+        getCaseOrThrow(caseId);
+        return healthCareCertRepository.findByCaseId(caseId);
+    }
+
+    @Transactional
+    public HealthCareCertificationEntity createHealthCareCertification(Long caseId, Map<String, Object> request, String userId) {
+        CaseEntity c = getCaseOrThrow(caseId);
+        HealthCareCertificationEntity cert = new HealthCareCertificationEntity();
+        cert.setCaseId(caseId);
+        cert.setRecipientId(c.getRecipientId());
+        cert.setCertificationMethod((String) request.get("certificationMethod"));
+        cert.setCertificationType((String) request.get("certificationType"));
+        cert.setFormType((String) request.getOrDefault("formType", "SOC_873_874"));
+        cert.setPrintOption((String) request.getOrDefault("printOption", "NIGHTLY_BATCH"));
+        cert.setLanguage((String) request.getOrDefault("language", "ENGLISH"));
+        if (request.get("printDate") != null) {
+            cert.setPrintDate(LocalDate.parse((String) request.get("printDate")));
+            cert.calculateInitialDueDate(); // 45 days from print
+        }
+        cert.setComments((String) request.get("comments"));
+        cert.setCreatedBy(userId);
+        cert.setStatus("ACTIVE");
+        HealthCareCertificationEntity saved = healthCareCertRepository.save(cert);
+        log.info("[HCC] Created health care certification: caseId={}, id={}", caseId, saved.getId());
+        return saved;
+    }
+
+    @Transactional
+    public HealthCareCertificationEntity updateHealthCareCertification(Long certId, Map<String, Object> request, String userId) {
+        HealthCareCertificationEntity cert = healthCareCertRepository.findById(certId)
+                .orElseThrow(() -> new RuntimeException("Health care certification not found: " + certId));
+        if (request.get("documentationReceivedDate") != null) {
+            cert.setDocumentationReceivedDate(LocalDate.parse((String) request.get("documentationReceivedDate")));
+        }
+        if (request.get("mailedGivenToRecipientDate") != null) {
+            cert.setMailedGivenToRecipientDate(LocalDate.parse((String) request.get("mailedGivenToRecipientDate")));
+            cert.recalculateDueDateFromMailedDate(); // recalculate 45-day window
+        }
+        if (request.get("certificationType") != null) {
+            cert.setCertificationType((String) request.get("certificationType"));
+        }
+        if (request.get("comments") != null) {
+            cert.setComments((String) request.get("comments"));
+        }
+        cert.setUpdatedBy(userId);
+        // Complete if documentation received and type set
+        cert.complete();
+        return healthCareCertRepository.save(cert);
+    }
+
+    @Transactional
+    public HealthCareCertificationEntity grantGoodCauseExtension(Long caseId, Map<String, Object> request, String userId) {
+        HealthCareCertificationEntity cert = healthCareCertRepository.findActiveByCaseId(caseId)
+                .orElseThrow(() -> new RuntimeException("No active health care certification for case: " + caseId));
+        cert.setGoodCauseExtensionRequested(true);
+        cert.calculateGoodCauseExtensionDueDate(); // adds 45 days to current due date
+        if (request.get("notes") != null) cert.setComments((String) request.get("notes"));
+        cert.setUpdatedBy(userId);
+        HealthCareCertificationEntity saved = healthCareCertRepository.save(cert);
+        log.info("[HCC] Good cause extension granted: caseId={}, newDueDate={}", caseId, saved.getGoodCauseExtensionDueDate());
+        return saved;
+    }
+
+    @Transactional
+    public HealthCareCertificationEntity inactivateHealthCareCertification(Long certId, String userId) {
+        HealthCareCertificationEntity cert = healthCareCertRepository.findById(certId)
+                .orElseThrow(() -> new RuntimeException("Health care certification not found: " + certId));
+        cert.inactivate(userId);
+        return healthCareCertRepository.save(cert);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Notices of Action (NOA) — NA 1250–1257
+    // ─────────────────────────────────────────────────────────────
+
+    public List<NoticeOfActionEntity> getNoasForCase(Long caseId) {
+        getCaseOrThrow(caseId);
+        return noaRepository.findByCaseIdOrderByRequestDateDesc(caseId);
+    }
+
+    @Transactional
+    public NoticeOfActionEntity generateNoa(Long caseId, Map<String, Object> request, String userId) {
+        CaseEntity c = getCaseOrThrow(caseId);
+        NoticeOfActionEntity noa = new NoticeOfActionEntity();
+        noa.setCaseId(caseId);
+        noa.setRecipientId(c.getRecipientId());
+
+        String noaTypeStr = (String) request.get("noaType");
+        noa.setNoaType(NoaType.valueOf(noaTypeStr));
+
+        String langStr = (String) request.getOrDefault("language", "ENGLISH");
+        try { noa.setLanguage(NoticeOfActionEntity.Language.valueOf(langStr)); } catch (Exception e) { noa.setLanguage(NoticeOfActionEntity.Language.ENGLISH); }
+
+        noa.setTriggerAction((String) request.get("triggerAction"));
+        noa.setTriggerReasonCode((String) request.get("triggerReasonCode"));
+        noa.setNotes((String) request.get("notes"));
+        if (request.get("effectiveDate") != null) {
+            noa.setEffectiveDate(LocalDate.parse((String) request.get("effectiveDate")));
+        }
+
+        // PRINT_NOW → immediately set to PRINTED; NIGHTLY_BATCH → stays PENDING
+        String printMethod = (String) request.getOrDefault("printMethod", "NIGHTLY_BATCH");
+        if ("PRINT_NOW".equals(printMethod)) {
+            noa.setStatus(NoaStatus.PRINTED);
+            noa.setPrintDate(LocalDate.now());
+        } else {
+            noa.setStatus(NoaStatus.PENDING);
+        }
+        noa.setCreatedBy(userId);
+        NoticeOfActionEntity saved = noaRepository.save(noa);
+        log.info("[NOA] Generated NOA {} for caseId={}", noaTypeStr, caseId);
+        return saved;
+    }
+
+    @Transactional
+    public NoticeOfActionEntity printNoa(Long noaId, String userId) {
+        NoticeOfActionEntity noa = noaRepository.findById(noaId)
+                .orElseThrow(() -> new RuntimeException("NOA not found: " + noaId));
+        noa.setStatus(NoaStatus.PRINTED);
+        noa.setPrintDate(LocalDate.now());
+        noa.setUpdatedBy(userId);
+        return noaRepository.save(noa);
+    }
+
+    @Transactional
+    public NoticeOfActionEntity suppressNoa(Long noaId, Map<String, Object> request, String userId) {
+        NoticeOfActionEntity noa = noaRepository.findById(noaId)
+                .orElseThrow(() -> new RuntimeException("NOA not found: " + noaId));
+        noa.setStatus(NoaStatus.SUPPRESSED);
+        noa.setSuppressedDate(LocalDate.now());
+        noa.setSuppressedBy(userId);
+        noa.setSuppressedReason((String) request.getOrDefault("reason", "Suppressed by user"));
+        noa.setUpdatedBy(userId);
+        return noaRepository.save(noa);
     }
 
     // ─────────────────────────────────────────────────────────────

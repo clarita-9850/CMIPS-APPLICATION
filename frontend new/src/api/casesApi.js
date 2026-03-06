@@ -132,3 +132,39 @@ export const updateMediCalSoc = (caseId, data) =>
 
 export const getMediCalEligibility = (caseId) =>
   http.get(`/cases/${caseId}/medi-cal-eligibility`).then(r => r.data);
+
+// ── Missing lifecycle actions ──────────────────────────────────────
+export const rescindCase = (id, data) =>
+  http.put(`/cases/${id}/rescind`, data).then(r => r.data);
+
+export const reactivateCase = (id, data) =>
+  http.put(`/cases/${id}/reactivate`, data).then(r => r.data);
+
+export const cancelTransfer = (id, data) =>
+  http.post(`/cases/${id}/transfer/cancel`, data).then(r => r.data);
+
+// ── Health Care Certification ─────────────────────────────────────
+export const getHealthCareCert = (caseId) =>
+  http.get(`/cases/${caseId}/health-care-cert`).then(r => r.data);
+
+export const createHealthCareCert = (caseId, data) =>
+  http.post(`/cases/${caseId}/health-care-cert`, data).then(r => r.data);
+
+export const updateHealthCareCert = (certId, data) =>
+  http.put(`/cases/health-care-cert/${certId}`, data).then(r => r.data);
+
+export const grantGoodCauseExtension = (caseId, data) =>
+  http.put(`/cases/${caseId}/health-care-cert/good-cause`, data).then(r => r.data);
+
+// ── NOA (Notice of Action) ────────────────────────────────────────
+export const getNoas = (caseId) =>
+  http.get(`/cases/${caseId}/noas`).then(r => r.data);
+
+export const generateNoa = (caseId, data) =>
+  http.post(`/cases/${caseId}/noas`, data).then(r => r.data);
+
+export const printNoa = (noaId) =>
+  http.get(`/cases/noas/${noaId}/print`).then(r => r.data);
+
+export const suppressNoa = (noaId) =>
+  http.put(`/cases/noas/${noaId}/suppress`).then(r => r.data);

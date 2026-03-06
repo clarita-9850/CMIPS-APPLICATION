@@ -70,82 +70,8 @@ keycloak:
     secret: ${KEYCLOAK_CLIENT_SECRET:X6282J5tQzu2tzqLcglKmjhwfidB0vh9}
   permission-cache:
     ttl-minutes: ${KEYCLOAK_PERMISSION_CACHE_TTL_MINUTES:5}
-  policy-enforcer-config:
-    enforcement-mode: ENFORCING  # Changed to ENFORCING for strict authorization
-    user-managed-access: {}
-    paths:
-      - name: Timesheet Resource
-        path: /api/timesheets/*
-        methods:
-          - name: create
-            method: POST
-            scopes:
-              - create
-          - name: read
-            method: GET
-            scopes:
-              - read
-          - name: update
-            method: PUT
-            scopes:
-              - update
-          - name: delete
-            method: DELETE
-            scopes:
-              - delete
-          - name: submit
-            method: POST
-            path: /api/timesheets/*/submit
-            scopes:
-              - submit
-          - name: approve
-            method: POST
-            path: /api/timesheets/*/approve
-            scopes:
-              - approve
-          - name: reject
-            method: POST
-            path: /api/timesheets/*/reject
-            scopes:
-              - reject
-      - name: EVV Resource
-        path: /api/evv/*
-        methods:
-          - name: create
-            method: POST
-            scopes:
-              - create
-          - name: read
-            method: GET
-            scopes:
-              - read
-          - name: update
-            method: PUT
-            scopes:
-              - update
-          - name: delete
-            method: DELETE
-            scopes:
-              - delete
-      - name: Provider-Recipient Resource
-        path: /api/provider-recipient/*
-        methods:
-          - name: create
-            method: POST
-            scopes:
-              - create
-          - name: read
-            method: GET
-            scopes:
-              - read
-          - name: update
-            method: PUT
-            scopes:
-              - update
-          - name: delete
-            method: DELETE
-            scopes:
-              - delete
+  # Authorization is handled entirely by @RequirePermission + AuthorizationAspect + KeycloakPolicyEvaluationService
+  # All resources, scopes, and role-policy mappings are configured in Keycloak only (not duplicated here)
 
 logging:
   level:

@@ -792,4 +792,114 @@ public class CaseManagementController {
                 "eligible", true
         ));
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // Health Care Certification (DSD Section 21 — BR SE 28-50)
+    // ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/{caseId}/health-care-cert")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getHealthCareCerts(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getHealthCareCertifications(caseId));
+    }
+
+    @PostMapping("/{caseId}/health-care-cert")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> createHealthCareCert(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.createHealthCareCertification(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/health-care-cert/{certId}")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> updateHealthCareCert(
+            @PathVariable Long certId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.updateHealthCareCertification(certId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/{caseId}/health-care-cert/good-cause")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> grantGoodCauseExtension(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.grantGoodCauseExtension(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/health-care-cert/{certId}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateHealthCareCert(
+            @PathVariable Long certId,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.inactivateHealthCareCertification(certId, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Notices of Action (NOA) — NA 1250–1257
+    // ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/{caseId}/noas")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getNoasForCase(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getNoasForCase(caseId));
+    }
+
+    @PostMapping("/{caseId}/noas")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> generateNoa(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.generateNoa(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/noas/{noaId}/print")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> printNoa(
+            @PathVariable Long noaId,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.printNoa(noaId, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/noas/{noaId}/suppress")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> suppressNoa(
+            @PathVariable Long noaId,
+            @RequestBody(required = false) Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            Map<String, Object> body = request != null ? request : Map.of();
+            return ResponseEntity.ok(caseMaintenanceService.suppressNoa(noaId, body, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

@@ -46,6 +46,10 @@ export const CaseDetailPage = () => {
   const [flexibleHours, setFlexibleHours] = useState([]);
   const [contractorInvoices, setContractorInvoices] = useState([]);
   const [mediCalSoc, setMediCalSoc] = useState(null);
+  const [noas, setNoas] = useState([]);
+  const [healthCerts, setHealthCerts] = useState([]);
+  const [showNoaModal, setShowNoaModal] = useState(false);
+  const [showHealthCertModal, setShowHealthCertModal] = useState(false);
   const [agreementsSubTab, setAgreementsSubTab] = useState('workweek');
   const [hoursSubTab, setHoursSubTab] = useState('flexible');
   const [formsSubTab, setFormsSubTab] = useState('electronic');
@@ -141,6 +145,10 @@ export const CaseDetailPage = () => {
       formsApi.getContractorInvoices(id).then(d => setContractorInvoices(Array.isArray(d) ? d : [])).catch(() => setContractorInvoices([]));
     } else if (activeTab === 'medicalSoc') {
       casesApi.getMediCalSoc(id).then(d => setMediCalSoc(d)).catch(() => setMediCalSoc(null));
+    } else if (activeTab === 'noa') {
+      casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])).catch(() => setNoas([]));
+    } else if (activeTab === 'healthCert') {
+      casesApi.getHealthCareCert(id).then(d => setHealthCerts(Array.isArray(d) ? d : [])).catch(() => setHealthCerts([]));
     }
   }, [id, activeTab]);
 
@@ -265,6 +273,8 @@ export const CaseDetailPage = () => {
         <button className={`wq-tab ${activeTab === 'visits' ? 'active' : ''}`} onClick={() => setActiveTab('visits')}>Visits</button>
         <button className={`wq-tab ${activeTab === 'contractor' ? 'active' : ''}`} onClick={() => setActiveTab('contractor')}>Contractor</button>
         <button className={`wq-tab ${activeTab === 'medicalSoc' ? 'active' : ''}`} onClick={() => setActiveTab('medicalSoc')}>Medi-Cal</button>
+        <button className={`wq-tab ${activeTab === 'noa' ? 'active' : ''}`} onClick={() => setActiveTab('noa')}>NOA</button>
+        <button className={`wq-tab ${activeTab === 'healthCert' ? 'active' : ''}`} onClick={() => setActiveTab('healthCert')}>Health Cert</button>
         <button className={`wq-tab ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Notes</button>
         <button className={`wq-tab ${activeTab === 'contacts' ? 'active' : ''}`} onClick={() => setActiveTab('contacts')}>Contacts</button>
         <button className={`wq-tab ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>History</button>
@@ -1106,6 +1116,215 @@ export const CaseDetailPage = () => {
             )}
             <div style={{ marginTop: '1rem' }}>
               <button className="wq-btn wq-btn-outline" onClick={() => setShowReassessModal(true)}>Schedule Reassessment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOA Tab — Notices of Action */}
+      {activeTab === 'noa' && (
+        <div className="wq-panel">
+          <div className="wq-panel-header">
+            <h4>Notices of Action ({noas.length})</h4>
+            <button className="wq-btn wq-btn-primary" style={{ fontSize: '0.8rem' }} onClick={() => { setModalForm({ noaType: '', language: 'ENGLISH', printMethod: 'NIGHTLY_BATCH', effectiveDate: '', notes: '' }); setShowNoaModal(true); }}>Generate NOA</button>
+          </div>
+          <div className="wq-panel-body">
+            {noas.length === 0 ? <p style={{ color: '#718096' }}>No notices of action on record.</p> : (
+              <table className="wq-table">
+                <thead><tr><th>NOA Type</th><th>Language</th><th>Status</th><th>Trigger</th><th>Effective Date</th><th>Request Date</th><th>Print Date</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {noas.map(n => (
+                    <tr key={n.id}>
+                      <td><strong>{n.noaType}</strong></td>
+                      <td>{n.language || 'ENGLISH'}</td>
+                      <td><span className={`wq-badge wq-badge-${(n.status || '').toLowerCase()}`}>{n.status}</span></td>
+                      <td>{n.triggerAction || '\u2014'}{n.triggerReasonCode ? ` (${n.triggerReasonCode})` : ''}</td>
+                      <td>{n.effectiveDate ? new Date(n.effectiveDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                      <td>{n.requestDate ? new Date(n.requestDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                      <td>{n.printDate ? new Date(n.printDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                      <td style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        {n.status === 'PENDING' && (
+                          <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                            onClick={() => casesApi.printNoa(n.id).then(() => casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])))}>Print</button>
+                        )}
+                        {(n.status === 'PENDING' || n.status === 'PRINTED') && (
+                          <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                            onClick={() => casesApi.suppressNoa(n.id).then(() => casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])))}>Suppress</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* NOA Generation Modal */}
+      {showNoaModal && (
+        <div className="wq-modal-overlay" onClick={() => setShowNoaModal(false)}>
+          <div className="wq-modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="wq-modal-header"><h4>Generate Notice of Action</h4><button className="wq-modal-close" onClick={() => setShowNoaModal(false)}>✕</button></div>
+            <div className="wq-modal-body">
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                <div>
+                  <label className="wq-label">NOA Type <span style={{ color: '#c53030' }}>*</span></label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.noaType || ''} onChange={e => setModalForm(p => ({ ...p, noaType: e.target.value }))}>
+                    <option value="">Select...</option>
+                    {[['NA_1250','NA 1250 — Approval'],['NA_1251','NA 1251 — Continuation'],['NA_1252','NA 1252 — Denial'],['NA_1253','NA 1253 — Change in Award'],['NA_1254','NA 1254 — Change (Reduction)'],['NA_1255','NA 1255 — Termination'],['NA_1256','NA 1256 — Share of Cost'],['NA_1257','NA 1257 — Multi-Program']].map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Language</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.language || 'ENGLISH'} onChange={e => setModalForm(p => ({ ...p, language: e.target.value }))}>
+                    {['ENGLISH','SPANISH','CHINESE','ARMENIAN','TAGALOG','VIETNAMESE'].map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Print Method</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.printMethod || 'NIGHTLY_BATCH'} onChange={e => setModalForm(p => ({ ...p, printMethod: e.target.value }))}>
+                    <option value="NIGHTLY_BATCH">Print in Nightly Batch</option>
+                    <option value="PRINT_NOW">Print Now</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Effective Date</label>
+                  <input type="date" className="wq-input" value={modalForm.effectiveDate || ''} onChange={e => setModalForm(p => ({ ...p, effectiveDate: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="wq-label">Notes</label>
+                  <textarea className="wq-input" rows={2} value={modalForm.notes || ''} onChange={e => setModalForm(p => ({ ...p, notes: e.target.value }))} style={{ width: '100%' }} />
+                </div>
+                {modalError && <p style={{ color: '#c53030', fontSize: '0.8rem' }}>{modalError}</p>}
+              </div>
+            </div>
+            <div className="wq-modal-footer">
+              <button className="wq-btn wq-btn-primary" onClick={() => {
+                if (!modalForm.noaType) { setModalError('NOA Type is required.'); return; }
+                casesApi.generateNoa(id, { noaType: modalForm.noaType, language: modalForm.language, printMethod: modalForm.printMethod, effectiveDate: modalForm.effectiveDate || null, notes: modalForm.notes, triggerAction: 'MANUAL' })
+                  .then(() => { setShowNoaModal(false); setModalError(''); casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])); })
+                  .catch(err => setModalError(err?.response?.data?.error || 'Failed to generate NOA.'));
+              }}>Generate</button>
+              <button className="wq-btn wq-btn-outline" onClick={() => { setShowNoaModal(false); setModalError(''); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Health Care Certification Tab — DSD Section 21 */}
+      {activeTab === 'healthCert' && (
+        <div className="wq-panel">
+          <div className="wq-panel-header">
+            <h4>Health Care Certifications ({healthCerts.length})</h4>
+            <button className="wq-btn wq-btn-primary" style={{ fontSize: '0.8rem' }} onClick={() => { setModalForm({ certificationMethod: 'FORM_GENERATED', formType: 'SOC_873_874', printOption: 'NIGHTLY_BATCH', language: 'ENGLISH', printDate: new Date().toISOString().slice(0,10), comments: '' }); setShowHealthCertModal(true); }}>Request SOC 873</button>
+          </div>
+          <div className="wq-panel-body">
+            {/* Summary info banner */}
+            <div style={{ background: '#ebf8ff', border: '1px solid #bee3f8', padding: '0.5rem 1rem', borderRadius: '4px', marginBottom: '1rem', fontSize: '0.85rem', color: '#2b6cb0' }}>
+              <strong>BR SE 28-50:</strong> Initial due date = 45 days from print/mail date. Good Cause Extension = additional 45 days (max total 90 days). Documentation received completes certification.
+            </div>
+            {healthCerts.length === 0 ? <p style={{ color: '#718096' }}>No health care certifications on record.</p> : (
+              <table className="wq-table">
+                <thead><tr><th>Form Type</th><th>Method</th><th>Print Option</th><th>Status</th><th>Due Date</th><th>Good Cause Due</th><th>Doc Received</th><th>Actions</th></tr></thead>
+                <tbody>
+                  {healthCerts.map(cert => {
+                    const isOverdue = cert.dueDate && !cert.documentationReceivedDate && new Date(cert.dueDate) < new Date();
+                    const dueDateDisplay = cert.goodCauseExtensionDueDate || cert.dueDate;
+                    return (
+                      <tr key={cert.id}>
+                        <td>{cert.formType || 'SOC_873_874'}</td>
+                        <td>{cert.certificationMethod}</td>
+                        <td>{cert.printOption}</td>
+                        <td>
+                          <span className={`wq-badge wq-badge-${(cert.status || '').toLowerCase()}`}>{cert.status}</span>
+                          {isOverdue && <span className="wq-badge wq-badge-terminated" style={{ marginLeft: '0.25rem' }}>OVERDUE</span>}
+                        </td>
+                        <td style={{ color: isOverdue ? '#c53030' : undefined }}>{cert.dueDate ? new Date(cert.dueDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                        <td>{cert.goodCauseExtensionDueDate ? new Date(cert.goodCauseExtensionDueDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                        <td>{cert.documentationReceivedDate ? new Date(cert.documentationReceivedDate).toLocaleDateString('en-US') : '\u2014'}</td>
+                        <td style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                          {cert.status === 'ACTIVE' && !cert.goodCauseExtensionRequested && (
+                            <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                              onClick={() => casesApi.grantGoodCauseExtension(id, { notes: 'Good cause extension granted' }).then(() => casesApi.getHealthCareCert(id).then(d => setHealthCerts(Array.isArray(d) ? d : [])))}>
+                              Good Cause
+                            </button>
+                          )}
+                          {cert.status === 'ACTIVE' && (
+                            <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                              onClick={() => casesApi.updateHealthCareCert(cert.id, { documentationReceivedDate: new Date().toISOString().slice(0,10) }).then(() => casesApi.getHealthCareCert(id).then(d => setHealthCerts(Array.isArray(d) ? d : [])))}>
+                              Mark Received
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Health Care Cert Modal */}
+      {showHealthCertModal && (
+        <div className="wq-modal-overlay" onClick={() => setShowHealthCertModal(false)}>
+          <div className="wq-modal" style={{ maxWidth: '500px' }} onClick={e => e.stopPropagation()}>
+            <div className="wq-modal-header"><h4>Request Health Care Certification (SOC 873)</h4><button className="wq-modal-close" onClick={() => setShowHealthCertModal(false)}>✕</button></div>
+            <div className="wq-modal-body">
+              <div style={{ display: 'grid', gap: '0.75rem' }}>
+                <div>
+                  <label className="wq-label">Certification Method</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.certificationMethod || 'FORM_GENERATED'} onChange={e => setModalForm(p => ({ ...p, certificationMethod: e.target.value }))}>
+                    <option value="FORM_GENERATED">Form Generated (County)</option>
+                    <option value="USER_ENTERED">3rd Party / User Entered</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Form Type</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.formType || 'SOC_873_874'} onChange={e => setModalForm(p => ({ ...p, formType: e.target.value }))}>
+                    <option value="SOC_873_874">SOC 873 &amp; 874</option>
+                    <option value="SOC_873_ENGLISH_ONLY">SOC 873 English Only</option>
+                    <option value="SOC_873L_874L">SOC 873L &amp; 874L (Large Print)</option>
+                    <option value="SOC_873L_ENGLISH_ONLY">SOC 873L English Only (Large Print)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Print Option</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.printOption || 'NIGHTLY_BATCH'} onChange={e => setModalForm(p => ({ ...p, printOption: e.target.value }))}>
+                    <option value="NIGHTLY_BATCH">Print in Nightly Batch</option>
+                    <option value="PRINT_NOW">Print Now</option>
+                    <option value="GENERATE_LOCAL">Generate Local</option>
+                    <option value="SEND_ESP">Send via ESP</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Language</label>
+                  <select className="wq-input" style={{ width: '100%' }} value={modalForm.language || 'ENGLISH'} onChange={e => setModalForm(p => ({ ...p, language: e.target.value }))}>
+                    {['ENGLISH','SPANISH','CHINESE','ARMENIAN'].map(l => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="wq-label">Print / Mail Date <span style={{ color: '#c53030' }}>*</span></label>
+                  <input type="date" className="wq-input" value={modalForm.printDate || ''} onChange={e => setModalForm(p => ({ ...p, printDate: e.target.value }))} />
+                  <p style={{ fontSize: '0.75rem', color: '#718096', margin: '2px 0 0' }}>Due date = Print Date + 45 days (BR SE 28)</p>
+                </div>
+                <div>
+                  <label className="wq-label">Comments</label>
+                  <textarea className="wq-input" rows={2} value={modalForm.comments || ''} onChange={e => setModalForm(p => ({ ...p, comments: e.target.value }))} style={{ width: '100%' }} />
+                </div>
+                {modalError && <p style={{ color: '#c53030', fontSize: '0.8rem' }}>{modalError}</p>}
+              </div>
+            </div>
+            <div className="wq-modal-footer">
+              <button className="wq-btn wq-btn-primary" onClick={() => {
+                if (!modalForm.printDate) { setModalError('Print date is required.'); return; }
+                casesApi.createHealthCareCert(id, { certificationMethod: modalForm.certificationMethod, formType: modalForm.formType, printOption: modalForm.printOption, language: modalForm.language, printDate: modalForm.printDate, comments: modalForm.comments })
+                  .then(() => { setShowHealthCertModal(false); setModalError(''); casesApi.getHealthCareCert(id).then(d => setHealthCerts(Array.isArray(d) ? d : [])); })
+                  .catch(err => setModalError(err?.response?.data?.error || 'Failed to create certification.'));
+              }}>Request</button>
+              <button className="wq-btn wq-btn-outline" onClick={() => { setShowHealthCertModal(false); setModalError(''); }}>Cancel</button>
             </div>
           </div>
         </div>

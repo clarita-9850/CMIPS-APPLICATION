@@ -83,6 +83,11 @@ import { DataPipelinePage } from './pages/DataPipelinePage';
 
 // Utility pages
 import { StateHearingSearchPage } from './pages/StateHearingSearchPage';
+import { TerminateCasePage } from './pages/TerminateCasePage';
+import { WithdrawalCasePage } from './pages/WithdrawalCasePage';
+import { LeaveCasePage } from './pages/LeaveCasePage';
+import { RescindCasePage } from './pages/RescindCasePage';
+import { ReactivateCasePage } from './pages/ReactivateCasePage';
 import { LiveInProviderPage } from './pages/LiveInProviderPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { PreferencesPage } from './pages/PreferencesPage';
@@ -208,6 +213,13 @@ function App() {
             <Route path="/person/merge-duplicate-ssn" element={<PersonMergeDuplicateSsnPage />} />
             <Route path="/case/search-state-hearing" element={<CaseSearchStateHearingPage />} />
             <Route path="/case/reissue-bvi-timesheet" element={<CaseReissueBviTimesheetPage />} />
+
+            {/* Case Lifecycle Action Pages */}
+            <Route path="/case/terminate-case" element={<TerminateCasePage />} />
+            <Route path="/case/withdrawal-case" element={<WithdrawalCasePage />} />
+            <Route path="/case/leave-case" element={<LeaveCasePage />} />
+            <Route path="/case/rescind-case" element={<RescindCasePage />} />
+            <Route path="/case/reactivate-case" element={<ReactivateCasePage />} />
             <Route path="/payment/list-warrant-replacements" element={<PaymentListWarrantReplacementsPage />} />
 
             {/* Payment Routes */}
