@@ -3,8 +3,11 @@ package com.cmips.controller;
 import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.ElectronicFormEntity;
 import com.cmips.service.CaseMaintenanceService;
+import com.cmips.service.SocFormPdfService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,9 +26,12 @@ public class ElectronicFormController {
     private static final Logger log = LoggerFactory.getLogger(ElectronicFormController.class);
 
     private final CaseMaintenanceService maintenanceService;
+    private final SocFormPdfService socFormPdfService;
 
-    public ElectronicFormController(CaseMaintenanceService maintenanceService) {
+    public ElectronicFormController(CaseMaintenanceService maintenanceService,
+                                    SocFormPdfService socFormPdfService) {
         this.maintenanceService = maintenanceService;
+        this.socFormPdfService = socFormPdfService;
     }
 
     @GetMapping("/{caseId}/forms")
@@ -50,11 +56,19 @@ public class ElectronicFormController {
     @GetMapping("/forms/{id}/download")
     @RequirePermission(resource = "Case Resource", scope = "view")
     public ResponseEntity<?> downloadForm(@PathVariable Long id) {
-        // Mock — in production: generate PDF from form template
-        return ResponseEntity.ok(Map.of(
-                "formId", id,
-                "message", "Form PDF download endpoint — connect to form generation service for production use."
-        ));
+        try {
+            byte[] pdf = socFormPdfService.generateFormPdf(id);
+            ElectronicFormEntity form = maintenanceService.getElectronicForm(id);
+            String filename = "SOC-" + form.getFormType().name().replace("SOC_", "").replace("_", "-")
+                    + "-" + id + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdf);
+        } catch (RuntimeException e) {
+            log.error("Failed to generate PDF for form {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/forms/{id}/inactivate")

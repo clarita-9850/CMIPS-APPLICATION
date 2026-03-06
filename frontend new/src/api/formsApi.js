@@ -8,7 +8,13 @@ export const requestForm = (caseId, data) =>
   http.post(`/cases/${caseId}/forms`, data).then(r => r.data);
 
 export const downloadForm = (id) =>
-  http.get(`/cases/forms/${id}/download`).then(r => r.data);
+  http.get(`/cases/forms/${id}/download`, { responseType: 'blob' });
+
+export const getFormHistory = (formId) =>
+  http.get(`/cases/forms/${formId}/history`).then(r => r.data);
+
+export const addFormComment = (formId, data) =>
+  http.post(`/cases/forms/${formId}/history`, data).then(r => r.data);
 
 export const inactivateForm = (id) =>
   http.put(`/cases/forms/${id}/inactivate`).then(r => r.data);

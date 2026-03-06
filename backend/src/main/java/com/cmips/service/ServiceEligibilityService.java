@@ -1,6 +1,7 @@
 package com.cmips.service;
 
 import com.cmips.entity.*;
+import com.cmips.entity.NoticeOfActionEntity;
 import com.cmips.entity.ServiceEligibilityEntity.AssessmentType;
 import com.cmips.repository.*;
 import org.slf4j.Logger;
@@ -25,15 +26,21 @@ public class ServiceEligibilityService {
     private final CaseRepository caseRepository;
     private final HealthCareCertificationRepository healthCareCertificationRepository;
     private final TaskService taskService;
+    private final NoticeOfActionRepository noaRepository;
+    private final NoaContentAssemblerService noaContentAssembler;
 
     public ServiceEligibilityService(ServiceEligibilityRepository serviceEligibilityRepository,
                                      CaseRepository caseRepository,
                                      HealthCareCertificationRepository healthCareCertificationRepository,
-                                     TaskService taskService) {
+                                     TaskService taskService,
+                                     NoticeOfActionRepository noaRepository,
+                                     NoaContentAssemblerService noaContentAssembler) {
         this.serviceEligibilityRepository = serviceEligibilityRepository;
         this.caseRepository = caseRepository;
         this.healthCareCertificationRepository = healthCareCertificationRepository;
         this.taskService = taskService;
+        this.noaRepository = noaRepository;
+        this.noaContentAssembler = noaContentAssembler;
     }
 
     // ==================== ASSESSMENT MANAGEMENT ====================
@@ -150,6 +157,9 @@ public class ServiceEligibilityService {
         ServiceEligibilityEntity assessment = serviceEligibilityRepository.findById(assessmentId)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
 
+        // Capture previous total for NOA NA_1253/NA_1254 comparison
+        final Double prevHoursMonthly = assessment.getTotalAuthorizedHoursMonthly();
+
         // Update individual service hours — all 25 DSD Section 21 service types
         if (update.getDomesticServicesHours() != null)          assessment.setDomesticServicesHours(update.getDomesticServicesHours());
         if (update.getRelatedServicesHours() != null)           assessment.setRelatedServicesHours(update.getRelatedServicesHours());
@@ -206,12 +216,44 @@ public class ServiceEligibilityService {
         }
 
         // BR SE 51/52 — Cascade new authorized hours to CaseEntity
+        final Double newHoursMonthly = assessment.getTotalAuthorizedHoursMonthly();
         caseRepository.findById(assessment.getCaseId()).ifPresent(c -> {
-            c.setAuthorizedHoursMonthly(assessment.getTotalAuthorizedHoursMonthly());
-            c.setAuthorizedHoursWeekly(assessment.getTotalAuthorizedHoursMonthly() != null
-                    ? assessment.getTotalAuthorizedHoursMonthly() / 4.33 : null);
+            c.setAuthorizedHoursMonthly(newHoursMonthly);
+            c.setAuthorizedHoursWeekly(newHoursMonthly != null ? newHoursMonthly / 4.33 : null);
             caseRepository.save(c);
-            log.info("[BR SE 51] Authorized hours cascaded to case {}: {}/month", c.getId(), assessment.getTotalAuthorizedHoursMonthly());
+            log.info("[BR SE 51] Authorized hours cascaded to case {}: {}/month", c.getId(), newHoursMonthly);
+
+            // Auto-generate NA 1253 (increase) or NA 1254 (decrease) for ELIGIBLE cases
+            // per DSD Section 31: Change in Award triggers when reassessment modifies authorized hours
+            boolean hoursChanged = prevHoursMonthly == null
+                    || (newHoursMonthly != null && Math.abs(prevHoursMonthly - newHoursMonthly) > 0.01);
+            if (hoursChanged && newHoursMonthly != null
+                    && c.getCaseStatus() != null && "ELIGIBLE".equals(c.getCaseStatus().name())) {
+                try {
+                    boolean isIncrease = prevHoursMonthly == null || newHoursMonthly > prevHoursMonthly;
+                    NoticeOfActionEntity.NoaType noaType = isIncrease
+                            ? NoticeOfActionEntity.NoaType.NA_1253
+                            : NoticeOfActionEntity.NoaType.NA_1254;
+                    String hrCode = isIncrease ? "HR03" : "HR04";
+
+                    NoticeOfActionEntity noa = new NoticeOfActionEntity();
+                    noa.setCaseId(c.getId());
+                    noa.setRecipientId(c.getRecipientId());
+                    noa.setNoaType(noaType);
+                    noa.setTriggerAction("HOURS_CHANGE");
+                    noa.setTriggerReasonCode(hrCode);
+                    noa.setEffectiveDate(LocalDate.now());
+                    noa.setStatus(NoticeOfActionEntity.NoaStatus.PENDING);
+                    noa.setCreatedBy(userId);
+                    noa = noaRepository.save(noa);
+                    noaContentAssembler.assemble(noa);
+                    noaRepository.save(noa);
+                    log.info("[NOA-AUTO] {} generated for case {} (hours: {} -> {}, categories={})",
+                            noaType, c.getId(), prevHoursMonthly, newHoursMonthly, noa.getAssembledCategories());
+                } catch (Exception ex) {
+                    log.error("[NOA-AUTO] Failed to auto-generate hours-change NOA for case {}: {}", c.getId(), ex.getMessage());
+                }
+            }
         });
 
         assessment.setUpdatedBy(userId);
@@ -347,11 +389,39 @@ public class ServiceEligibilityService {
 
             assessment.setIhssShareOfCost(finalSoc);
 
-            // BR SE 13 — Cascade SOC to CaseEntity
+            // BR SE 13 — Cascade SOC to CaseEntity; auto-generate NA 1256 if SOC changed
             caseRepository.findById(assessment.getCaseId()).ifPresent(caseEntity -> {
+                Double prevSoc = caseEntity.getShareOfCostAmount();
                 caseEntity.setShareOfCostAmount(finalSoc);
                 caseRepository.save(caseEntity);
                 log.info("[BR SE 13] SOC cascaded to case {}: ${}", caseEntity.getId(), finalSoc);
+
+                // Auto-generate NA 1256 (Share of Cost) when SOC amount changes on an ELIGIBLE case
+                boolean socChanged = prevSoc == null || Math.abs(prevSoc - finalSoc) > 0.01;
+                if (socChanged && caseEntity.getCaseStatus() != null
+                        && "ELIGIBLE".equals(caseEntity.getCaseStatus().name())) {
+                    try {
+                        String socReasonCode = prevSoc == null ? "NEW"
+                                : finalSoc > prevSoc ? "INCREASE"
+                                : finalSoc < prevSoc ? "DECREASE" : "NEW";
+                        NoticeOfActionEntity noa = new NoticeOfActionEntity();
+                        noa.setCaseId(caseEntity.getId());
+                        noa.setRecipientId(caseEntity.getRecipientId());
+                        noa.setNoaType(NoticeOfActionEntity.NoaType.NA_1256);
+                        noa.setTriggerAction("SOC_CHANGE");
+                        noa.setTriggerReasonCode(socReasonCode);
+                        noa.setEffectiveDate(java.time.LocalDate.now());
+                        noa.setStatus(NoticeOfActionEntity.NoaStatus.PENDING);
+                        noa.setCreatedBy(userId);
+                        noa = noaRepository.save(noa);
+                        noaContentAssembler.assemble(noa);
+                        noaRepository.save(noa);
+                        log.info("[NOA-AUTO] NA_1256 generated for case {} (SOC changed: {} -> {}, categories={})",
+                                caseEntity.getId(), prevSoc, finalSoc, noa.getAssembledCategories());
+                    } catch (Exception ex) {
+                        log.error("[NOA-AUTO] Failed to auto-generate NA_1256 for case {}: {}", caseEntity.getId(), ex.getMessage());
+                    }
+                }
             });
 
             // BR SE 14 — If countable income changed, reset verification flag
@@ -396,6 +466,36 @@ public class ServiceEligibilityService {
         if (waiverChanged) {
             assessment.setReinstatedHours(null); // cleared so worker re-enters waiver-specific hours
             log.info("[BR SE 53] Reinstated hours cleared for assessment {} after waiver program change", assessmentId);
+
+            // Auto-generate NA 1257 (Multi-Program) when case enrolls in PCSP/CFCO/WPCS waiver
+            // per DSD Section 31: Multi-program NOA required when program type changes
+            boolean isMultiProgram = waiverProgram != null
+                    && (waiverProgram.contains("PCSP") || waiverProgram.contains("CFCO")
+                        || waiverProgram.contains("WPCS") || waiverProgram.contains("IFO"));
+            if (isMultiProgram) {
+                caseRepository.findById(assessment.getCaseId()).ifPresent(c -> {
+                    if (c.getCaseStatus() != null && "ELIGIBLE".equals(c.getCaseStatus().name())) {
+                        try {
+                            NoticeOfActionEntity noa = new NoticeOfActionEntity();
+                            noa.setCaseId(c.getId());
+                            noa.setRecipientId(c.getRecipientId());
+                            noa.setNoaType(NoticeOfActionEntity.NoaType.NA_1257);
+                            noa.setTriggerAction("WAIVER_PROGRAM_CHANGE");
+                            noa.setTriggerReasonCode(waiverProgram);
+                            noa.setEffectiveDate(LocalDate.now());
+                            noa.setStatus(NoticeOfActionEntity.NoaStatus.PENDING);
+                            noa.setCreatedBy(userId);
+                            noa = noaRepository.save(noa);
+                            noaContentAssembler.assemble(noa);
+                            noaRepository.save(noa);
+                            log.info("[NOA-AUTO] NA_1257 generated for case {} (waiver: {} -> {}, categories={})",
+                                    c.getId(), oldWaiverProgram, waiverProgram, noa.getAssembledCategories());
+                        } catch (Exception ex) {
+                            log.error("[NOA-AUTO] Failed to auto-generate NA_1257 for case {}: {}", c.getId(), ex.getMessage());
+                        }
+                    }
+                });
+            }
         }
 
         assessment.setUpdatedBy(userId);

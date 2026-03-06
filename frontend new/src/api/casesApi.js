@@ -169,6 +169,15 @@ export const printNoa = (noaId) =>
 export const suppressNoa = (noaId) =>
   http.put(`/cases/noas/${noaId}/suppress`).then(r => r.data);
 
+export const downloadNoaPdf = (noaId) =>
+  http.get(`/cases/noas/${noaId}/pdf`, { responseType: 'blob' });
+
+export const getNoaHistory = (noaId) =>
+  http.get(`/cases/noas/${noaId}/history`).then(r => r.data);
+
+export const addNoaComment = (noaId, data) =>
+  http.post(`/cases/noas/${noaId}/history`, data).then(r => r.data);
+
 
 // ── FPO Eligibility (CI-67555) ────────────────────────────────────
 export const getFpoEligibility = (caseId) =>

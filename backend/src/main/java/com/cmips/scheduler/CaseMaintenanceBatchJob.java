@@ -3,11 +3,18 @@ package com.cmips.scheduler;
 import com.cmips.entity.CaseEntity;
 import com.cmips.entity.CaseEntity.CaseStatus;
 import com.cmips.entity.CaseEntity.CaseType;
+import com.cmips.entity.ElectronicFormEntity;
+import com.cmips.entity.ElectronicFormEntity.PrintMethod;
+import com.cmips.entity.ElectronicFormEntity.FormStatus;
+import com.cmips.entity.NoticeOfActionEntity;
+import com.cmips.entity.NoticeOfActionEntity.NoaStatus;
 import com.cmips.entity.Notification;
 import com.cmips.entity.RecipientEntity;
 import com.cmips.entity.Task;
 import com.cmips.entity.TaskType;
 import com.cmips.repository.CaseRepository;
+import com.cmips.repository.ElectronicFormRepository;
+import com.cmips.repository.NoticeOfActionRepository;
 import com.cmips.repository.RecipientRepository;
 import com.cmips.repository.TaskRepository;
 import com.cmips.repository.TaskTypeRepository;
@@ -44,6 +51,8 @@ public class CaseMaintenanceBatchJob {
     private final TaskService taskService;
     private final NotificationService notificationService;
     private final BusinessDayCalculator businessDayCalc;
+    private final NoticeOfActionRepository noaRepository;
+    private final ElectronicFormRepository formRepository;
 
     public CaseMaintenanceBatchJob(CaseRepository caseRepo,
                                     RecipientRepository recipientRepo,
@@ -51,7 +60,9 @@ public class CaseMaintenanceBatchJob {
                                     TaskTypeRepository taskTypeRepo,
                                     TaskService taskService,
                                     NotificationService notificationService,
-                                    BusinessDayCalculator businessDayCalc) {
+                                    BusinessDayCalculator businessDayCalc,
+                                    NoticeOfActionRepository noaRepository,
+                                    ElectronicFormRepository formRepository) {
         this.caseRepo = caseRepo;
         this.recipientRepo = recipientRepo;
         this.taskRepo = taskRepo;
@@ -59,6 +70,8 @@ public class CaseMaintenanceBatchJob {
         this.taskService = taskService;
         this.notificationService = notificationService;
         this.businessDayCalc = businessDayCalc;
+        this.noaRepository = noaRepository;
+        this.formRepository = formRepository;
     }
 
     /**
@@ -229,6 +242,64 @@ public class CaseMaintenanceBatchJob {
         }
 
         log.info("Case Maintenance monthly batch completed — {} items created", count);
+    }
+
+    /**
+     * Nightly batch print — runs at 2:30 AM every day.
+     * Per DSD Section 31 (CI-116202): all NIGHTLY_BATCH NOAs and forms with status PENDING
+     * are marked PRINTED, simulating the Curam Correspondence → XSL Processor → Printer pipeline.
+     * Each printed NOA also generates a mailing task for the case worker.
+     */
+    @Scheduled(cron = "0 30 2 * * ?")
+    public void nightlyBatchPrint() {
+        log.info("Starting Nightly Batch Print job (NOAs + Forms)...");
+        LocalDate today = LocalDate.now();
+        int noaPrinted = 0;
+        int formsPrinted = 0;
+
+        // ── Process PENDING NIGHTLY_BATCH NOAs ────────────────────────────────
+        List<NoticeOfActionEntity> pendingNoas = noaRepository.findPendingForBatchPrint();
+        for (NoticeOfActionEntity noa : pendingNoas) {
+            try {
+                noa.setStatus(NoaStatus.PRINTED);
+                noa.setPrintDate(today);
+                noaRepository.save(noa);
+                noaPrinted++;
+
+                // Create mailing task for case worker (DSD Section 31: two copies mailed to recipient)
+                caseRepo.findById(noa.getCaseId()).ifPresent(c -> {
+                    Notification n = Notification.builder()
+                            .userId(c.getCaseOwnerId() != null ? c.getCaseOwnerId() : "SYSTEM")
+                            .message("NOA " + noa.getNoaType() + " printed for case " + c.getCaseNumber()
+                                    + " — please mail two copies to recipient.")
+                            .notificationType(Notification.NotificationType.INFO)
+                            .actionLink("/cases/" + c.getId())
+                            .relatedEntityType("NOA")
+                            .relatedEntityId(noa.getId())
+                            .readStatus(false)
+                            .build();
+                    notificationService.createNotification(n);
+                });
+            } catch (Exception ex) {
+                log.error("Nightly batch: failed to print NOA id={}: {}", noa.getId(), ex.getMessage());
+            }
+        }
+
+        // ── Process PENDING NIGHTLY_BATCH Electronic Forms ─────────────────────
+        List<ElectronicFormEntity> pendingForms = formRepository.findByStatusAndPrintMethod(
+                FormStatus.PENDING, PrintMethod.NIGHTLY_BATCH);
+        for (ElectronicFormEntity form : pendingForms) {
+            try {
+                form.setStatus(FormStatus.PRINTED);
+                form.setPrintDate(today);
+                formRepository.save(form);
+                formsPrinted++;
+            } catch (Exception ex) {
+                log.error("Nightly batch: failed to print form id={}: {}", form.getId(), ex.getMessage());
+            }
+        }
+
+        log.info("Nightly Batch Print completed — {} NOAs printed, {} forms printed", noaPrinted, formsPrinted);
     }
 
     // ==================== Helpers ====================

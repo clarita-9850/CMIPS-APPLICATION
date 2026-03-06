@@ -2,6 +2,8 @@ package com.cmips.service;
 
 import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity;
+import com.cmips.entity.FormHistoryEntity;
+import com.cmips.entity.FormHistoryEntity.EventType;
 import com.cmips.entity.CountyContractorInvoiceEntity.InvoiceStatus;
 import com.cmips.entity.ElectronicFormEntity.*;
 import com.cmips.entity.NoticeOfActionEntity.NoaType;
@@ -52,6 +54,7 @@ public class CaseMaintenanceService {
     private final ProviderRepository providerRepository;
     private final HealthCareCertificationRepository healthCareCertRepository;
     private final NoticeOfActionRepository noaRepository;
+    private final FormHistoryRepository formHistoryRepository;
 
     public CaseMaintenanceService(WorkweekAgreementRepository workweekAgreementRepository,
                                    OvertimeAgreementRepository overtimeAgreementRepository,
@@ -63,7 +66,8 @@ public class CaseMaintenanceService {
                                    CaseRepository caseRepository,
                                    ProviderRepository providerRepository,
                                    HealthCareCertificationRepository healthCareCertRepository,
-                                   NoticeOfActionRepository noaRepository) {
+                                   NoticeOfActionRepository noaRepository,
+                                   FormHistoryRepository formHistoryRepository) {
         this.workweekAgreementRepository = workweekAgreementRepository;
         this.overtimeAgreementRepository = overtimeAgreementRepository;
         this.wpcsHoursRepository = wpcsHoursRepository;
@@ -75,6 +79,28 @@ public class CaseMaintenanceService {
         this.providerRepository = providerRepository;
         this.healthCareCertRepository = healthCareCertRepository;
         this.noaRepository = noaRepository;
+        this.formHistoryRepository = formHistoryRepository;
+    }
+
+    // ── Form/NOA history helper ──────────────────────────────────────────────
+
+    private void recordFormHistory(Long formId, Long noaId, Long caseId,
+                                   EventType eventType, String summary,
+                                   String prevStatus, String newStatus, String byUser) {
+        try {
+            FormHistoryEntity entry = new FormHistoryEntity();
+            entry.setFormId(formId);
+            entry.setNoaId(noaId);
+            entry.setCaseId(caseId);
+            entry.setEventType(eventType);
+            entry.setEventSummary(summary);
+            entry.setPreviousStatus(prevStatus);
+            entry.setNewStatus(newStatus);
+            entry.setCreatedBy(byUser);
+            formHistoryRepository.save(entry);
+        } catch (Exception ex) {
+            log.warn("[FormHistory] Failed to record event for form={} noa={}: {}", formId, noaId, ex.getMessage());
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -474,6 +500,11 @@ public class CaseMaintenanceService {
         return formRepository.findByCaseIdOrderByRequestDateDesc(caseId);
     }
 
+    public ElectronicFormEntity getElectronicForm(Long id) {
+        return formRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Form not found: " + id));
+    }
+
     @Transactional
     public ElectronicFormEntity requestForm(Long caseId, Map<String, Object> request, String createdBy) {
         if (request.get("formType") == null) throw new IllegalArgumentException("Form Type is required.");
@@ -519,34 +550,49 @@ public class CaseMaintenanceService {
         ElectronicFormEntity saved = formRepository.save(form);
         log.info("[CaseMaint] Form requested: caseId={}, formType={}, id={}",
                 caseId, form.getFormType(), saved.getId());
+        recordFormHistory(saved.getId(), null, caseId, EventType.CREATED,
+                "Form " + saved.getFormType() + " requested",
+                null, saved.getStatus().name(), createdBy);
         return saved;
     }
 
     @Transactional
     public ElectronicFormEntity inactivateForm(Long id, String inactivatedBy) {
         ElectronicFormEntity form = getFormOrThrow(id);
+        String prev = form.getStatus().name();
         form.setStatus(FormStatus.INACTIVATED);
         form.setInactivatedDate(LocalDate.now());
         form.setInactivatedBy(inactivatedBy);
         form.setUpdatedBy(inactivatedBy);
-        return formRepository.save(form);
+        ElectronicFormEntity saved = formRepository.save(form);
+        recordFormHistory(id, null, form.getCaseId(), EventType.INACTIVATED,
+                "Form inactivated", prev, FormStatus.INACTIVATED.name(), inactivatedBy);
+        return saved;
     }
 
     @Transactional
     public ElectronicFormEntity suppressForm(Long id, String suppressedBy) {
         ElectronicFormEntity form = getFormOrThrow(id);
+        String prev = form.getStatus().name();
         form.setStatus(FormStatus.SUPPRESSED);
         form.setUpdatedBy(suppressedBy);
-        return formRepository.save(form);
+        ElectronicFormEntity saved = formRepository.save(form);
+        recordFormHistory(id, null, form.getCaseId(), EventType.SUPPRESSED,
+                "Form suppressed — no mail", prev, FormStatus.SUPPRESSED.name(), suppressedBy);
+        return saved;
     }
 
     @Transactional
     public ElectronicFormEntity markFormPrinted(Long id, String updatedBy) {
         ElectronicFormEntity form = getFormOrThrow(id);
+        String prev = form.getStatus().name();
         form.setStatus(FormStatus.PRINTED);
         form.setPrintDate(LocalDate.now());
         form.setUpdatedBy(updatedBy);
-        return formRepository.save(form);
+        ElectronicFormEntity saved = formRepository.save(form);
+        recordFormHistory(id, null, form.getCaseId(), EventType.PRINTED,
+                "Form marked as printed", prev, FormStatus.PRINTED.name(), updatedBy);
+        return saved;
     }
 
     private ElectronicFormEntity getFormOrThrow(Long id) {
@@ -774,26 +820,38 @@ public class CaseMaintenanceService {
         return saved;
     }
 
+    public NoticeOfActionEntity getNoaById(Long noaId) {
+        return noaRepository.findById(noaId).orElse(null);
+    }
+
     @Transactional
     public NoticeOfActionEntity printNoa(Long noaId, String userId) {
         NoticeOfActionEntity noa = noaRepository.findById(noaId)
                 .orElseThrow(() -> new RuntimeException("NOA not found: " + noaId));
+        String prev = noa.getStatus() != null ? noa.getStatus().name() : null;
         noa.setStatus(NoaStatus.PRINTED);
         noa.setPrintDate(LocalDate.now());
         noa.setUpdatedBy(userId);
-        return noaRepository.save(noa);
+        NoticeOfActionEntity saved = noaRepository.save(noa);
+        recordFormHistory(null, noaId, noa.getCaseId(), EventType.PRINTED,
+                "NOA printed", prev, NoaStatus.PRINTED.name(), userId);
+        return saved;
     }
 
     @Transactional
     public NoticeOfActionEntity suppressNoa(Long noaId, Map<String, Object> request, String userId) {
         NoticeOfActionEntity noa = noaRepository.findById(noaId)
                 .orElseThrow(() -> new RuntimeException("NOA not found: " + noaId));
+        String prev = noa.getStatus() != null ? noa.getStatus().name() : null;
         noa.setStatus(NoaStatus.SUPPRESSED);
         noa.setSuppressedDate(LocalDate.now());
         noa.setSuppressedBy(userId);
         noa.setSuppressedReason((String) request.getOrDefault("reason", "Suppressed by user"));
         noa.setUpdatedBy(userId);
-        return noaRepository.save(noa);
+        NoticeOfActionEntity saved = noaRepository.save(noa);
+        recordFormHistory(null, noaId, noa.getCaseId(), EventType.SUPPRESSED,
+                "NOA suppressed — " + noa.getSuppressedReason(), prev, NoaStatus.SUPPRESSED.name(), userId);
+        return saved;
     }
 
     // ─────────────────────────────────────────────────────────────

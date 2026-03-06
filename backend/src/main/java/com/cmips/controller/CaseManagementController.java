@@ -3,9 +3,11 @@ package com.cmips.controller;
 import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity.CaseStatus;
+import com.cmips.entity.ElectronicFormEntity.BviFormat;
 import com.cmips.service.CaseMaintenanceService;
 import com.cmips.service.CaseManagementService;
 import com.cmips.service.FieldLevelAuthorizationService;
+import com.cmips.service.NoaPdfGeneratorService;
 import com.cmips.service.PDFReportGeneratorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,15 +36,18 @@ public class CaseManagementController {
     private final FieldLevelAuthorizationService fieldAuthService;
     private final CaseMaintenanceService caseMaintenanceService;
     private final PDFReportGeneratorService pdfService;
+    private final NoaPdfGeneratorService noaPdfService;
 
     public CaseManagementController(CaseManagementService caseManagementService,
                                     FieldLevelAuthorizationService fieldAuthService,
                                     CaseMaintenanceService caseMaintenanceService,
-                                    PDFReportGeneratorService pdfService) {
+                                    PDFReportGeneratorService pdfService,
+                                    NoaPdfGeneratorService noaPdfService) {
         this.caseManagementService = caseManagementService;
         this.fieldAuthService = fieldAuthService;
         this.caseMaintenanceService = caseMaintenanceService;
         this.pdfService = pdfService;
+        this.noaPdfService = noaPdfService;
     }
 
     // ==================== CASE CRUD ====================
@@ -927,6 +932,42 @@ public class CaseManagementController {
             @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
         try {
             return ResponseEntity.ok(caseMaintenanceService.printNoa(noaId, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Download NOA as PDF — DSD Section 31 (NA 1250-1257 form layout).
+     * Optional ?bvi=LARGE_FONT|AUDIO_CD|DATA_CD for BVI variants.
+     * Returns application/pdf bytes.
+     */
+    @GetMapping("/noas/{noaId}/pdf")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> downloadNoaPdf(
+            @PathVariable Long noaId,
+            @RequestParam(required = false) String bvi) {
+        try {
+            BviFormat fmt = BviFormat.STANDARD;
+            if (bvi != null) {
+                try { fmt = BviFormat.valueOf(bvi.toUpperCase()); } catch (IllegalArgumentException ignored) {}
+            }
+
+            byte[] pdfBytes = noaPdfService.generateNoaPdf(noaId, fmt);
+
+            boolean isText = fmt == BviFormat.AUDIO_CD || fmt == BviFormat.DATA_CD;
+            String ext = isText ? "txt" : "pdf";
+            MediaType mediaType = isText ? MediaType.TEXT_PLAIN : MediaType.APPLICATION_PDF;
+
+            NoticeOfActionEntity noa = caseMaintenanceService.getNoaById(noaId);
+            String filename = (noa != null ? noa.getNoaType().name().replace("_", "-") : "noa")
+                    + "-" + noaId + (fmt != BviFormat.STANDARD ? "-" + fmt.name().toLowerCase() : "")
+                    + "." + ext;
+
+            return ResponseEntity.ok()
+                    .contentType(mediaType)
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .body(pdfBytes);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

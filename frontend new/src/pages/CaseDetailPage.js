@@ -86,6 +86,14 @@ export const CaseDetailPage = () => {
   const [inactivateReason, setInactivateReason] = useState('');
   const [modalError, setModalError] = useState('');
 
+  // History expansion state (formId/noaId -> history entries | null=loading | false=collapsed)
+  const [formHistoryMap, setFormHistoryMap] = useState({});
+  const [noaHistoryMap, setNoaHistoryMap] = useState({});
+  const [historyCommentMap, setHistoryCommentMap] = useState({});
+
+  // NOA viewer modal
+  const [viewingNoa, setViewingNoa] = useState(null);
+
   // Form state for modals
   const [modalForm, setModalForm] = useState({});
 
@@ -95,6 +103,15 @@ export const CaseDetailPage = () => {
   const [showAssign, setShowAssign] = useState(false);
   const [showDeny, setShowDeny] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
+
+  const triggerBlobDownload = (response, filename) => {
+    const url = URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const loadCase = useCallback(() => {
     if (!id) { setLoading(false); return; }
@@ -1344,7 +1361,8 @@ export const CaseDetailPage = () => {
                       {electronicForms.map(f => {
                         const formStatusColor = { PENDING: '#fefcbf', PRINTED: '#c6f6d5', NOT_MAILED: '#fbd38d', INACTIVATED: '#e2e8f0', SUPPRESSED: '#fed7d7' };
                         return (
-                          <tr key={f.id}>
+                          <React.Fragment key={f.id}>
+                          <tr>
                             <td>{f.formType || '\u2014'}</td>
                             <td>{f.language || '\u2014'}</td>
                             <td>{f.bviFormat || '\u2014'}</td>
@@ -1354,9 +1372,20 @@ export const CaseDetailPage = () => {
                             <td>
                               {f.status === 'PRINTED' && (
                                 <button className="wq-btn wq-btn-sm wq-btn-outline" style={{ marginRight: '4px' }} onClick={() => {
-                                  formsApi.downloadForm(f.id).then(() => alert('Download initiated')).catch(() => setActionError('Failed to download'));
-                                }}>Download</button>
+                                  formsApi.downloadForm(f.id)
+                                    .then(resp => triggerBlobDownload(resp, `SOC-${f.formType?.replace('SOC_','').replace(/_/g,'-')}-${f.id}.pdf`))
+                                    .catch(() => setActionError('Failed to download form PDF'));
+                                }}>Download PDF</button>
                               )}
+                              <button className="wq-btn wq-btn-sm wq-btn-outline" style={{ marginRight: '4px' }} onClick={() => {
+                                const key = `f${f.id}`;
+                                if (formHistoryMap[key]) {
+                                  setFormHistoryMap(m => ({ ...m, [key]: null }));
+                                } else {
+                                  setFormHistoryMap(m => ({ ...m, [key]: [] }));
+                                  formsApi.getFormHistory(f.id).then(d => setFormHistoryMap(m => ({ ...m, [key]: Array.isArray(d) ? d : [] })));
+                                }
+                              }}>History</button>
                               {!['INACTIVATED', 'SUPPRESSED'].includes(f.status) && (
                                 <button className="wq-btn wq-btn-sm" onClick={() => {
                                   formsApi.inactivateForm(f.id).then(() => {
@@ -1366,6 +1395,40 @@ export const CaseDetailPage = () => {
                               )}
                             </td>
                           </tr>
+                          {formHistoryMap[`f${f.id}`] && (
+                            <tr key={`fh${f.id}`}>
+                              <td colSpan={7} style={{ background: '#f7fafc', padding: '0.75rem 1rem' }}>
+                                <strong style={{ fontSize: '0.8rem' }}>Form History</strong>
+                                {formHistoryMap[`f${f.id}`].length === 0 ? (
+                                  <p style={{ color: '#718096', fontSize: '0.8rem', margin: '0.5rem 0 0' }}>No history entries yet.</p>
+                                ) : (
+                                  <table style={{ width: '100%', fontSize: '0.78rem', marginTop: '0.5rem', borderCollapse: 'collapse' }}>
+                                    <thead><tr style={{ background: '#edf2f7' }}><th style={{ padding: '4px 8px', textAlign: 'left' }}>Date</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>Event</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>Summary</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>By</th></tr></thead>
+                                    <tbody>
+                                      {formHistoryMap[`f${f.id}`].map(h => (
+                                        <tr key={h.id}><td style={{ padding: '4px 8px' }}>{h.createdAt ? new Date(h.createdAt).toLocaleString() : '—'}</td><td style={{ padding: '4px 8px' }}>{h.eventType}</td><td style={{ padding: '4px 8px' }}>{h.comment || h.eventSummary || '—'}</td><td style={{ padding: '4px 8px' }}>{h.createdBy || '—'}</td></tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                  <input className="wq-input" style={{ flex: 1, fontSize: '0.8rem', padding: '4px 8px' }}
+                                    placeholder="Add a comment..."
+                                    value={historyCommentMap[`f${f.id}`] || ''}
+                                    onChange={e => setHistoryCommentMap(m => ({ ...m, [`f${f.id}`]: e.target.value }))} />
+                                  <button className="wq-btn wq-btn-sm wq-btn-primary" onClick={() => {
+                                    const comment = historyCommentMap[`f${f.id}`];
+                                    if (!comment?.trim()) return;
+                                    formsApi.addFormComment(f.id, { comment, createdBy: username }).then(() => {
+                                      setHistoryCommentMap(m => ({ ...m, [`f${f.id}`]: '' }));
+                                      formsApi.getFormHistory(f.id).then(d => setFormHistoryMap(m => ({ ...m, [`f${f.id}`]: Array.isArray(d) ? d : [] })));
+                                    });
+                                  }}>Add</button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>
@@ -1574,7 +1637,8 @@ export const CaseDetailPage = () => {
                 <thead><tr><th>NOA Type</th><th>Language</th><th>Status</th><th>Trigger</th><th>Effective Date</th><th>Request Date</th><th>Print Date</th><th>Actions</th></tr></thead>
                 <tbody>
                   {noas.map(n => (
-                    <tr key={n.id}>
+                    <React.Fragment key={n.id}>
+                    <tr>
                       <td><strong>{n.noaType}</strong></td>
                       <td>{n.language || 'ENGLISH'}</td>
                       <td><span className={`wq-badge wq-badge-${(n.status || '').toLowerCase()}`}>{n.status}</span></td>
@@ -1583,6 +1647,14 @@ export const CaseDetailPage = () => {
                       <td>{n.requestDate ? new Date(n.requestDate).toLocaleDateString('en-US') : '\u2014'}</td>
                       <td>{n.printDate ? new Date(n.printDate).toLocaleDateString('en-US') : '\u2014'}</td>
                       <td style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                        <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                          onClick={() => setViewingNoa(n)}>View</button>
+                        {n.status === 'PRINTED' && (
+                          <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                            onClick={() => casesApi.downloadNoaPdf(n.id)
+                              .then(resp => triggerBlobDownload(resp, `NOA-${n.noaType}-${n.id}.pdf`))
+                              .catch(() => setActionError('Failed to download NOA PDF'))}>PDF</button>
+                        )}
                         {n.status === 'PENDING' && (
                           <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                             onClick={() => casesApi.printNoa(n.id).then(() => casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])))}>Print</button>
@@ -1591,12 +1663,99 @@ export const CaseDetailPage = () => {
                           <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
                             onClick={() => casesApi.suppressNoa(n.id).then(() => casesApi.getNoas(id).then(d => setNoas(Array.isArray(d) ? d : [])))}>Suppress</button>
                         )}
+                        <button className="wq-btn wq-btn-outline" style={{ fontSize: '0.75rem', padding: '2px 8px' }}
+                          onClick={() => {
+                            const key = `n${n.id}`;
+                            if (noaHistoryMap[key]) {
+                              setNoaHistoryMap(m => ({ ...m, [key]: null }));
+                            } else {
+                              setNoaHistoryMap(m => ({ ...m, [key]: [] }));
+                              casesApi.getNoaHistory(n.id).then(d => setNoaHistoryMap(m => ({ ...m, [key]: Array.isArray(d) ? d : [] })));
+                            }
+                          }}>History</button>
                       </td>
                     </tr>
+                    {noaHistoryMap[`n${n.id}`] && (
+                      <tr key={`nh${n.id}`}>
+                        <td colSpan={8} style={{ background: '#f7fafc', padding: '0.75rem 1rem' }}>
+                          <strong style={{ fontSize: '0.8rem' }}>NOA History</strong>
+                          {n.messageContent && (
+                            <details style={{ marginTop: '0.5rem' }}>
+                              <summary style={{ cursor: 'pointer', fontSize: '0.8rem', color: '#2b6cb0' }}>View Assembled Notice Text</summary>
+                              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.75rem', background: '#edf2f7', padding: '0.75rem', borderRadius: '4px', marginTop: '0.25rem', maxHeight: '200px', overflow: 'auto' }}>{n.messageContent}</pre>
+                            </details>
+                          )}
+                          {noaHistoryMap[`n${n.id}`].length === 0 ? (
+                            <p style={{ color: '#718096', fontSize: '0.8rem', margin: '0.5rem 0 0' }}>No history entries yet.</p>
+                          ) : (
+                            <table style={{ width: '100%', fontSize: '0.78rem', marginTop: '0.5rem', borderCollapse: 'collapse' }}>
+                              <thead><tr style={{ background: '#edf2f7' }}><th style={{ padding: '4px 8px', textAlign: 'left' }}>Date</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>Event</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>Summary / Comment</th><th style={{ padding: '4px 8px', textAlign: 'left' }}>By</th></tr></thead>
+                              <tbody>
+                                {noaHistoryMap[`n${n.id}`].map(h => (
+                                  <tr key={h.id}><td style={{ padding: '4px 8px' }}>{h.createdAt ? new Date(h.createdAt).toLocaleString() : '—'}</td><td style={{ padding: '4px 8px' }}>{h.eventType}</td><td style={{ padding: '4px 8px' }}>{h.comment || h.eventSummary || '—'}</td><td style={{ padding: '4px 8px' }}>{h.createdBy || '—'}</td></tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                            <input className="wq-input" style={{ flex: 1, fontSize: '0.8rem', padding: '4px 8px' }}
+                              placeholder="Add a comment..."
+                              value={historyCommentMap[`n${n.id}`] || ''}
+                              onChange={e => setHistoryCommentMap(m => ({ ...m, [`n${n.id}`]: e.target.value }))} />
+                            <button className="wq-btn wq-btn-sm wq-btn-primary" onClick={() => {
+                              const comment = historyCommentMap[`n${n.id}`];
+                              if (!comment?.trim()) return;
+                              casesApi.addNoaComment(n.id, { comment, createdBy: username }).then(() => {
+                                setHistoryCommentMap(m => ({ ...m, [`n${n.id}`]: '' }));
+                                casesApi.getNoaHistory(n.id).then(d => setNoaHistoryMap(m => ({ ...m, [`n${n.id}`]: Array.isArray(d) ? d : [] })));
+                              });
+                            }}>Add</button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* NOA Viewer Modal */}
+      {viewingNoa && (
+        <div className="wq-modal-overlay" onClick={() => setViewingNoa(null)}>
+          <div className="wq-modal" style={{ maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+            <div className="wq-modal-header">
+              <h4>Notice of Action — {viewingNoa.noaType}</h4>
+              <button className="wq-modal-close" onClick={() => setViewingNoa(null)}>✕</button>
+            </div>
+            <div className="wq-modal-body">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem' }}>
+                <div><strong>Status:</strong> {viewingNoa.status}</div>
+                <div><strong>Language:</strong> {viewingNoa.language || 'ENGLISH'}</div>
+                <div><strong>Effective Date:</strong> {viewingNoa.effectiveDate ? new Date(viewingNoa.effectiveDate).toLocaleDateString() : '—'}</div>
+                <div><strong>Print Date:</strong> {viewingNoa.printDate ? new Date(viewingNoa.printDate).toLocaleDateString() : '—'}</div>
+                {viewingNoa.triggerAction && <div><strong>Trigger:</strong> {viewingNoa.triggerAction}</div>}
+                {viewingNoa.triggerReasonCode && <div><strong>Reason Code:</strong> {viewingNoa.triggerReasonCode}</div>}
+              </div>
+              {viewingNoa.messageContent ? (
+                <>
+                  <strong style={{ fontSize: '0.85rem' }}>Assembled Notice Text:</strong>
+                  <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.8rem', background: '#f7fafc', border: '1px solid #e2e8f0', padding: '1rem', borderRadius: '4px', marginTop: '0.5rem', maxHeight: '300px', overflow: 'auto' }}>{viewingNoa.messageContent}</pre>
+                </>
+              ) : (
+                <p style={{ color: '#718096', fontSize: '0.85rem' }}>No assembled notice text available for this NOA.</p>
+              )}
+              {viewingNoa.status === 'PRINTED' && (
+                <div style={{ marginTop: '1rem' }}>
+                  <button className="wq-btn wq-btn-primary" onClick={() => casesApi.downloadNoaPdf(viewingNoa.id)
+                    .then(resp => triggerBlobDownload(resp, `NOA-${viewingNoa.noaType}-${viewingNoa.id}.pdf`))
+                    .catch(() => setActionError('Failed to download NOA PDF'))}>Download PDF</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

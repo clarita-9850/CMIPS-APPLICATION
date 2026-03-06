@@ -3,6 +3,8 @@ package com.cmips.service;
 import com.cmips.controller.CaseManagementController.CreateCaseRequest;
 import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity.CaseStatus;
+import com.cmips.entity.NoticeOfActionEntity.NoaType;
+import com.cmips.entity.NoticeOfActionEntity.NoaStatus;
 import com.cmips.entity.RecipientEntity.PersonType;
 import com.cmips.repository.*;
 import com.cmips.util.BusinessDayCalculator;
@@ -47,6 +49,8 @@ public class CaseManagementService {
     private final TaskAutoCloseService taskAutoCloseService; // DSD GAP 3 — Auto-close tasks on business events
     private final BusinessDayCalculator businessDayCalc;
     private final FPOEligibilityRepository fpoEligibilityRepository;
+    private final NoticeOfActionRepository noaRepository;
+    private final NoaContentAssemblerService noaContentAssembler;
 
     // Aid codes excluded from S8 notification per BR OS 16
     private static final Set<String> EXCLUDED_AID_CODES = Set.of("10", "20", "60");
@@ -70,7 +74,9 @@ public class CaseManagementService {
             CaseMaintenanceTaskService cmTaskService,
             TaskAutoCloseService taskAutoCloseService,
             BusinessDayCalculator businessDayCalc,
-            FPOEligibilityRepository fpoEligibilityRepository) {
+            FPOEligibilityRepository fpoEligibilityRepository,
+            NoticeOfActionRepository noaRepository,
+            NoaContentAssemblerService noaContentAssembler) {
         this.caseRepository = caseRepository;
         this.recipientRepository = recipientRepository;
         this.serviceEligibilityRepository = serviceEligibilityRepository;
@@ -90,6 +96,8 @@ public class CaseManagementService {
         this.taskAutoCloseService = taskAutoCloseService;
         this.businessDayCalc = businessDayCalc;
         this.fpoEligibilityRepository = fpoEligibilityRepository;
+        this.noaRepository = noaRepository;
+        this.noaContentAssembler = noaContentAssembler;
     }
 
     // ==================== CASE CREATION ====================
@@ -566,7 +574,9 @@ public class CaseManagementService {
 
         caseEntity = caseRepository.save(caseEntity);
 
-        // Send MEDS IH34 notification would happen here
+        // Auto-generate NA 1250 (Approval) NOA per DSD Section 31
+        autoGenerateNoa(caseEntity, NoaType.NA_1250, "APPROVE", null, LocalDate.now(), userId);
+
         log.info("Case {} approved, recipient {} is now ELIGIBLE", caseEntity.getCaseNumber(), recipient.getId());
 
         return caseEntity;
@@ -592,6 +602,10 @@ public class CaseManagementService {
             medsService.sendIH34UpdateApplicationData(
                 String.valueOf(caseId), caseEntity.getCin(), "DENIED");
         }
+
+        // Auto-generate NA 1252 (Denial) NOA per DSD Section 31
+        autoGenerateNoa(caseEntity, NoaType.NA_1252, "DENY", denialReason, LocalDate.now(), userId);
+
         log.info("Case {} denied: {}, IH34 sent to MEDS", caseEntity.getCaseNumber(), denialReason);
 
         return caseEntity;
@@ -654,6 +668,9 @@ public class CaseManagementService {
 
         // Auto-close tasks triggered by case termination (DSD GAP 3)
         taskAutoCloseService.onBusinessEvent(TaskAutoCloseService.EVENT_CASE_TERMINATED, caseEntity.getCaseNumber());
+
+        // Auto-generate NA 1255 (Termination) NOA per DSD Section 31
+        autoGenerateNoa(caseEntity, NoaType.NA_1255, "TERMINATE", terminationReason, effectiveDate, userId);
 
         log.info("Case {} terminated with reason {}: {}", caseEntity.getCaseNumber(),
                 terminationReason, CaseCodeTables.TERMINATION_REASONS.get(terminationReason));
@@ -921,6 +938,23 @@ public class CaseManagementService {
         // CM 64 — If case has companion cases, create companion rescission tasks
         if (caseEntity.getCompanionCase() != null && !caseEntity.getCompanionCase().isBlank()) {
             cmTaskService.onCompanionCaseRescinded(caseEntity);
+        }
+
+        // Auto-generate NOA based on rescind reason (DSD Section 31 / Appendix G Group RS)
+        // R0001: SH05 (State Hearing Filed) + applicable approval/continuation NOA
+        // R0002/R0004: NA 1251 Continuation — services restored at prior level
+        // R0003: TR18 (Administrative Error) + NA 1251
+        // R0005: TR26 (Medi-Cal Non-Compliance Resolved) — auto only
+        if ("R0001".equals(rescindReason)) {
+            autoGenerateNoa(caseEntity, NoaType.NA_1251, "RESCIND", "RS01", LocalDate.now(), userId);
+        } else if ("R0002".equals(rescindReason)) {
+            autoGenerateNoa(caseEntity, NoaType.NA_1251, "RESCIND", "RS02", LocalDate.now(), userId);
+        } else if ("R0003".equals(rescindReason)) {
+            autoGenerateNoa(caseEntity, NoaType.NA_1251, "RESCIND", "RS03", LocalDate.now(), userId);
+        } else if ("R0004".equals(rescindReason)) {
+            autoGenerateNoa(caseEntity, NoaType.NA_1251, "RESCIND", "RS04", LocalDate.now(), userId);
+        } else if ("R0005".equals(rescindReason)) {
+            autoGenerateNoa(caseEntity, NoaType.NA_1251, "RESCIND", "RS05", LocalDate.now(), userId);
         }
 
         log.info("Case {} rescinded with reason {}, restored to {}", caseEntity.getCaseNumber(),
@@ -1489,6 +1523,44 @@ public class CaseManagementService {
                 .build();
 
         taskService.createTask(task);
+    }
+
+    // ==================== NOA AUTO-GENERATION ====================
+
+    /**
+     * Auto-generate a Notice of Action for a case lifecycle event.
+     * Per DSD Section 31: NOA is created with NIGHTLY_BATCH print method
+     * (prints during the next overnight batch run).
+     *
+     * @param caseEntity    the case
+     * @param noaType       NA_1250 (Approval), NA_1252 (Denial), NA_1255 (Termination), etc.
+     * @param triggerAction action that triggered the NOA (e.g. "APPROVE", "DENY", "TERMINATE")
+     * @param reasonCode    reason code if applicable (e.g. termination reason code)
+     * @param effectiveDate effective date of the action
+     * @param userId        user performing the action
+     */
+    private void autoGenerateNoa(CaseEntity caseEntity, NoaType noaType, String triggerAction,
+                                  String reasonCode, LocalDate effectiveDate, String userId) {
+        try {
+            NoticeOfActionEntity noa = new NoticeOfActionEntity();
+            noa.setCaseId(caseEntity.getId());
+            noa.setRecipientId(caseEntity.getRecipientId());
+            noa.setNoaType(noaType);
+            noa.setTriggerAction(triggerAction);
+            noa.setTriggerReasonCode(reasonCode);
+            noa.setEffectiveDate(effectiveDate);
+            noa.setStatus(NoaStatus.PENDING);  // NIGHTLY_BATCH — printed overnight
+            noa.setCreatedBy(userId);
+            noa = noaRepository.save(noa);
+            // Assemble Appendix G category code message body
+            noaContentAssembler.assemble(noa);
+            noaRepository.save(noa);
+            log.info("[NOA-AUTO] {} generated for case {} (trigger={}, categories={})",
+                    noaType, caseEntity.getCaseNumber(), triggerAction, noa.getAssembledCategories());
+        } catch (Exception ex) {
+            // NOA failure must not roll back the primary case transaction
+            log.error("[NOA-AUTO] Failed to auto-generate {} for case {}: {}", noaType, caseEntity.getCaseNumber(), ex.getMessage());
+        }
     }
 
     // ==================== STATISTICS ====================

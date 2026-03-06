@@ -86,6 +86,20 @@ public class NoticeOfActionEntity {
     @Column(name = "notes", columnDefinition = "TEXT")
     private String notes;
 
+    /**
+     * Assembled NOA body text (in recipient's language) populated by NoaContentAssemblerService.
+     * Contains the full translated text with dynamic variables substituted.
+     */
+    @Column(name = "message_content", columnDefinition = "TEXT")
+    private String messageContent;
+
+    /**
+     * Comma-delimited list of Appendix G category codes included in this NOA body.
+     * e.g. "DN03,IN01,SH01"
+     */
+    @Column(name = "assembled_categories", length = 500)
+    private String assembledCategories;
+
     // Audit fields
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -162,6 +176,12 @@ public class NoticeOfActionEntity {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getMessageContent() { return messageContent; }
+    public void setMessageContent(String messageContent) { this.messageContent = messageContent; }
+
+    public String getAssembledCategories() { return assembledCategories; }
+    public void setAssembledCategories(String assembledCategories) { this.assembledCategories = assembledCategories; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
