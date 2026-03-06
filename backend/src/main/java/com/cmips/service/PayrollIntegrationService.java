@@ -168,6 +168,35 @@ public class PayrollIntegrationService {
         return buildResponse("PR00925A", recipientId, "Recipient worker number updated in Payroll");
     }
 
+    /**
+     * PRO0927A — Send Authorized Hours to Advantage Payroll after final determination.
+     * DSD Section 22: triggered when social worker approves assessment and finalizes authorization.
+     *
+     * @param caseId             CMIPS case identifier
+     * @param recipientId        CMIPS recipient identifier
+     * @param authorizedHoursMonthly  Total authorized hours per month from the approved assessment
+     * @param authorizationStartDate  ISO date string (yyyy-MM-dd) when authorization begins
+     * @param approvedBy         userId who approved the determination
+     */
+    public Map<String, Object> sendPRO0927A(String caseId, String recipientId,
+                                             double authorizedHoursMonthly,
+                                             String authorizationStartDate,
+                                             String approvedBy) {
+        log.info("[PRO0927A] Send Authorized Hours to Payroll: case={}, recipient={}, hours={}/mo, startDate={}, approvedBy={}",
+                 caseId, recipientId, authorizedHoursMonthly, authorizationStartDate, approvedBy);
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("transactionType", "PRO0927A");
+        r.put("interface", "Advantage-Payroll");
+        r.put("caseId", caseId);
+        r.put("recipientId", recipientId);
+        r.put("authorizedHoursMonthly", authorizedHoursMonthly);
+        r.put("authorizationStartDate", authorizationStartDate);
+        r.put("approvedBy", approvedBy);
+        r.put("status", "SENT");
+        r.put("message", "Authorized hours transmitted to Advantage Payroll System");
+        return r;
+    }
+
     // ============================================================
     // Helper
     // ============================================================

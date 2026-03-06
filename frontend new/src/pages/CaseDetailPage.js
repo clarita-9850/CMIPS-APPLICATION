@@ -57,6 +57,23 @@ export const CaseDetailPage = () => {
   const [agreementsSubTab, setAgreementsSubTab] = useState('workweek');
   const [hoursSubTab, setHoursSubTab] = useState('flexible');
   const [formsSubTab, setFormsSubTab] = useState('electronic');
+  const [eligibilitySubTab, setEligibilitySubTab] = useState('assessments');
+
+  // Evidence Hub data
+  const [authSummary, setAuthSummary] = useState(null);
+  const [socSpendDown, setSocSpendDown] = useState(null);
+  const [householdEvidence, setHouseholdEvidence] = useState([]);
+  const [programEvidence, setProgramEvidence] = useState([]);
+  const [disasterContacts, setDisasterContacts] = useState([]);
+  const [countyRates, setCountyRates] = useState([]);
+  const [authSegments, setAuthSegments] = useState([]);
+  const [showHouseholdModal, setShowHouseholdModal] = useState(false);
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [showDisasterModal, setShowDisasterModal] = useState(false);
+  const [showCountyRateModal, setShowCountyRateModal] = useState(false);
+  const [showAuthSegmentModal, setShowAuthSegmentModal] = useState(false);
+  const [evidenceModalForm, setEvidenceModalForm] = useState({});
+  const [pro0927aResult, setPro0927aResult] = useState(null);
 
   // New modal states
   const [showWorkweekModal, setShowWorkweekModal] = useState(false);
@@ -156,11 +173,22 @@ export const CaseDetailPage = () => {
     } else if (activeTab === 'eligibility') {
       Promise.all([
         eligibilityApi.getAssessments(id).catch(() => []),
-        eligibilityApi.getServicePlans(id).catch(() => [])
-      ]).then(([a, sp]) => {
+        eligibilityApi.getServicePlans(id).catch(() => []),
+        eligibilityApi.getAuthorizationSummary(id).catch(() => null),
+        eligibilityApi.getHouseholdEvidence(id).catch(() => []),
+        eligibilityApi.getProgramEvidence(id).catch(() => []),
+        eligibilityApi.getDisasterContacts(id).catch(() => []),
+        eligibilityApi.getAuthSegments(id).catch(() => []),
+      ]).then(([a, sp, authSum, hh, prog, disaster, segs]) => {
         setAssessments(Array.isArray(a) ? a : (a?.content || a?.items || []));
         setServicePlans(Array.isArray(sp) ? sp : (sp?.content || sp?.items || []));
+        setAuthSummary(authSum);
+        setHouseholdEvidence(Array.isArray(hh) ? hh : []);
+        setProgramEvidence(Array.isArray(prog) ? prog : []);
+        setDisasterContacts(Array.isArray(disaster) ? disaster : []);
+        setAuthSegments(Array.isArray(segs) ? segs : []);
       });
+      eligibilityApi.getAllCountyRates().then(d => setCountyRates(Array.isArray(d) ? d : [])).catch(() => {});
     } else if (activeTab === 'agreements') {
       casesApi.getWorkweekAgreements(id).then(d => setWorkweekAgreements(Array.isArray(d) ? d : [])).catch(() => setWorkweekAgreements([]));
       casesApi.getOvertimeAgreements(id).then(d => setOvertimeAgreements(Array.isArray(d) ? d : [])).catch(() => setOvertimeAgreements([]));
@@ -493,6 +521,16 @@ export const CaseDetailPage = () => {
       {/* Eligibility Tab — DSD Section 21 (Needs Assessment) + Section 22 (Final Determination) */}
       {activeTab === 'eligibility' && (
         <>
+          {/* Eligibility Sub-Tab Nav */}
+          <div className="wq-tabs" style={{ marginBottom: '1rem' }}>
+            {[['assessments','Assessments'],['authorization','Authorization Summary'],['household','Household Evidence'],['program','Program Evidence'],['disaster','Disaster Preparedness'],['segments','Auth Segments'],['rates','County Pay Rates']].map(([k,l]) => (
+              <button key={k} className={`wq-tab ${eligibilitySubTab === k ? 'active' : ''}`} onClick={() => setEligibilitySubTab(k)}>{l}</button>
+            ))}
+          </div>
+
+          {/* ── Assessments sub-tab (existing content) ── */}
+          {eligibilitySubTab === 'assessments' && (
+          <>
           {/* Assessment List */}
           {!selectedAssessment && (
             <div className="wq-panel">
@@ -880,6 +918,523 @@ export const CaseDetailPage = () => {
                       .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); setShowRejectModal(false); })
                       .catch(err => setActionError(err?.response?.data?.message || 'Rejection failed'));
                   }}>Reject Assessment</button>
+                </div>
+              </div>
+            </div>
+          )}
+          </>
+          )}
+
+          {/* ── Authorization Summary sub-tab ── */}
+          {eligibilitySubTab === 'authorization' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Authorization Summary</h4>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button className="wq-btn wq-btn-outline" onClick={() => {
+                    eligibilityApi.getAuthorizationSummary(id).then(d => setAuthSummary(d)).catch(() => setActionError('Failed to load authorization summary'));
+                  }}>Refresh</button>
+                  {authSummary?.activeAssessmentId && (
+                    <button className="wq-btn wq-btn-primary" onClick={() => {
+                      eligibilityApi.sendPro0927A(authSummary.activeAssessmentId)
+                        .then(r => setPro0927aResult(r))
+                        .catch(() => setActionError('PRO0927A transmission failed'));
+                    }}>Send PRO0927A to Payroll</button>
+                  )}
+                </div>
+              </div>
+              <div className="wq-panel-body">
+                {!authSummary ? (
+                  <p className="wq-empty">No approved assessment found. Complete and approve an assessment first.</p>
+                ) : (
+                  <>
+                    {pro0927aResult && (
+                      <div style={{ marginBottom: '1rem', padding: '0.75rem 1rem', backgroundColor: '#c6f6d5', borderRadius: 6, color: '#276749', fontWeight: 600 }}>
+                        PRO0927A sent — Interface ID: {pro0927aResult.interfaceId || 'N/A'}
+                      </div>
+                    )}
+                    <div className="wq-detail-grid" style={{ marginBottom: '1.5rem' }}>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Mode of Service:</span><span className="wq-detail-value">{authSummary.modeOfService || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Monthly):</span><span className="wq-detail-value">{authSummary.authorizedHoursMonthly != null ? authSummary.authorizedHoursMonthly.toFixed(2) + ' hrs' : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Weekly):</span><span className="wq-detail-value">{authSummary.authorizedHoursWeekly != null ? authSummary.authorizedHoursWeekly.toFixed(2) + ' hrs' : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Share of Cost:</span><span className="wq-detail-value">{authSummary.shareOfCostAmount != null ? `$${authSummary.shareOfCostAmount.toFixed(2)}` : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Waiver Program:</span><span className="wq-detail-value">{authSummary.waiverProgram || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Assessment Status:</span><span className="wq-detail-value">{authSummary.assessmentStatus || '—'}</span></div>
+                    </div>
+                    <h5 style={{ marginBottom: '0.75rem', fontWeight: 600 }}>Service Hours by Type</h5>
+                    <table className="wq-table" style={{ marginBottom: '1.5rem' }}>
+                      <thead><tr><th>Service Type</th><th>Hours/Month</th></tr></thead>
+                      <tbody>
+                        {authSummary.serviceHours && Object.entries(authSummary.serviceHours).map(([svc, hrs]) => (
+                          <tr key={svc}><td>{svc.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase())}</td><td>{hrs != null ? Number(hrs).toFixed(2) : '—'}</td></tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <h5 style={{ marginBottom: '0.75rem', fontWeight: 600 }}>Functional Index Scores</h5>
+                    <div className="wq-detail-grid" style={{ marginBottom: '1.5rem' }}>
+                      {authSummary.functionalIndexScores && Object.entries(authSummary.functionalIndexScores).map(([cat, score]) => (
+                        <div key={cat} className="wq-detail-row">
+                          <span className="wq-detail-label">{cat.replace(/^fi/, '').replace(/([A-Z])/g, ' $1').trim()}:</span>
+                          <span className="wq-detail-value">{score ?? '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {authSummary.activeAssessmentId && (
+                      <>
+                        <h5 style={{ marginBottom: '0.75rem', fontWeight: 600 }}>SOC 4-Week Spend-Down Split (BR SE 49)</h5>
+                        {!socSpendDown ? (
+                          <button className="wq-btn wq-btn-outline" onClick={() => {
+                            eligibilityApi.getSocSpendDown(authSummary.activeAssessmentId).then(d => setSocSpendDown(d)).catch(() => setActionError('Failed to load SOC spend-down'));
+                          }}>Load SOC Spend-Down</button>
+                        ) : (
+                          <table className="wq-table">
+                            <thead><tr><th>Week</th><th>Regular Hrs</th><th>OT Hrs</th><th>Gross Pay</th><th>SOC Applied</th><th>Net Pay</th></tr></thead>
+                            <tbody>
+                              {Array.isArray(socSpendDown.weeks) && socSpendDown.weeks.map((w, i) => (
+                                <tr key={i}>
+                                  <td>Week {i + 1}</td>
+                                  <td>{w.regularHours != null ? w.regularHours.toFixed(2) : '—'}</td>
+                                  <td>{w.overtimeHours != null ? w.overtimeHours.toFixed(2) : '—'}</td>
+                                  <td>{w.grossPay != null ? `$${w.grossPay.toFixed(2)}` : '—'}</td>
+                                  <td>{w.socApplied != null ? `$${w.socApplied.toFixed(2)}` : '—'}</td>
+                                  <td>{w.netPay != null ? `$${w.netPay.toFixed(2)}` : '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Household Evidence sub-tab ── */}
+          {eligibilitySubTab === 'household' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Household Evidence ({householdEvidence.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setEvidenceModalForm({}); setShowHouseholdModal(true); }}>Add Household Evidence</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {householdEvidence.length === 0 ? (
+                  <p className="wq-empty">No household evidence recorded. Click "Add Household Evidence" to begin.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead><tr><th>Living Arrangement</th><th>Housing Type</th><th>Members</th><th>Companion Case</th><th>Live-In Provider</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody>
+                      {householdEvidence.map(h => (
+                        <tr key={h.id}>
+                          <td>{h.livingArrangement || '—'}</td>
+                          <td>{h.housingType || '—'}</td>
+                          <td>{h.numberOfHouseholdMembers ?? '—'}</td>
+                          <td>{h.hasCompanionCase ? 'Yes' : 'No'}</td>
+                          <td>{h.hasLiveInProvider ? 'Yes' : 'No'}</td>
+                          <td><span className={`wq-badge wq-badge-${(h.status || 'active').toLowerCase()}`}>{h.status || 'ACTIVE'}</span></td>
+                          <td>{h.createdAt ? new Date(h.createdAt).toLocaleDateString() : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+          {showHouseholdModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowHouseholdModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                <div className="wq-modal-header"><h3>Add Household Evidence</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div>
+                      <label className="wq-label">Living Arrangement</label>
+                      <select className="wq-input" value={evidenceModalForm.livingArrangement || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, livingArrangement: e.target.value }))}>
+                        <option value="">Select...</option>
+                        {['LIVES_ALONE', 'WITH_SPOUSE_PARTNER', 'WITH_FAMILY_MEMBER', 'WITH_NON_FAMILY', 'BOARD_AND_CARE', 'ASSISTED_LIVING', 'OTHER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="wq-label">Housing Type</label>
+                      <select className="wq-input" value={evidenceModalForm.housingType || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, housingType: e.target.value }))}>
+                        <option value="">Select...</option>
+                        {['OWN_HOME', 'RENTS', 'LIVES_WITH_OTHERS_FREE', 'BOARD_AND_CARE_FACILITY', 'OTHER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="wq-label">Number of Household Members</label>
+                      <input type="number" className="wq-input" min={1} value={evidenceModalForm.numberOfHouseholdMembers || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, numberOfHouseholdMembers: parseInt(e.target.value) }))} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.5rem' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.hasCompanionCase} onChange={e => setEvidenceModalForm(p => ({ ...p, hasCompanionCase: e.target.checked }))} /> Companion Case
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.hasLiveInProvider} onChange={e => setEvidenceModalForm(p => ({ ...p, hasLiveInProvider: e.target.checked }))} /> Live-In Provider
+                      </label>
+                    </div>
+                    <div>
+                      <label className="wq-label">Notes</label>
+                      <textarea className="wq-input" rows={2} value={evidenceModalForm.notes || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, notes: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowHouseholdModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" onClick={() => {
+                    eligibilityApi.createHouseholdEvidence(id, { ...evidenceModalForm, caseId: parseInt(id) })
+                      .then(() => { eligibilityApi.getHouseholdEvidence(id).then(d => setHouseholdEvidence(Array.isArray(d) ? d : [])); setShowHouseholdModal(false); setEvidenceModalForm({}); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to save household evidence'));
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Program Evidence sub-tab ── */}
+          {eligibilitySubTab === 'program' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Program Evidence ({programEvidence.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setEvidenceModalForm({}); setShowProgramModal(true); }}>Add Program Evidence</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {programEvidence.length === 0 ? (
+                  <p className="wq-empty">No program evidence recorded.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead><tr><th>Program</th><th>Funding</th><th>Medi-Cal Active</th><th>Functional Need</th><th>Financial Eligible</th><th>Status</th><th>Date</th></tr></thead>
+                    <tbody>
+                      {programEvidence.map(p => (
+                        <tr key={p.id}>
+                          <td>{p.programType || '—'}</td>
+                          <td>{p.fundingCategory || '—'}</td>
+                          <td>{p.mediCalActive ? 'Yes' : 'No'}</td>
+                          <td>{p.functionalNeedMet ? 'Yes' : 'No'}</td>
+                          <td>{p.financialEligibilityMet ? 'Yes' : 'No'}</td>
+                          <td><span className={`wq-badge wq-badge-${(p.status || 'active').toLowerCase()}`}>{p.status || 'ACTIVE'}</span></td>
+                          <td>{p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+          {showProgramModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowProgramModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="wq-modal-header"><h3>Add Program Evidence</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div>
+                      <label className="wq-label">Program Type</label>
+                      <select className="wq-input" value={evidenceModalForm.programType || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, programType: e.target.value }))}>
+                        <option value="">Select...</option>
+                        {['IHSS', 'WPCS', 'CFCO', 'IPO'].map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="wq-label">Funding Category</label>
+                      <select className="wq-input" value={evidenceModalForm.fundingCategory || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, fundingCategory: e.target.value }))}>
+                        <option value="">Select...</option>
+                        {['STATE', 'COUNTY', 'FEDERAL_WAIVER', 'STATE_AND_COUNTY'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="wq-label">Medi-Cal Aid Code</label>
+                      <input type="text" className="wq-input" value={evidenceModalForm.mediCalAidCode || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, mediCalAidCode: e.target.value }))} placeholder="e.g. 10" />
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.mediCalActive} onChange={e => setEvidenceModalForm(p => ({ ...p, mediCalActive: e.target.checked }))} /> Medi-Cal Active
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.functionalNeedMet} onChange={e => setEvidenceModalForm(p => ({ ...p, functionalNeedMet: e.target.checked }))} /> Functional Need Met
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.financialEligibilityMet} onChange={e => setEvidenceModalForm(p => ({ ...p, financialEligibilityMet: e.target.checked }))} /> Financial Eligible
+                      </label>
+                    </div>
+                    <div>
+                      <label className="wq-label">Eligibility Reason</label>
+                      <textarea className="wq-input" rows={2} value={evidenceModalForm.eligibilityReason || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, eligibilityReason: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowProgramModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" onClick={() => {
+                    eligibilityApi.createProgramEvidence(id, { ...evidenceModalForm, caseId: parseInt(id) })
+                      .then(() => { eligibilityApi.getProgramEvidence(id).then(d => setProgramEvidence(Array.isArray(d) ? d : [])); setShowProgramModal(false); setEvidenceModalForm({}); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to save program evidence'));
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Disaster Preparedness sub-tab ── */}
+          {eligibilitySubTab === 'disaster' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Disaster Preparedness Contacts ({disasterContacts.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setEvidenceModalForm({}); setShowDisasterModal(true); }}>Add Contact</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {disasterContacts.length === 0 ? (
+                  <p className="wq-empty">No disaster preparedness contacts on record.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead><tr><th>Name</th><th>Relationship</th><th>Phone</th><th>Can Evacuate</th><th>Special Transport</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {disasterContacts.map(c => (
+                        <tr key={c.id}>
+                          <td>{c.contactName || '—'}</td>
+                          <td>{c.relationship || '—'}</td>
+                          <td>{c.phoneNumber || '—'}</td>
+                          <td>{c.canAssistEvacuation ? 'Yes' : 'No'}</td>
+                          <td>{c.specializedTransport ? 'Yes' : 'No'}</td>
+                          <td><span className={`wq-badge wq-badge-${(c.status || 'active').toLowerCase()}`}>{c.status || 'ACTIVE'}</span></td>
+                          <td>
+                            {c.status !== 'INACTIVE' && (
+                              <button className="wq-btn wq-btn-sm wq-btn-outline" onClick={() => {
+                                eligibilityApi.inactivateDisasterContact(c.id)
+                                  .then(() => eligibilityApi.getDisasterContacts(id).then(d => setDisasterContacts(Array.isArray(d) ? d : [])))
+                                  .catch(() => setActionError('Failed to inactivate contact'));
+                              }}>Inactivate</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+          {showDisasterModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowDisasterModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="wq-modal-header"><h3>Add Disaster Preparedness Contact</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div>
+                      <label className="wq-label">Contact Name <span style={{ color: 'red' }}>*</span></label>
+                      <input type="text" className="wq-input" value={evidenceModalForm.contactName || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, contactName: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="wq-label">Relationship</label>
+                      <select className="wq-input" value={evidenceModalForm.relationship || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, relationship: e.target.value }))}>
+                        <option value="">Select...</option>
+                        {['SPOUSE', 'CHILD', 'PARENT', 'SIBLING', 'NEIGHBOR', 'FRIEND', 'CAREGIVER', 'PROVIDER', 'OTHER_FAMILY', 'OTHER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="wq-label">Phone Number</label>
+                      <input type="text" className="wq-input" value={evidenceModalForm.phoneNumber || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, phoneNumber: e.target.value }))} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.canAssistEvacuation} onChange={e => setEvidenceModalForm(p => ({ ...p, canAssistEvacuation: e.target.checked }))} /> Can Assist Evacuation
+                      </label>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={!!evidenceModalForm.specializedTransport} onChange={e => setEvidenceModalForm(p => ({ ...p, specializedTransport: e.target.checked }))} /> Specialized Transport
+                      </label>
+                    </div>
+                    <div>
+                      <label className="wq-label">Special Needs Notes</label>
+                      <textarea className="wq-input" rows={2} value={evidenceModalForm.specialNeedsNotes || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, specialNeedsNotes: e.target.value }))} style={{ width: '100%' }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowDisasterModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" disabled={!evidenceModalForm.contactName} onClick={() => {
+                    eligibilityApi.createDisasterContact(id, { ...evidenceModalForm, caseId: parseInt(id) })
+                      .then(() => { eligibilityApi.getDisasterContacts(id).then(d => setDisasterContacts(Array.isArray(d) ? d : [])); setShowDisasterModal(false); setEvidenceModalForm({}); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to save contact'));
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Authorization Segments sub-tab ── */}
+          {eligibilitySubTab === 'segments' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Authorization Segments ({authSegments.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setEvidenceModalForm({}); setShowAuthSegmentModal(true); }}>Add Segment</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {authSegments.length === 0 ? (
+                  <p className="wq-empty">No authorization segments recorded.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead><tr><th>Start Date</th><th>End Date</th><th>Hrs/Month</th><th>Mode</th><th>Funding</th><th>SOC</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                      {authSegments.map(s => (
+                        <tr key={s.id}>
+                          <td>{s.segmentStartDate ? new Date(s.segmentStartDate).toLocaleDateString() : '—'}</td>
+                          <td>{s.segmentEndDate ? new Date(s.segmentEndDate).toLocaleDateString() : '—'}</td>
+                          <td>{s.authorizedHoursMonthly != null ? Number(s.authorizedHoursMonthly).toFixed(2) : '—'}</td>
+                          <td>{s.modeOfService || '—'}</td>
+                          <td>{s.fundingSource || '—'}</td>
+                          <td>{s.shareOfCostAmount != null ? `$${Number(s.shareOfCostAmount).toFixed(2)}` : '—'}</td>
+                          <td><span className={`wq-badge wq-badge-${(s.segmentStatus || 'active').toLowerCase()}`}>{s.segmentStatus || 'ACTIVE'}</span></td>
+                          <td>
+                            {s.segmentStatus === 'ACTIVE' && (
+                              <button className="wq-btn wq-btn-sm wq-btn-outline" onClick={() => {
+                                eligibilityApi.inactivateAuthSegment(s.id)
+                                  .then(() => eligibilityApi.getAuthSegments(id).then(d => setAuthSegments(Array.isArray(d) ? d : [])))
+                                  .catch(() => setActionError('Failed to inactivate segment'));
+                              }}>Inactivate</button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+          {showAuthSegmentModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowAuthSegmentModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                <div className="wq-modal-header"><h3>Add Authorization Segment</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">Start Date <span style={{ color: 'red' }}>*</span></label>
+                        <input type="date" className="wq-input" value={evidenceModalForm.segmentStartDate || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, segmentStartDate: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">End Date</label>
+                        <input type="date" className="wq-input" value={evidenceModalForm.segmentEndDate || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, segmentEndDate: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">Authorized Hours/Month</label>
+                        <input type="number" className="wq-input" step="0.5" value={evidenceModalForm.authorizedHoursMonthly || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, authorizedHoursMonthly: parseFloat(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">Mode of Service</label>
+                        <select className="wq-input" value={evidenceModalForm.modeOfService || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, modeOfService: e.target.value }))}>
+                          <option value="">Select...</option>
+                          {['IH', 'HM', 'WPCS', 'CFCO', 'IPO'].map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">Funding Source</label>
+                        <select className="wq-input" value={evidenceModalForm.fundingSource || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, fundingSource: e.target.value }))}>
+                          <option value="">Select...</option>
+                          {['STATE', 'COUNTY', 'FEDERAL_WAIVER', 'STATE_AND_COUNTY'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="wq-label">SOC Amount ($)</label>
+                        <input type="number" className="wq-input" step="0.01" value={evidenceModalForm.shareOfCostAmount || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, shareOfCostAmount: parseFloat(e.target.value) }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="wq-label">Segment Reason</label>
+                      <input type="text" className="wq-input" value={evidenceModalForm.segmentReason || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, segmentReason: e.target.value }))} placeholder="e.g. Initial authorization" />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowAuthSegmentModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" disabled={!evidenceModalForm.segmentStartDate} onClick={() => {
+                    eligibilityApi.createAuthSegment(id, { ...evidenceModalForm, caseId: parseInt(id) })
+                      .then(() => { eligibilityApi.getAuthSegments(id).then(d => setAuthSegments(Array.isArray(d) ? d : [])); setShowAuthSegmentModal(false); setEvidenceModalForm({}); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to save segment'));
+                  }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── County Pay Rates sub-tab ── */}
+          {eligibilitySubTab === 'rates' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>County Pay Rates ({countyRates.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setEvidenceModalForm({}); setShowCountyRateModal(true); }}>Add Rate</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {countyRates.length === 0 ? (
+                  <p className="wq-empty">No county pay rates configured.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead><tr><th>County</th><th>Rate Type</th><th>Hourly Rate</th><th>OT Rate</th><th>Effective Date</th><th>End Date</th><th>Status</th></tr></thead>
+                    <tbody>
+                      {countyRates.map(r => (
+                        <tr key={r.id}>
+                          <td>{r.countyCode || '—'}</td>
+                          <td>{r.rateType || '—'}</td>
+                          <td>{r.hourlyRate != null ? `$${Number(r.hourlyRate).toFixed(2)}` : '—'}</td>
+                          <td>{r.overtimeRate != null ? `$${Number(r.overtimeRate).toFixed(2)}` : '—'}</td>
+                          <td>{r.effectiveDate ? new Date(r.effectiveDate).toLocaleDateString() : '—'}</td>
+                          <td>{r.endDate ? new Date(r.endDate).toLocaleDateString() : '—'}</td>
+                          <td><span className={`wq-badge wq-badge-${(r.status || 'active').toLowerCase()}`}>{r.status || 'ACTIVE'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+          {showCountyRateModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowCountyRateModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="wq-modal-header"><h3>Add County Pay Rate</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">County Code <span style={{ color: 'red' }}>*</span></label>
+                        <input type="text" className="wq-input" value={evidenceModalForm.countyCode || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, countyCode: e.target.value }))} placeholder="e.g. 19" />
+                      </div>
+                      <div>
+                        <label className="wq-label">Rate Type</label>
+                        <select className="wq-input" value={evidenceModalForm.rateType || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, rateType: e.target.value }))}>
+                          <option value="">Select...</option>
+                          {['STANDARD_IP', 'WPCS_IP', 'ENHANCED_IP', 'HOMEMAKER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">Hourly Rate ($)</label>
+                        <input type="number" className="wq-input" step="0.01" value={evidenceModalForm.hourlyRate || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, hourlyRate: parseFloat(e.target.value) }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">Effective Date <span style={{ color: 'red' }}>*</span></label>
+                        <input type="date" className="wq-input" value={evidenceModalForm.effectiveDate || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, effectiveDate: e.target.value }))} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="wq-label">End Date</label>
+                      <input type="date" className="wq-input" value={evidenceModalForm.endDate || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, endDate: e.target.value }))} />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowCountyRateModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" disabled={!evidenceModalForm.countyCode || !evidenceModalForm.effectiveDate} onClick={() => {
+                    eligibilityApi.createCountyRate({ ...evidenceModalForm })
+                      .then(() => { eligibilityApi.getAllCountyRates().then(d => setCountyRates(Array.isArray(d) ? d : [])); setShowCountyRateModal(false); setEvidenceModalForm({}); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to save county rate'));
+                  }}>Save</button>
                 </div>
               </div>
             </div>
