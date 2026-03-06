@@ -934,9 +934,9 @@ export const CaseDetailPage = () => {
                   <button className="wq-btn wq-btn-outline" onClick={() => {
                     eligibilityApi.getAuthorizationSummary(id).then(d => setAuthSummary(d)).catch(() => setActionError('Failed to load authorization summary'));
                   }}>Refresh</button>
-                  {authSummary?.activeAssessmentId && (
+                  {authSummary?.assessmentId && (
                     <button className="wq-btn wq-btn-primary" onClick={() => {
-                      eligibilityApi.sendPro0927A(authSummary.activeAssessmentId)
+                      eligibilityApi.sendPro0927A(authSummary.assessmentId)
                         .then(r => setPro0927aResult(r))
                         .catch(() => setActionError('PRO0927A transmission failed'));
                     }}>Send PRO0927A to Payroll</button>
@@ -955,11 +955,11 @@ export const CaseDetailPage = () => {
                     )}
                     <div className="wq-detail-grid" style={{ marginBottom: '1.5rem' }}>
                       <div className="wq-detail-row"><span className="wq-detail-label">Mode of Service:</span><span className="wq-detail-value">{authSummary.modeOfService || '—'}</span></div>
-                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Monthly):</span><span className="wq-detail-value">{authSummary.authorizedHoursMonthly != null ? authSummary.authorizedHoursMonthly.toFixed(2) + ' hrs' : '—'}</span></div>
-                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Weekly):</span><span className="wq-detail-value">{authSummary.authorizedHoursWeekly != null ? authSummary.authorizedHoursWeekly.toFixed(2) + ' hrs' : '—'}</span></div>
-                      <div className="wq-detail-row"><span className="wq-detail-label">Share of Cost:</span><span className="wq-detail-value">{authSummary.shareOfCostAmount != null ? `$${authSummary.shareOfCostAmount.toFixed(2)}` : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Monthly):</span><span className="wq-detail-value">{authSummary.totalAuthorizedHoursMonthly != null ? Number(authSummary.totalAuthorizedHoursMonthly).toFixed(2) + ' hrs' : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Authorized Hours (Weekly):</span><span className="wq-detail-value">{authSummary.totalAuthorizedHoursWeekly != null ? Number(authSummary.totalAuthorizedHoursWeekly).toFixed(2) + ' hrs' : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Share of Cost:</span><span className="wq-detail-value">{authSummary.shareOfCostAmount != null ? `$${Number(authSummary.shareOfCostAmount).toFixed(2)}` : '—'}</span></div>
                       <div className="wq-detail-row"><span className="wq-detail-label">Waiver Program:</span><span className="wq-detail-value">{authSummary.waiverProgram || '—'}</span></div>
-                      <div className="wq-detail-row"><span className="wq-detail-label">Assessment Status:</span><span className="wq-detail-value">{authSummary.assessmentStatus || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Assessment Status:</span><span className="wq-detail-value">{authSummary.status || '—'}</span></div>
                     </div>
                     <h5 style={{ marginBottom: '0.75rem', fontWeight: 600 }}>Service Hours by Type</h5>
                     <table className="wq-table" style={{ marginBottom: '1.5rem' }}>
@@ -979,25 +979,25 @@ export const CaseDetailPage = () => {
                         </div>
                       ))}
                     </div>
-                    {authSummary.activeAssessmentId && (
+                    {authSummary.assessmentId && (
                       <>
                         <h5 style={{ marginBottom: '0.75rem', fontWeight: 600 }}>SOC 4-Week Spend-Down Split (BR SE 49)</h5>
                         {!socSpendDown ? (
                           <button className="wq-btn wq-btn-outline" onClick={() => {
-                            eligibilityApi.getSocSpendDown(authSummary.activeAssessmentId).then(d => setSocSpendDown(d)).catch(() => setActionError('Failed to load SOC spend-down'));
+                            eligibilityApi.getSocSpendDown(authSummary.assessmentId).then(d => setSocSpendDown(d)).catch(() => setActionError('Failed to load SOC spend-down'));
                           }}>Load SOC Spend-Down</button>
                         ) : (
                           <table className="wq-table">
-                            <thead><tr><th>Week</th><th>Regular Hrs</th><th>OT Hrs</th><th>Gross Pay</th><th>SOC Applied</th><th>Net Pay</th></tr></thead>
+                            <thead><tr><th>Week</th><th>Regular Hrs</th><th>OT Hrs</th><th>Regular Pay</th><th>OT Pay</th><th>Gross Pay</th></tr></thead>
                             <tbody>
-                              {Array.isArray(socSpendDown.weeks) && socSpendDown.weeks.map((w, i) => (
+                              {Array.isArray(socSpendDown.weeklyBreakdown) && socSpendDown.weeklyBreakdown.map((w, i) => (
                                 <tr key={i}>
                                   <td>Week {i + 1}</td>
-                                  <td>{w.regularHours != null ? w.regularHours.toFixed(2) : '—'}</td>
-                                  <td>{w.overtimeHours != null ? w.overtimeHours.toFixed(2) : '—'}</td>
-                                  <td>{w.grossPay != null ? `$${w.grossPay.toFixed(2)}` : '—'}</td>
-                                  <td>{w.socApplied != null ? `$${w.socApplied.toFixed(2)}` : '—'}</td>
-                                  <td>{w.netPay != null ? `$${w.netPay.toFixed(2)}` : '—'}</td>
+                                  <td>{w.regularHours != null ? Number(w.regularHours).toFixed(2) : '—'}</td>
+                                  <td>{w.overtimeHours != null ? Number(w.overtimeHours).toFixed(2) : '—'}</td>
+                                  <td>{w.regularPay != null ? `$${Number(w.regularPay).toFixed(2)}` : '—'}</td>
+                                  <td>{w.overtimePay != null ? `$${Number(w.overtimePay).toFixed(2)}` : '—'}</td>
+                                  <td>{w.grossPay != null ? `$${Number(w.grossPay).toFixed(2)}` : '—'}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -1029,7 +1029,7 @@ export const CaseDetailPage = () => {
                         <tr key={h.id}>
                           <td>{h.livingArrangement || '—'}</td>
                           <td>{h.housingType || '—'}</td>
-                          <td>{h.numberOfHouseholdMembers ?? '—'}</td>
+                          <td>{h.numberOfMembers ?? '—'}</td>
                           <td>{h.hasCompanionCase ? 'Yes' : 'No'}</td>
                           <td>{h.hasLiveInProvider ? 'Yes' : 'No'}</td>
                           <td><span className={`wq-badge wq-badge-${(h.status || 'active').toLowerCase()}`}>{h.status || 'ACTIVE'}</span></td>
@@ -1064,7 +1064,7 @@ export const CaseDetailPage = () => {
                     </div>
                     <div>
                       <label className="wq-label">Number of Household Members</label>
-                      <input type="number" className="wq-input" min={1} value={evidenceModalForm.numberOfHouseholdMembers || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, numberOfHouseholdMembers: parseInt(e.target.value) }))} />
+                      <input type="number" className="wq-input" min={1} value={evidenceModalForm.numberOfMembers || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, numberOfMembers: parseInt(e.target.value) }))} />
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
@@ -1194,9 +1194,9 @@ export const CaseDetailPage = () => {
                         <tr key={c.id}>
                           <td>{c.contactName || '—'}</td>
                           <td>{c.relationship || '—'}</td>
-                          <td>{c.phoneNumber || '—'}</td>
-                          <td>{c.canAssistEvacuation ? 'Yes' : 'No'}</td>
-                          <td>{c.specializedTransport ? 'Yes' : 'No'}</td>
+                          <td>{c.primaryPhone || '—'}</td>
+                          <td>{c.canEvacuateIndependently ? 'Yes' : 'No'}</td>
+                          <td>{c.requiresSpecializedTransport ? 'Yes' : 'No'}</td>
                           <td><span className={`wq-badge wq-badge-${(c.status || 'active').toLowerCase()}`}>{c.status || 'ACTIVE'}</span></td>
                           <td>
                             {c.status !== 'INACTIVE' && (
@@ -1229,19 +1229,19 @@ export const CaseDetailPage = () => {
                       <label className="wq-label">Relationship</label>
                       <select className="wq-input" value={evidenceModalForm.relationship || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, relationship: e.target.value }))}>
                         <option value="">Select...</option>
-                        {['SPOUSE', 'CHILD', 'PARENT', 'SIBLING', 'NEIGHBOR', 'FRIEND', 'CAREGIVER', 'PROVIDER', 'OTHER_FAMILY', 'OTHER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
+                        {['SPOUSE_PARTNER', 'CHILD', 'PARENT', 'SIBLING', 'OTHER_FAMILY', 'FRIEND', 'NEIGHBOR', 'PROVIDER', 'SOCIAL_WORKER', 'OTHER'].map(v => <option key={v} value={v}>{v.replace(/_/g, ' ')}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="wq-label">Phone Number</label>
-                      <input type="text" className="wq-input" value={evidenceModalForm.phoneNumber || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, phoneNumber: e.target.value }))} />
+                      <input type="text" className="wq-input" value={evidenceModalForm.primaryPhone || ''} onChange={e => setEvidenceModalForm(p => ({ ...p, primaryPhone: e.target.value }))} />
                     </div>
                     <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={!!evidenceModalForm.canAssistEvacuation} onChange={e => setEvidenceModalForm(p => ({ ...p, canAssistEvacuation: e.target.checked }))} /> Can Assist Evacuation
+                        <input type="checkbox" checked={!!evidenceModalForm.canEvacuateIndependently} onChange={e => setEvidenceModalForm(p => ({ ...p, canEvacuateIndependently: e.target.checked }))} /> Can Evacuate Independently
                       </label>
                       <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                        <input type="checkbox" checked={!!evidenceModalForm.specializedTransport} onChange={e => setEvidenceModalForm(p => ({ ...p, specializedTransport: e.target.checked }))} /> Specialized Transport
+                        <input type="checkbox" checked={!!evidenceModalForm.requiresSpecializedTransport} onChange={e => setEvidenceModalForm(p => ({ ...p, requiresSpecializedTransport: e.target.checked }))} /> Requires Specialized Transport
                       </label>
                     </div>
                     <div>
