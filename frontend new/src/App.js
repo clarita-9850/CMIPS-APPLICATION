@@ -68,6 +68,11 @@ import { BVITimesheetReissuePage } from './pages/BVITimesheetReissuePage';
 import { TravelClaimPage } from './pages/TravelClaimPage';
 import { DirectDepositPage } from './pages/DirectDepositPage';
 import { SickLeavePage } from './pages/SickLeavePage';
+import { PaymentSearchPage } from './pages/PaymentSearchPage';
+import { SpecialTransactionsPage } from './pages/SpecialTransactionsPage';
+import { PaymentCorrectionsPage } from './pages/PaymentCorrectionsPage';
+import { OverpaymentRecoveryPage } from './pages/OverpaymentRecoveryPage';
+import { CareerPathwaysPage } from './pages/CareerPathwaysPage';
 
 // Organization / Admin
 import { OrganizationPage } from './pages/OrganizationPage';
@@ -236,6 +241,13 @@ function App() {
             <Route path="/payments/travel-claim" element={<TravelClaimPage />} />
             <Route path="/payments/direct-deposit" element={<DirectDepositPage />} />
             <Route path="/payments/sick-leave" element={<SickLeavePage />} />
+            <Route path="/payments/search" element={<PaymentSearchPage />} />
+            <Route path="/payments/special-transactions" element={<SpecialTransactionsPage />} />
+            <Route path="/payments/payment-corrections" element={<PaymentCorrectionsPage />} />
+            <Route path="/payments/career-pathways" element={<CareerPathwaysPage />} />
+            <Route path="/cases/:caseId/special-transactions" element={<SpecialTransactionsPage />} />
+            <Route path="/cases/:caseId/payment-corrections" element={<PaymentCorrectionsPage />} />
+            <Route path="/cases/:caseId/overpayments" element={<OverpaymentRecoveryPage />} />
 
             {/* Work Queues */}
             <Route path="/work-queues" element={<WorkQueuesPage />} />

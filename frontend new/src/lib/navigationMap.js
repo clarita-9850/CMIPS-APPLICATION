@@ -84,6 +84,10 @@ export const SIDE_NAV_ROUTES = {
   'travel-claim': '/payments/travel-claim',
   'direct-deposit': '/payments/direct-deposit',
   'sick-leave': '/payments/sick-leave',
+  'payment-search': '/payments/search',
+  'special-transactions': '/payments/special-transactions',
+  'payment-corrections': '/payments/payment-corrections',
+  'career-pathways': '/payments/career-pathways',
 };
 
 /**
