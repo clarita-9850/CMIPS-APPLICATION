@@ -35,6 +35,14 @@ public interface WorkweekAgreementRepository extends JpaRepository<WorkweekAgree
     // Agreements for a specific recipient link
     List<WorkweekAgreementEntity> findByProviderIdAndRecipientId(Long providerId, Long recipientId);
 
+    // All agreements for a recipient (case view)
+    List<WorkweekAgreementEntity> findByRecipientId(Long recipientId);
+
+    // Inactive history for a recipient (case view)
+    @Query("SELECT w FROM WorkweekAgreementEntity w WHERE w.recipientId = :recipientId " +
+           "AND w.status = 'INACTIVE' ORDER BY w.inactivatedDate DESC")
+    List<WorkweekAgreementEntity> findInactiveHistoryForRecipient(@Param("recipientId") Long recipientId);
+
     // Providers with active workweek agreements (for overtime calculation)
     @Query("SELECT DISTINCT w.providerId FROM WorkweekAgreementEntity w WHERE w.status = 'ACTIVE'")
     List<Long> findProviderIdsWithActiveAgreements();

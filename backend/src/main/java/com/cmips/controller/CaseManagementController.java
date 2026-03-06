@@ -3,6 +3,7 @@ package com.cmips.controller;
 import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.*;
 import com.cmips.entity.CaseEntity.CaseStatus;
+import com.cmips.service.CaseMaintenanceService;
 import com.cmips.service.CaseManagementService;
 import com.cmips.service.FieldLevelAuthorizationService;
 import org.slf4j.Logger;
@@ -28,11 +29,14 @@ public class CaseManagementController {
 
     private final CaseManagementService caseManagementService;
     private final FieldLevelAuthorizationService fieldAuthService;
+    private final CaseMaintenanceService caseMaintenanceService;
 
     public CaseManagementController(CaseManagementService caseManagementService,
-                                    FieldLevelAuthorizationService fieldAuthService) {
+                                    FieldLevelAuthorizationService fieldAuthService,
+                                    CaseMaintenanceService caseMaintenanceService) {
         this.caseManagementService = caseManagementService;
         this.fieldAuthService = fieldAuthService;
+        this.caseMaintenanceService = caseMaintenanceService;
     }
 
     // ==================== CASE CRUD ====================
@@ -532,5 +536,260 @@ public class CaseManagementController {
     @lombok.Data
     public static class FundingSourceRequest {
         private String fundingSource;
+    }
+
+    // ==================== CASE MAINTENANCE: WORKWEEK AGREEMENTS ====================
+
+    @GetMapping("/{caseId}/workweek-agreements")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getWorkweekAgreements(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getWorkweekAgreementsForCase(caseId));
+    }
+
+    @GetMapping("/{caseId}/workweek-agreements/history")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getWorkweekAgreementHistory(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getWorkweekAgreementHistoryForCase(caseId));
+    }
+
+    @PostMapping("/{caseId}/workweek-agreements")
+    @RequirePermission(resource = "Case Resource", scope = "create")
+    public ResponseEntity<?> createWorkweekAgreement(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.createWorkweekAgreement(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/workweek-agreements/{id}")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> updateWorkweekAgreement(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.updateWorkweekAgreement(id, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/workweek-agreements/{id}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateWorkweekAgreement(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            String reason = request.get("reason") != null ? (String) request.get("reason") : null;
+            return ResponseEntity.ok(caseMaintenanceService.inactivateWorkweekAgreement(id, reason, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== CASE MAINTENANCE: OVERTIME AGREEMENTS ====================
+
+    @GetMapping("/{caseId}/overtime-agreements")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getOvertimeAgreements(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getOvertimeAgreements(caseId));
+    }
+
+    @PostMapping("/{caseId}/overtime-agreements")
+    @RequirePermission(resource = "Case Resource", scope = "create")
+    public ResponseEntity<?> createOvertimeAgreement(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.createOvertimeAgreement(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/overtime-agreements/{id}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateOvertimeAgreement(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.inactivateOvertimeAgreement(id, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== CASE MAINTENANCE: WPCS HOURS ====================
+
+    @GetMapping("/{caseId}/wpcs-hours")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getWpcsHours(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getWpcsHours(caseId));
+    }
+
+    @PostMapping("/{caseId}/wpcs-hours")
+    @RequirePermission(resource = "Case Resource", scope = "create")
+    public ResponseEntity<?> createWpcsHours(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.createWpcsHours(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/wpcs-hours/{id}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateWpcsHours(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.inactivateWpcsHours(id, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== CASE MAINTENANCE: WORKPLACE HOURS ====================
+
+    @GetMapping("/{caseId}/workplace-hours")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getWorkplaceHours(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getWorkplaceHours(caseId));
+    }
+
+    @PostMapping("/{caseId}/workplace-hours")
+    @RequirePermission(resource = "Case Resource", scope = "create")
+    public ResponseEntity<?> createWorkplaceHours(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.createWorkplaceHours(caseId, request, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/workplace-hours/{id}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateWorkplaceHours(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.inactivateWorkplaceHours(id, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== CASE MAINTENANCE: ESP ENROLLMENT ====================
+
+    @GetMapping("/{caseId}/esp-registrations")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getEspRegistrations(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getEspRegistrations(caseId));
+    }
+
+    @PutMapping("/esp-registrations/{espId}/inactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> inactivateEspRegistration(
+            @PathVariable String espId,
+            @RequestBody(required = false) Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            String reason = request != null && request.get("reason") != null
+                    ? (String) request.get("reason") : null;
+            return ResponseEntity.ok(caseMaintenanceService.inactivateEspRegistration(espId, reason, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PutMapping("/esp-registrations/{espId}/reactivate")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> reactivateEspRegistration(
+            @PathVariable String espId,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            return ResponseEntity.ok(caseMaintenanceService.reactivateEspRegistration(espId, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/esp-registrations/{espId}/soc2321")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> downloadSoc2321(@PathVariable String espId) {
+        return ResponseEntity.ok(Map.of(
+                "espId", espId,
+                "formType", "SOC_2321",
+                "message", "SOC 2321 — Account Inactivation Notice. PDF generation endpoint."
+        ));
+    }
+
+    // ==================== CASE MAINTENANCE: REASSESSMENT ====================
+
+    @PostMapping("/{id}/schedule-reassessment")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> scheduleReassessment(
+            @PathVariable Long id,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            String rawDate = request.get("dueDate") != null
+                    ? (String) request.get("dueDate")
+                    : (request.get("reassessmentDueDate") != null ? (String) request.get("reassessmentDueDate") : null);
+            LocalDate dueDate = rawDate != null ? LocalDate.parse(rawDate) : null;
+            return ResponseEntity.ok(caseMaintenanceService.scheduleReassessment(id, dueDate, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== CASE MAINTENANCE: MEDI-CAL SOC ====================
+
+    @GetMapping("/{caseId}/medi-cal-soc")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getMediCalSoc(@PathVariable Long caseId) {
+        return ResponseEntity.ok(caseMaintenanceService.getMediCalSoc(caseId));
+    }
+
+    @PutMapping("/{caseId}/medi-cal-soc")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> updateMediCalSoc(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            CaseEntity updated = caseMaintenanceService.updateMediCalSoc(caseId, request, userId);
+            return ResponseEntity.ok(Map.of(
+                    "caseId", updated.getId(),
+                    "shareOfCostAmount", updated.getShareOfCostAmount() != null ? updated.getShareOfCostAmount() : 0,
+                    "countableIncome", updated.getCountableIncome() != null ? updated.getCountableIncome() : 0,
+                    "netIncome", updated.getNetIncome() != null ? updated.getNetIncome() : 0
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/{caseId}/medi-cal-eligibility")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getMediCalEligibility(@PathVariable Long caseId) {
+        // Delegates to SAWSService for real eligibility lookup — mock for now
+        return ResponseEntity.ok(Map.of(
+                "caseId", caseId,
+                "message", "Medi-Cal eligibility lookup — connects to SAWS in production.",
+                "eligible", true
+        ));
     }
 }
