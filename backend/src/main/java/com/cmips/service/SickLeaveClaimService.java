@@ -7,6 +7,7 @@ import com.cmips.entity.CaseEntity;
 import com.cmips.entity.ProviderAssignmentEntity;
 import com.cmips.entity.ProviderAssignmentEntity.AssignmentStatus;
 import com.cmips.entity.ProviderEntity;
+import com.cmips.entity.ProviderEntity.ProviderStatus;
 import com.cmips.entity.RecipientEntity;
 import com.cmips.entity.SickLeaveClaimEntity;
 import com.cmips.repository.*;
@@ -99,6 +100,20 @@ public class SickLeaveClaimService {
                     "Provider '" + providerNumber + "' is not actively assigned to Case '" + caseNumber + "'.");
         }
 
+        // 3b. DSD SB-3: Provider must be ACTIVE to submit sick leave claims
+        if (provider.getProviderStatus() != ProviderEntity.ProviderStatus.ACTIVE) {
+            throw new RuntimeException(
+                    "Provider '" + providerNumber + "' is not in ACTIVE status and cannot submit sick leave claims.");
+        }
+
+        // 3c. DSD SB-3: Provider must have accrued sick leave hours available for this fiscal year
+        double accruedBalance = provider.getSickLeaveAccruedHours() != null
+                ? provider.getSickLeaveAccruedHours() : 0.0;
+        if (accruedBalance <= 0.0) {
+            throw new RuntimeException(
+                    "Provider '" + providerNumber + "' has no accrued sick leave hours available for this fiscal year.");
+        }
+
         // 4. Get provider type from assignment
         String providerType = "IHSS"; // default
         List<ProviderAssignmentEntity> assignments = assignmentRepository.findByProviderIdAndStatus(
@@ -161,6 +176,14 @@ public class SickLeaveClaimService {
         CaseEntity caseEntity = caseRepository.findById(request.getCaseId())
                 .orElseThrow(() -> new RuntimeException("Case not found: " + request.getCaseId()));
 
+        // DSD SB-3: Provider must have accrued sick leave hours available
+        double accruedHours = provider.getSickLeaveAccruedHours() != null
+                ? provider.getSickLeaveAccruedHours() : 0.0;
+        if (accruedHours <= 0.0) {
+            throw new RuntimeException(
+                    "Provider has no accrued sick leave hours available for this fiscal year.");
+        }
+
         // Get provider type from assignment
         String providerType = "IHSS";
         List<ProviderAssignmentEntity> assignments = assignmentRepository.findByProviderIdAndStatus(
@@ -187,6 +210,14 @@ public class SickLeaveClaimService {
         int totalMinutes = request.getTimeEntries().stream()
                 .mapToInt(SickLeaveSaveRequest.TimeEntry::getMinutes)
                 .sum();
+
+        // DSD SB-3: Claimed hours cannot exceed the provider's accrued sick leave balance
+        double claimedHoursDecimal = totalMinutes / 60.0;
+        if (claimedHoursDecimal > accruedHours) {
+            throw new RuntimeException(String.format(
+                    "Claimed hours (%.2f) exceed provider's available sick leave balance (%.2f hours).",
+                    claimedHoursDecimal, accruedHours));
+        }
 
         // Serialize time entries to JSON
         String timeEntriesJson;
