@@ -6,8 +6,11 @@ import com.cmips.entity.CaseEntity.CaseStatus;
 import com.cmips.service.CaseMaintenanceService;
 import com.cmips.service.CaseManagementService;
 import com.cmips.service.FieldLevelAuthorizationService;
+import com.cmips.service.PDFReportGeneratorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,13 +33,16 @@ public class CaseManagementController {
     private final CaseManagementService caseManagementService;
     private final FieldLevelAuthorizationService fieldAuthService;
     private final CaseMaintenanceService caseMaintenanceService;
+    private final PDFReportGeneratorService pdfService;
 
     public CaseManagementController(CaseManagementService caseManagementService,
                                     FieldLevelAuthorizationService fieldAuthService,
-                                    CaseMaintenanceService caseMaintenanceService) {
+                                    CaseMaintenanceService caseMaintenanceService,
+                                    PDFReportGeneratorService pdfService) {
         this.caseManagementService = caseManagementService;
         this.fieldAuthService = fieldAuthService;
         this.caseMaintenanceService = caseMaintenanceService;
+        this.pdfService = pdfService;
     }
 
     // ==================== CASE CRUD ====================
@@ -127,12 +133,16 @@ public class CaseManagementController {
 
     @PutMapping("/{id}/approve")
     @RequirePermission(resource = "Case Resource", scope = "approve")
-    public ResponseEntity<CaseEntity> approveCase(
+    public ResponseEntity<?> approveCase(
             @PathVariable Long id,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-
-        CaseEntity caseEntity = caseManagementService.approveCase(id, userId);
-        return ResponseEntity.ok(caseEntity);
+        try {
+            CaseEntity caseEntity = caseManagementService.approveCase(id, userId);
+            return ResponseEntity.ok(caseEntity);
+        } catch (RuntimeException e) {
+            log.warn("[approveCase] Validation failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PutMapping("/{id}/deny")
@@ -308,6 +318,27 @@ public class CaseManagementController {
     public ResponseEntity<List<CaseNoteEntity>> getCaseNotes(@PathVariable Long id) {
         List<CaseNoteEntity> notes = caseManagementService.getCaseNotes(id);
         return ResponseEntity.ok(notes);
+    }
+
+    /**
+     * Download all case notes as a PDF report.
+     * GET /api/cases/{id}/notes/pdf
+     */
+    @GetMapping("/{id}/notes/pdf")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
+    public ResponseEntity<?> downloadCaseNotesPdf(@PathVariable Long id) {
+        try {
+            List<CaseNoteEntity> notes = caseManagementService.getCaseNotes(id);
+            byte[] pdfBytes = pdfService.generateCaseNotesPDF(id, notes);
+            String filename = "case-notes-" + id + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            log.error("Error generating case notes PDF for caseId={}", id, e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @PostMapping("/{id}/notes")

@@ -331,4 +331,36 @@ public class TimesheetService {
         return timesheetRepository.findByStatus(TimesheetStatus.SUBMITTED, pageable)
             .map(TimesheetResponse::new);
     }
+
+    /**
+     * Reissue a timesheet — creates a new DRAFT copy with original hours,
+     * recording the reissue reason in comments.
+     * BVI reissue workflow: county staff corrects a BVI-submitted timesheet.
+     */
+    public TimesheetResponse reissueTimesheet(Long originalId, String reason, String userId) {
+        Timesheet original = timesheetRepository.findById(originalId)
+            .orElseThrow(() -> new IllegalArgumentException("Timesheet not found: " + originalId));
+
+        Timesheet reissued = new Timesheet(
+            original.getUserId(),
+            original.getEmployeeId(),
+            original.getEmployeeName(),
+            original.getDepartment(),
+            original.getLocation(),
+            original.getPayPeriodStart(),
+            original.getPayPeriodEnd()
+        );
+        reissued.setRegularHours(original.getRegularHours());
+        reissued.setOvertimeHours(original.getOvertimeHours());
+        reissued.setHolidayHours(original.getHolidayHours());
+        reissued.setSickHours(original.getSickHours());
+        reissued.setVacationHours(original.getVacationHours());
+        reissued.calculateTotalHours();
+        reissued.setComments("[REISSUE of #" + originalId + "] " + (reason != null ? reason : ""));
+        reissued.setStatus(TimesheetStatus.DRAFT);
+
+        Timesheet saved = timesheetRepository.save(reissued);
+        logger.info("Timesheet {} reissued as new timesheet {} by user {}", originalId, saved.getId(), userId);
+        return new TimesheetResponse(saved);
+    }
 }

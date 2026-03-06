@@ -4,8 +4,11 @@ import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.PersonNoteEntity;
 import com.cmips.entity.PersonNoteEntity.*;
 import com.cmips.service.PersonNoteService;
+import com.cmips.service.PDFReportGeneratorService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -27,9 +30,11 @@ public class PersonNoteController {
     private static final Logger log = LoggerFactory.getLogger(PersonNoteController.class);
 
     private final PersonNoteService noteService;
+    private final PDFReportGeneratorService pdfService;
 
-    public PersonNoteController(PersonNoteService noteService) {
+    public PersonNoteController(PersonNoteService noteService, PDFReportGeneratorService pdfService) {
         this.noteService = noteService;
+        this.pdfService = pdfService;
     }
 
     // ==================== CREATE NOTES ====================
@@ -466,6 +471,36 @@ public class PersonNoteController {
             return ResponseEntity.ok(Map.of("count", count));
         } catch (Exception e) {
             log.error("Error counting notes", e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== PDF EXPORT ====================
+
+    /**
+     * Download all person notes as a PDF report.
+     * GET /api/notes/person/{personId}/pdf?activeOnly=true
+     */
+    @GetMapping("/person/{personId}/pdf")
+    @RequirePermission(resource = "Case Notes Resource", scope = "view")
+    public ResponseEntity<?> downloadPersonNotesPdf(
+            @PathVariable Long personId,
+            @RequestParam(required = false, defaultValue = "false") boolean activeOnly,
+            @RequestParam(required = false, defaultValue = "Person") String personName) {
+        try {
+            List<PersonNoteEntity> notes = activeOnly
+                    ? noteService.getActivePersonNotes(personId)
+                    : noteService.getPersonNotes(personId);
+
+            byte[] pdfBytes = pdfService.generatePersonNotesPDF(personName, personId, notes);
+
+            String filename = "person-notes-" + personId + ".pdf";
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(pdfBytes);
+        } catch (Exception e) {
+            log.error("Error generating person notes PDF for personId={}", personId, e);
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }

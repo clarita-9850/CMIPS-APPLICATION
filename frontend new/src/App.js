@@ -83,6 +83,8 @@ import { DataPipelinePage } from './pages/DataPipelinePage';
 
 // Utility pages
 import { StateHearingSearchPage } from './pages/StateHearingSearchPage';
+import { ReferralListPage } from './pages/ReferralListPage';
+import { ReferralEditPage } from './pages/ReferralEditPage';
 import { TerminateCasePage } from './pages/TerminateCasePage';
 import { WithdrawalCasePage } from './pages/WithdrawalCasePage';
 import { LeaveCasePage } from './pages/LeaveCasePage';
@@ -198,6 +200,9 @@ function App() {
             <Route path="/persons/search/referral" element={<PersonSearchReferralPage />} />
             <Route path="/persons/search/application" element={<PersonSearchApplicationPage />} />
             <Route path="/persons/referral/new" element={<PersonCreateReferralPage />} />
+            {/* Referral List + Edit */}
+            <Route path="/referrals" element={<ReferralListPage />} />
+            <Route path="/referrals/:id/edit" element={<ReferralEditPage />} />
             <Route path="/providers" element={<ProvidersPage />} />
             <Route path="/providers/register" element={<ProviderRegisterPage />} />
             <Route path="/providers/live-in" element={<LiveInProviderPage />} />

@@ -542,6 +542,15 @@ public class CaseManagementService {
         CaseEntity caseEntity = caseRepository.findById(caseId)
                 .orElseThrow(() -> new RuntimeException("Case not found"));
 
+        // Idempotency guard: reject if case is already approved/eligible
+        if (caseEntity.getCaseStatus() == CaseStatus.ELIGIBLE) {
+            throw new RuntimeException("Case is already approved and eligible");
+        }
+        // Only PENDING cases can be approved
+        if (caseEntity.getCaseStatus() != CaseStatus.PENDING) {
+            throw new RuntimeException("Case cannot be approved in status: " + caseEntity.getCaseStatus());
+        }
+
         caseEntity.setCaseStatus(CaseStatus.ELIGIBLE);
         caseEntity.setEligibilityDate(LocalDate.now());
         caseEntity.setUpdatedBy(userId);
@@ -575,8 +584,12 @@ public class CaseManagementService {
 
         caseEntity = caseRepository.save(caseEntity);
 
-        // Per BR OS 12 - Send MEDS IH34 – Update Application Data
-        log.info("Case {} denied: {}", caseEntity.getCaseNumber(), denialReason);
+        // BR OS 12: Send MEDS IH34 – Update Application Data on case denial
+        if (caseEntity.getCin() != null) {
+            medsService.sendIH34UpdateApplicationData(
+                String.valueOf(caseId), caseEntity.getCin(), "DENIED");
+        }
+        log.info("Case {} denied: {}, IH34 sent to MEDS", caseEntity.getCaseNumber(), denialReason);
 
         return caseEntity;
     }
@@ -1142,6 +1155,12 @@ public class CaseManagementService {
         map.put("terminationReason", c.getTerminationReason());
         map.put("denialDate",        c.getDenialDate());
         map.put("withdrawalDate",    c.getWithdrawalDate());
+        // SOC and authorization data (BR SE 13, BR OS 49-60)
+        map.put("shareOfCostAmount",       c.getShareOfCostAmount());
+        map.put("authorizedHoursMonthly",  c.getAuthorizedHoursMonthly());
+        map.put("authorizedHoursWeekly",   c.getAuthorizedHoursWeekly());
+        map.put("reassessmentDueDate",     c.getReassessmentDueDate());
+        map.put("lastAssessmentDate",      c.getLastAssessmentDate());
         map.put("createdAt",     c.getCreatedAt());
         map.put("updatedAt",     c.getUpdatedAt());
 

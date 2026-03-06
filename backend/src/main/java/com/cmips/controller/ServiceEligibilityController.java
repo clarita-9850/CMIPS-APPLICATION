@@ -127,11 +127,26 @@ public class ServiceEligibilityController {
         ServiceEligibilityEntity assessment = eligibilityRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Assessment not found"));
 
-        // Update functional ranks (1-5 scale) - using existing entity fields
+        // Category-level ranks (legacy 1-5)
         if (request.getDomesticRank() != null) assessment.setFunctionalRankDomestic(request.getDomesticRank());
         if (request.getRelatedRank() != null) assessment.setFunctionalRankRelated(request.getRelatedRank());
         if (request.getPersonalRank() != null) assessment.setFunctionalRankPersonal(request.getPersonalRank());
         if (request.getParamedicalRank() != null) assessment.setFunctionalRankParamedical(request.getParamedicalRank());
+        // 14 functional index scores (1-6) per DSD Section 21
+        if (request.getFiHousework() != null) assessment.setFiHousework(request.getFiHousework());
+        if (request.getFiLaundry() != null) assessment.setFiLaundry(request.getFiLaundry());
+        if (request.getFiShopping() != null) assessment.setFiShopping(request.getFiShopping());
+        if (request.getFiMealPrep() != null) assessment.setFiMealPrep(request.getFiMealPrep());
+        if (request.getFiAmbulation() != null) assessment.setFiAmbulation(request.getFiAmbulation());
+        if (request.getFiBathing() != null) assessment.setFiBathing(request.getFiBathing());
+        if (request.getFiDressing() != null) assessment.setFiDressing(request.getFiDressing());
+        if (request.getFiBowelBladder() != null) assessment.setFiBowelBladder(request.getFiBowelBladder());
+        if (request.getFiTransfer() != null) assessment.setFiTransfer(request.getFiTransfer());
+        if (request.getFiFeeding() != null) assessment.setFiFeeding(request.getFiFeeding());
+        if (request.getFiRespiration() != null) assessment.setFiRespiration(request.getFiRespiration());
+        if (request.getFiMemory() != null) assessment.setFiMemory(request.getFiMemory());
+        if (request.getFiOrientation() != null) assessment.setFiOrientation(request.getFiOrientation());
+        if (request.getFiJudgment() != null) assessment.setFiJudgment(request.getFiJudgment());
 
         assessment.setUpdatedBy(userId);
         ServiceEligibilityEntity saved = eligibilityRepository.save(assessment);
@@ -301,7 +316,117 @@ public class ServiceEligibilityController {
         return ResponseEntity.ok(assessment);
     }
 
+    /**
+     * Reject assessment (supervisor) — DSD Section 22
+     * Transitions PENDING_SUPERVISOR_REVIEW → REJECTED with reason.
+     */
+    @PutMapping("/{id}/reject")
+    @RequirePermission(resource = "Service Eligibility Resource", scope = "approve")
+    public ResponseEntity<ServiceEligibilityEntity> rejectAssessment(
+            @PathVariable Long id,
+            @RequestBody RejectRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        ServiceEligibilityEntity assessment = eligibilityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Assessment not found: " + id));
+        if (!"PENDING_SUPERVISOR_REVIEW".equals(assessment.getStatus()) && !"PENDING_APPROVAL".equals(assessment.getStatus())) {
+            return ResponseEntity.badRequest().build();
+        }
+        assessment.setStatus("REJECTED");
+        assessment.setApprovedById(userId);
+        assessment.setApprovalDate(LocalDate.now());
+        assessment.setUpdatedBy(userId);
+        assessment.setSocialWorkerCertification(
+            "REJECTED: " + (request.getReason() != null ? request.getReason() : "No reason provided"));
+        ServiceEligibilityEntity saved = eligibilityRepository.save(assessment);
+        log.info("[SE] Assessment {} rejected by {}", id, userId);
+        return ResponseEntity.ok(saved);
+    }
+
+    /**
+     * Check Eligibility — DSD Section 22 (preview mode).
+     * Runs the determination algorithm without saving or generating NOA.
+     * Returns a preview of authorized hours, SOC, mode of service, and funding source.
+     */
+    @PostMapping("/{id}/check-eligibility")
+    @RequirePermission(resource = "Service Eligibility Resource", scope = "view")
+    public ResponseEntity<Map<String, Object>> checkEligibility(
+            @PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        ServiceEligibilityEntity a = eligibilityRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Assessment not found: " + id));
+
+        double totalMonthly = a.calculateTotalAssessedNeed();
+        double totalWeekly  = totalMonthly / 4.33;
+
+        // SOC preview (BR SE 13): SOC = max(0, countableIncome - 600)
+        double countableIncome = a.getCountableIncome() != null ? a.getCountableIncome() : 0.0;
+        double rawSoc = Math.max(0.0, countableIncome - 600.0);
+        double ipRate = a.getCountyIpRate() != null ? a.getCountyIpRate() : 0.0;
+        double socPreview = (ipRate > 0) ? Math.min(rawSoc, totalMonthly * ipRate) : rawSoc;
+
+        // Mode of service determination (DSD Section 22)
+        // Priority: waiver program → service composition → default IH
+        String modeOfService;
+        String waiverPgm = a.getWaiverProgram();
+        if ("WPCS".equalsIgnoreCase(waiverPgm) && !Boolean.TRUE.equals(a.getRecipientDeclinesCfco())) {
+            modeOfService = "WPCS";  // Waiver Personal Care Services
+        } else if ("CFCO".equalsIgnoreCase(waiverPgm) && !Boolean.TRUE.equals(a.getRecipientDeclinesCfco())) {
+            modeOfService = "CFCO";  // Community First Choice Option
+        } else if ("IPO".equalsIgnoreCase(waiverPgm)) {
+            modeOfService = "IPO";   // Independence Plus Option
+        } else {
+            // Determine IH vs HM based on service composition: >70% domestic → county homemaker
+            double domHours = a.getDomesticServicesHours() != null ? a.getDomesticServicesHours() : 0.0;
+            double relHours = a.getRelatedServicesHours() != null ? a.getRelatedServicesHours() : 0.0;
+            double perHours = a.getPersonalCareHours() != null ? a.getPersonalCareHours() : 0.0;
+            double paraHours = a.getParamedicalHours() != null ? a.getParamedicalHours() : 0.0;
+            double totalHours = domHours + relHours + perHours + paraHours;
+            if (totalHours > 0 && (domHours / totalHours) > 0.70) {
+                modeOfService = "HM";  // County Homemaker (primarily domestic services)
+            } else {
+                modeOfService = "IH";  // Standard In-Home Individual Provider
+            }
+        }
+
+        // Funding source determination: waiver program if active and not declined, else IHSS
+        String fundingSource;
+        if (waiverPgm != null && !waiverPgm.isBlank() && !Boolean.TRUE.equals(a.getRecipientDeclinesCfco())) {
+            fundingSource = waiverPgm;
+        } else {
+            fundingSource = "IHSS";
+        }
+
+        // Eligibility determination
+        boolean eligible = totalMonthly > 0;
+        String determination = eligible ? "ELIGIBLE" : "INELIGIBLE - No assessed service need";
+
+        Map<String, Object> preview = new java.util.LinkedHashMap<>();
+        preview.put("previewOnly", true);
+        preview.put("determination", determination);
+        preview.put("eligible", eligible);
+        preview.put("totalAssessedNeedMonthly", Math.round(totalMonthly * 100.0) / 100.0);
+        preview.put("totalAssessedNeedWeekly",  Math.round(totalWeekly  * 100.0) / 100.0);
+        preview.put("estimatedShareOfCost", Math.round(socPreview * 100.0) / 100.0);
+        preview.put("modeOfService", modeOfService);
+        preview.put("fundingSource", fundingSource);
+        preview.put("advancePayRate", a.getAdvancePayRate());
+        preview.put("waiverProgram", waiverPgm);
+        preview.put("noaGenerated", false);
+        preview.put("message", "This is a preview. No records have been saved and no NOA has been generated.");
+
+        log.info("[SE] Check eligibility preview for assessment {}: determination={}, hours={}", id, determination, totalMonthly);
+        return ResponseEntity.ok(preview);
+    }
+
     // ==================== REQUEST DTOs ====================
+
+    public static class RejectRequest {
+        private String reason;
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
+    }
 
     public static class CreateAssessmentRequest {
         private Long caseId;
@@ -326,18 +451,34 @@ public class ServiceEligibilityController {
         private Integer relatedRank;
         private Integer personalRank;
         private Integer paramedicalRank;
+        // 14 functional index scores (1-6) per DSD Section 21
+        private Integer fiHousework, fiLaundry, fiShopping, fiMealPrep, fiAmbulation;
+        private Integer fiBathing, fiDressing, fiBowelBladder, fiTransfer, fiFeeding;
+        private Integer fiRespiration, fiMemory, fiOrientation, fiJudgment;
 
         public Integer getDomesticRank() { return domesticRank; }
-        public void setDomesticRank(Integer domesticRank) { this.domesticRank = domesticRank; }
-
+        public void setDomesticRank(Integer v) { this.domesticRank = v; }
         public Integer getRelatedRank() { return relatedRank; }
-        public void setRelatedRank(Integer relatedRank) { this.relatedRank = relatedRank; }
-
+        public void setRelatedRank(Integer v) { this.relatedRank = v; }
         public Integer getPersonalRank() { return personalRank; }
-        public void setPersonalRank(Integer personalRank) { this.personalRank = personalRank; }
-
+        public void setPersonalRank(Integer v) { this.personalRank = v; }
         public Integer getParamedicalRank() { return paramedicalRank; }
-        public void setParamedicalRank(Integer paramedicalRank) { this.paramedicalRank = paramedicalRank; }
+        public void setParamedicalRank(Integer v) { this.paramedicalRank = v; }
+
+        public Integer getFiHousework() { return fiHousework; } public void setFiHousework(Integer v) { fiHousework = v; }
+        public Integer getFiLaundry() { return fiLaundry; } public void setFiLaundry(Integer v) { fiLaundry = v; }
+        public Integer getFiShopping() { return fiShopping; } public void setFiShopping(Integer v) { fiShopping = v; }
+        public Integer getFiMealPrep() { return fiMealPrep; } public void setFiMealPrep(Integer v) { fiMealPrep = v; }
+        public Integer getFiAmbulation() { return fiAmbulation; } public void setFiAmbulation(Integer v) { fiAmbulation = v; }
+        public Integer getFiBathing() { return fiBathing; } public void setFiBathing(Integer v) { fiBathing = v; }
+        public Integer getFiDressing() { return fiDressing; } public void setFiDressing(Integer v) { fiDressing = v; }
+        public Integer getFiBowelBladder() { return fiBowelBladder; } public void setFiBowelBladder(Integer v) { fiBowelBladder = v; }
+        public Integer getFiTransfer() { return fiTransfer; } public void setFiTransfer(Integer v) { fiTransfer = v; }
+        public Integer getFiFeeding() { return fiFeeding; } public void setFiFeeding(Integer v) { fiFeeding = v; }
+        public Integer getFiRespiration() { return fiRespiration; } public void setFiRespiration(Integer v) { fiRespiration = v; }
+        public Integer getFiMemory() { return fiMemory; } public void setFiMemory(Integer v) { fiMemory = v; }
+        public Integer getFiOrientation() { return fiOrientation; } public void setFiOrientation(Integer v) { fiOrientation = v; }
+        public Integer getFiJudgment() { return fiJudgment; } public void setFiJudgment(Integer v) { fiJudgment = v; }
     }
 
     public static class ShareOfCostRequest {

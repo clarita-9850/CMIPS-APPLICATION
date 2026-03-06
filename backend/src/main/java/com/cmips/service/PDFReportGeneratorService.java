@@ -1151,6 +1151,280 @@ public class PDFReportGeneratorService {
         }
     }
     
+    // ======================== PERSON NOTES PDF ========================
+
+    /**
+     * Generate a printable PDF of person notes for a given person.
+     * Includes note date/time, category, subject, content, follow-up status, and created-by.
+     * Confidential notes are marked; supervisorOnly notes are flagged.
+     *
+     * @param personName   Display name of the person (recipient/referral)
+     * @param personId     Numeric person ID
+     * @param notes        List of PersonNoteEntity objects to include
+     * @return             PDF bytes
+     */
+    public byte[] generatePersonNotesPDF(String personName, Long personId,
+            java.util.List<com.cmips.entity.PersonNoteEntity> notes) {
+        try {
+            Document document = new Document(PageSize.A4);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            PdfWriter.getInstance(document, out);
+
+            document.addTitle("Person Notes — " + personName);
+            document.addCreator("CMIPS");
+            document.addCreationDate();
+            document.open();
+
+            // ── Header ──────────────────────────────────────────────────────
+            Font titleFont    = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, new Color(21, 53, 84));
+            Font subFont      = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.DARK_GRAY);
+            Font sectionFont  = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 11, new Color(21, 53, 84));
+            Font labelFont    = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.BLACK);
+            Font dataFont     = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.BLACK);
+            Font smallFont    = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.GRAY);
+
+            Paragraph title = new Paragraph("Person Notes", titleFont);
+            title.setSpacingAfter(4);
+            document.add(title);
+
+            Paragraph sub = new Paragraph(
+                "Person: " + personName + "  |  ID: " + personId
+                + "  |  Printed: " + LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm")),
+                subFont);
+            sub.setSpacingAfter(8);
+            document.add(sub);
+
+            document.add(new LineSeparator(1f, 100f, new Color(21, 53, 84), Element.ALIGN_LEFT, -2));
+
+            // ── Summary count ───────────────────────────────────────────────
+            long activeCount = notes.stream().filter(n -> Boolean.TRUE.equals(n.getActive())).count();
+            Paragraph summary = new Paragraph(
+                "Total notes: " + notes.size() + "  |  Active: " + activeCount
+                + "  |  Inactive: " + (notes.size() - activeCount),
+                subFont);
+            summary.setSpacingBefore(6);
+            summary.setSpacingAfter(12);
+            document.add(summary);
+
+            if (notes.isEmpty()) {
+                document.add(new Paragraph("No notes found for this person.", dataFont));
+            } else {
+                for (com.cmips.entity.PersonNoteEntity note : notes) {
+                    // ── Note card (shaded box per note) ─────────────────────
+                    PdfPTable card = new PdfPTable(2);
+                    card.setWidthPercentage(100);
+                    card.setSpacingBefore(8);
+                    card.setSpacingAfter(4);
+                    card.setWidths(new float[]{1f, 3f});
+
+                    Color headerBg = Boolean.TRUE.equals(note.getConfidential())
+                            ? new Color(254, 215, 215)   // red tint for confidential
+                            : new Color(232, 240, 252);  // light blue standard
+
+                    // Row 1: Date / Category
+                    String dateStr = note.getNoteDate() != null
+                            ? note.getNoteDate().format(DateTimeFormatter.ofPattern("MM/dd/yyyy")) : "—";
+                    if (note.getNoteTime() != null) {
+                        dateStr += "  " + note.getNoteTime().format(DateTimeFormatter.ofPattern("HH:mm"));
+                    }
+                    addNoteRow(card, "Date / Time", dateStr, headerBg, labelFont, dataFont);
+
+                    String category = note.getCategory() != null ? note.getCategory().name() : "—";
+                    addNoteRow(card, "Category", category, headerBg, labelFont, dataFont);
+
+                    // Row 2: Subject
+                    addNoteRow(card, "Subject",
+                        note.getSubject() != null ? note.getSubject() : "—",
+                        headerBg, labelFont, dataFont);
+
+                    // Row 3: Contact info (if present)
+                    if (note.getContactedPerson() != null) {
+                        String contact = note.getContactedPerson()
+                            + (note.getContactedRelationship() != null ? " (" + note.getContactedRelationship() + ")" : "")
+                            + (note.getContactDirection() != null ? "  — " + note.getContactDirection() : "");
+                        addNoteRow(card, "Contacted", contact, headerBg, labelFont, dataFont);
+                    }
+
+                    // Row 4: Content (full width)
+                    PdfPCell contentLabelCell = new PdfPCell(new Phrase("Content", labelFont));
+                    contentLabelCell.setBackgroundColor(headerBg);
+                    contentLabelCell.setPadding(5);
+                    contentLabelCell.setBorderWidth(0.5f);
+                    card.addCell(contentLabelCell);
+
+                    String contentText = note.getContent() != null ? note.getContent() : "—";
+                    PdfPCell contentCell = new PdfPCell(new Phrase(contentText, dataFont));
+                    contentCell.setPadding(5);
+                    contentCell.setBorderWidth(0.5f);
+                    card.addCell(contentCell);
+
+                    // Row 5: Follow-up (if applicable)
+                    if (Boolean.TRUE.equals(note.getFollowUpNeeded())) {
+                        String followUp = Boolean.TRUE.equals(note.getFollowUpCompleted())
+                                ? "Completed on " + (note.getFollowUpCompletedDate() != null
+                                    ? note.getFollowUpCompletedDate().format(DateTimeFormatter.ofPattern("MM/dd/yyyy")) : "?")
+                                : "Pending" + (note.getFollowUpDate() != null
+                                    ? " by " + note.getFollowUpDate().format(DateTimeFormatter.ofPattern("MM/dd/yyyy")) : "");
+                        addNoteRow(card, "Follow-Up", followUp, headerBg, labelFont, dataFont);
+                    }
+
+                    // Row 6: Outcome
+                    if (note.getOutcome() != null && !note.getOutcome().isBlank()) {
+                        addNoteRow(card, "Outcome", note.getOutcome(), headerBg, labelFont, dataFont);
+                    }
+
+                    // Row 7: Flags + Created by
+                    java.util.List<String> flags = new java.util.ArrayList<>();
+                    if (Boolean.TRUE.equals(note.getConfidential()))   flags.add("CONFIDENTIAL");
+                    if (Boolean.TRUE.equals(note.getSupervisorOnly())) flags.add("SUPERVISOR-ONLY");
+                    if (!Boolean.TRUE.equals(note.getActive()))        flags.add("INACTIVE");
+                    String flagStr = flags.isEmpty() ? "None" : String.join(", ", flags);
+                    addNoteRow(card, "Flags", flagStr, headerBg, labelFont, dataFont);
+
+                    String createdInfo = (note.getCreatedBy() != null ? note.getCreatedBy() : "—")
+                        + (note.getCreatedAt() != null
+                            ? "  " + note.getCreatedAt().format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm"))
+                            : "");
+                    addNoteRow(card, "Created By", createdInfo, headerBg, smallFont, smallFont);
+
+                    document.add(card);
+                }
+            }
+
+            document.close();
+            return out.toByteArray();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate person notes PDF: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Generate a PDF report for all case notes on a case.
+     * Used by GET /api/cases/{caseId}/notes/pdf.
+     */
+    public byte[] generateCaseNotesPDF(Long caseId, java.util.List<com.cmips.entity.CaseNoteEntity> notes) {
+        try {
+            Document document = new Document(PageSize.A4);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            PdfWriter.getInstance(document, out);
+
+            document.addTitle("Case Notes — Case #" + caseId);
+            document.addCreator("CMIPS");
+            document.addCreationDate();
+            document.open();
+
+            Font titleFont   = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 16, new Color(21, 53, 84));
+            Font subFont     = FontFactory.getFont(FontFactory.HELVETICA, 10, Color.DARK_GRAY);
+            Font labelFont   = FontFactory.getFont(FontFactory.HELVETICA_BOLD, 9, Color.BLACK);
+            Font dataFont    = FontFactory.getFont(FontFactory.HELVETICA, 9, Color.BLACK);
+            Font smallFont   = FontFactory.getFont(FontFactory.HELVETICA, 8, Color.GRAY);
+
+            Paragraph title = new Paragraph("Case Notes", titleFont);
+            title.setSpacingAfter(4);
+            document.add(title);
+
+            Paragraph sub = new Paragraph(
+                "Case #" + caseId + "  |  Printed: "
+                + LocalDateTime.now().format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm")),
+                subFont);
+            sub.setSpacingAfter(8);
+            document.add(sub);
+
+            document.add(new LineSeparator(1f, 100f, new Color(21, 53, 84), Element.ALIGN_LEFT, -2));
+
+            long activeCount = notes.stream()
+                .filter(n -> !"CANCELLED".equalsIgnoreCase(n.getStatus())).count();
+            Paragraph summary = new Paragraph(
+                "Total notes: " + notes.size() + "  |  Active: " + activeCount
+                + "  |  Cancelled: " + (notes.size() - activeCount),
+                subFont);
+            summary.setSpacingBefore(6);
+            summary.setSpacingAfter(12);
+            document.add(summary);
+
+            if (notes.isEmpty()) {
+                document.add(new Paragraph("No notes found for this case.", dataFont));
+            } else {
+                for (com.cmips.entity.CaseNoteEntity note : notes) {
+                    boolean cancelled = "CANCELLED".equalsIgnoreCase(note.getStatus());
+                    Color headerBg = cancelled
+                        ? new Color(226, 232, 240)   // grey for cancelled
+                        : new Color(232, 240, 252);  // light blue standard
+
+                    PdfPTable card = new PdfPTable(2);
+                    card.setWidthPercentage(100);
+                    card.setSpacingBefore(8);
+                    card.setSpacingAfter(4);
+                    card.setWidths(new float[]{1f, 3f});
+
+                    addNoteRow(card, "Note Type", note.getNoteType() != null ? note.getNoteType() : "—", headerBg, labelFont, dataFont);
+                    addNoteRow(card, "Status",    note.getStatus()   != null ? note.getStatus()   : "—", headerBg, labelFont, dataFont);
+                    addNoteRow(card, "Subject",   note.getSubject()  != null ? note.getSubject()  : "—", headerBg, labelFont, dataFont);
+
+                    // Content
+                    PdfPCell contentLabel = new PdfPCell(new Phrase("Content", labelFont));
+                    contentLabel.setBackgroundColor(headerBg);
+                    contentLabel.setPadding(5);
+                    contentLabel.setBorderWidth(0.5f);
+                    card.addCell(contentLabel);
+                    PdfPCell contentCell = new PdfPCell(new Phrase(note.getContent() != null ? note.getContent() : "—", dataFont));
+                    contentCell.setPadding(5);
+                    contentCell.setBorderWidth(0.5f);
+                    card.addCell(contentCell);
+
+                    // Appended content
+                    if (note.getAppendedContent() != null && !note.getAppendedContent().isBlank()) {
+                        PdfPCell appLabel = new PdfPCell(new Phrase("Appended", labelFont));
+                        appLabel.setBackgroundColor(headerBg);
+                        appLabel.setPadding(5);
+                        appLabel.setBorderWidth(0.5f);
+                        card.addCell(appLabel);
+                        String appInfo = note.getAppendedContent()
+                            + (note.getAppendedBy() != null ? "  — " + note.getAppendedBy() : "")
+                            + (note.getAppendedAt() != null ? "  " + note.getAppendedAt().format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm")) : "");
+                        PdfPCell appCell = new PdfPCell(new Phrase(appInfo, dataFont));
+                        appCell.setPadding(5);
+                        appCell.setBorderWidth(0.5f);
+                        card.addCell(appCell);
+                    }
+
+                    if (cancelled && note.getCancellationReason() != null) {
+                        addNoteRow(card, "Cancel Reason", note.getCancellationReason(), headerBg, labelFont, dataFont);
+                    }
+
+                    String createdInfo = (note.getCreatedBy() != null ? note.getCreatedBy() : "—")
+                        + (note.getCreatedAt() != null
+                            ? "  " + note.getCreatedAt().format(DateTimeFormatter.ofPattern("MM/dd/yyyy HH:mm")) : "");
+                    addNoteRow(card, "Created By", createdInfo, headerBg, smallFont, smallFont);
+
+                    document.add(card);
+                }
+            }
+
+            document.close();
+            return out.toByteArray();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate case notes PDF: " + e.getMessage(), e);
+        }
+    }
+
+    /** Helper: add a 2-column row to a note card table. */
+    private void addNoteRow(PdfPTable table, String label, String value,
+                            Color bgColor, Font labelFont, Font dataFont) {
+        PdfPCell labelCell = new PdfPCell(new Phrase(label, labelFont));
+        labelCell.setBackgroundColor(bgColor);
+        labelCell.setPadding(5);
+        labelCell.setBorderWidth(0.5f);
+        table.addCell(labelCell);
+
+        PdfPCell valueCell = new PdfPCell(new Phrase(value != null ? value : "—", dataFont));
+        valueCell.setPadding(5);
+        valueCell.setBorderWidth(0.5f);
+        table.addCell(valueCell);
+    }
+
     /**
      * Inner class for executive summary metrics
      */

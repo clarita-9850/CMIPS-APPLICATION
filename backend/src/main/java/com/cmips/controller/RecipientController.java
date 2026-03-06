@@ -2,13 +2,19 @@ package com.cmips.controller;
 
 import com.cmips.annotation.RequirePermission;
 import com.cmips.entity.*;
+import com.cmips.entity.RecipientEmailEntity.EmailStatus;
+import com.cmips.entity.RecipientEmailEntity.EmailType;
 import com.cmips.entity.RecipientEntity.PersonType;
+import com.cmips.repository.AlternativeIdRepository;
 import com.cmips.repository.CaseRepository;
 import com.cmips.repository.ProviderRepository;
+import com.cmips.repository.RecipientEmailRepository;
 import com.cmips.repository.RecipientRepository;
 import com.cmips.service.CaseMaintenanceTaskService;
 import com.cmips.service.CaseManagementService;
+import com.cmips.service.GeocodingService;
 import com.cmips.service.MEDSService;
+import com.cmips.service.NotificationService;
 import com.cmips.service.PayrollIntegrationService;
 import com.cmips.service.SCIService;
 import org.slf4j.Logger;
@@ -44,6 +50,10 @@ public class RecipientController {
     private final SCIService sciService;
     private final MEDSService medsService;
     private final PayrollIntegrationService payrollIntegrationService;
+    private final GeocodingService geocodingService;
+    private final AlternativeIdRepository alternativeIdRepository;
+    private final RecipientEmailRepository recipientEmailRepository;
+    private final NotificationService notificationService;
 
     public RecipientController(RecipientRepository recipientRepository,
                                ProviderRepository providerRepository,
@@ -52,7 +62,11 @@ public class RecipientController {
                                CaseMaintenanceTaskService cmTaskService,
                                SCIService sciService,
                                MEDSService medsService,
-                               PayrollIntegrationService payrollIntegrationService) {
+                               PayrollIntegrationService payrollIntegrationService,
+                               GeocodingService geocodingService,
+                               AlternativeIdRepository alternativeIdRepository,
+                               RecipientEmailRepository recipientEmailRepository,
+                               NotificationService notificationService) {
         this.recipientRepository = recipientRepository;
         this.providerRepository = providerRepository;
         this.caseRepository = caseRepository;
@@ -61,6 +75,10 @@ public class RecipientController {
         this.sciService = sciService;
         this.medsService = medsService;
         this.payrollIntegrationService = payrollIntegrationService;
+        this.geocodingService = geocodingService;
+        this.alternativeIdRepository = alternativeIdRepository;
+        this.recipientEmailRepository = recipientEmailRepository;
+        this.notificationService = notificationService;
     }
 
     // ==================== PERSON SEARCH (BR OS 01-10, BR-20) ====================
@@ -390,6 +408,7 @@ public class RecipientController {
         String oldFirstName = existing.getFirstName();
         LocalDate oldDob    = existing.getDateOfBirth();
         String oldGender    = existing.getGender();
+        String oldWrittenLanguage = existing.getWrittenLanguage();
 
         // Update allowed fields
         if (updates.getFirstName() != null) existing.setFirstName(updates.getFirstName());
@@ -466,6 +485,23 @@ public class RecipientController {
             }
         }
 
+        // BR OS 49-60: Recalculate BVI format options when writtenLanguage changes.
+        // NOA language must match recipient's written language preference.
+        // BVI format (LARGE_FONT, AUDIO_CD, BRAILLE, DATA_CD) stays user-selected;
+        // only the noaLanguage and ihssFormsOption language are auto-updated.
+        boolean writtenLanguageChanged = updates.getWrittenLanguage() != null
+                && !java.util.Objects.equals(oldWrittenLanguage, updates.getWrittenLanguage());
+        if (writtenLanguageChanged) {
+            String newLang = saved.getWrittenLanguage();
+            // Sync noaLanguage to match new written language if not already set explicitly
+            saved.setNoaLanguage(newLang);
+            // IHSS forms language also tracks written language preference
+            saved.setIhssFormsOption(newLang);
+            saved = recipientRepository.save(saved);
+            log.info("[BR OS 49-60] Written language changed to {} for recipient {}; " +
+                     "noaLanguage and ihssFormsOption updated.", newLang, id);
+        }
+
         return ResponseEntity.ok(saved);
     }
 
@@ -495,6 +531,23 @@ public class RecipientController {
         }
 
         recipient.setUpdatedBy(userId);
+
+        // Geocode residence address for county routing and mapping
+        if ("RESIDENCE".equals(request.getAddressType()) && request.getZipCode() != null) {
+            try {
+                GeocodingService.Coordinates coords = geocodingService.geocode(
+                    (request.getStreetNumber() != null ? request.getStreetNumber() + " " : "") + request.getStreetName(),
+                    request.getCity(), request.getState(), request.getZipCode());
+                if (coords != null) {
+                    recipient.setResidenceLatitude(coords.getLatitude());
+                    recipient.setResidenceLongitude(coords.getLongitude());
+                    log.info("Geocoded address for recipient {}: lat={}, lon={}", id, coords.getLatitude(), coords.getLongitude());
+                }
+            } catch (Exception ex) {
+                log.warn("Geocoding failed for recipient {}: {}", id, ex.getMessage());
+            }
+        }
+
         RecipientEntity saved = recipientRepository.save(recipient);
 
         // BR-24: Send PR00924A to payroll on address change
@@ -735,6 +788,144 @@ public class RecipientController {
         public void setReason(String reason) { this.reason = reason; }
     }
 
+    // ==================== EMAIL MANAGEMENT (BR OS 46) ====================
+
+    /**
+     * GET /api/recipients/{id}/emails
+     * List all email addresses for a recipient (active and inactive), newest first.
+     */
+    @GetMapping("/{id}/emails")
+    @RequirePermission(resource = "Recipient Resource", scope = "view")
+    public ResponseEntity<List<RecipientEmailEntity>> listEmails(@PathVariable Long id) {
+        List<RecipientEmailEntity> emails = recipientEmailRepository.findByRecipientIdOrderByCreatedAtDesc(id);
+        return ResponseEntity.ok(emails);
+    }
+
+    /**
+     * POST /api/recipients/{id}/emails
+     * Add a new email address.
+     *
+     * BR OS 46: When email is created/updated for a recipient with ESP enrollment,
+     * an ESP notification event is generated (logged here; AMQP in production).
+     *
+     * If isPrimary=true, clears the primary flag from all other active emails first.
+     */
+    @PostMapping("/{id}/emails")
+    @RequirePermission(resource = "Recipient Resource", scope = "edit")
+    public ResponseEntity<?> addEmail(
+            @PathVariable Long id,
+            @RequestBody EmailRequest req,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        if (!recipientRepository.existsById(id)) {
+            return ResponseEntity.status(404).body(java.util.Map.of("error", "Recipient not found: " + id));
+        }
+        if (req.getEmailAddress() == null || req.getEmailAddress().isBlank()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Email address is required."));
+        }
+        // Basic RFC 5322 format check
+        if (!req.getEmailAddress().matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "EM OS 046: Invalid email address format."));
+        }
+
+        // If marking as primary, clear existing primary first
+        if (Boolean.TRUE.equals(req.getIsPrimary())) {
+            recipientEmailRepository.clearPrimaryForRecipient(id);
+        }
+
+        RecipientEmailEntity email = new RecipientEmailEntity();
+        email.setRecipientId(id);
+        email.setEmailAddress(req.getEmailAddress().trim().toLowerCase());
+        email.setEmailType(req.getEmailType() != null ? EmailType.valueOf(req.getEmailType()) : EmailType.HOME);
+        email.setIsPrimary(Boolean.TRUE.equals(req.getIsPrimary()));
+        email.setNotes(req.getNotes());
+        email.setCreatedBy(userId);
+        email.setUpdatedBy(userId);
+
+        RecipientEmailEntity saved = recipientEmailRepository.save(email);
+
+        // BR OS 46: Fire ESP notification event (AMQP in production; log + in-app notification in MVP)
+        log.info("[BR OS 46] ESP email event: recipientId={}, email={}, type={}, primary={}",
+                id, saved.getEmailAddress(), saved.getEmailType(), saved.getIsPrimary());
+        notificationService.sendDeliveryNotification(
+                userId != null ? userId : "system",
+                String.valueOf(saved.getId()),
+                "ESP_EMAIL_UPDATE",
+                "ESP_PORTAL");
+
+        return ResponseEntity.status(201).body(saved);
+    }
+
+    /**
+     * PUT /api/recipients/emails/{emailId}/set-primary
+     * Set this email as the primary for its recipient.
+     */
+    @PutMapping("/emails/{emailId}/set-primary")
+    @RequirePermission(resource = "Recipient Resource", scope = "edit")
+    public ResponseEntity<?> setPrimaryEmail(
+            @PathVariable Long emailId,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        RecipientEmailEntity email = recipientEmailRepository.findById(emailId)
+                .orElseThrow(() -> new RuntimeException("Email not found: " + emailId));
+
+        if (email.getStatus() != EmailStatus.ACTIVE) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Cannot set an inactive email as primary."));
+        }
+
+        recipientEmailRepository.clearPrimaryForRecipient(email.getRecipientId());
+        email.setIsPrimary(true);
+        email.setUpdatedBy(userId);
+        RecipientEmailEntity saved = recipientEmailRepository.save(email);
+
+        log.info("[BR OS 46] Primary email set: recipientId={}, emailId={}", email.getRecipientId(), emailId);
+        return ResponseEntity.ok(saved);
+    }
+
+    /**
+     * PUT /api/recipients/emails/{emailId}/inactivate
+     * Inactivate an email address.
+     */
+    @PutMapping("/emails/{emailId}/inactivate")
+    @RequirePermission(resource = "Recipient Resource", scope = "edit")
+    public ResponseEntity<?> inactivateEmail(
+            @PathVariable Long emailId,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+
+        RecipientEmailEntity email = recipientEmailRepository.findById(emailId)
+                .orElseThrow(() -> new RuntimeException("Email not found: " + emailId));
+
+        if (email.getStatus() == EmailStatus.INACTIVE) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "Email is already inactive."));
+        }
+
+        email.setStatus(EmailStatus.INACTIVE);
+        email.setIsPrimary(false);
+        email.setInactivatedDate(java.time.LocalDateTime.now());
+        email.setInactivatedBy(userId);
+        email.setUpdatedBy(userId);
+        RecipientEmailEntity saved = recipientEmailRepository.save(email);
+
+        log.info("[BR OS 46] Email inactivated: recipientId={}, emailId={}", email.getRecipientId(), emailId);
+        return ResponseEntity.ok(saved);
+    }
+
+    public static class EmailRequest {
+        private String emailAddress;
+        private String emailType; // HOME | WORK | OTHER
+        private Boolean isPrimary;
+        private String notes;
+
+        public String getEmailAddress() { return emailAddress; }
+        public void setEmailAddress(String emailAddress) { this.emailAddress = emailAddress; }
+        public String getEmailType() { return emailType; }
+        public void setEmailType(String emailType) { this.emailType = emailType; }
+        public Boolean getIsPrimary() { return isPrimary; }
+        public void setIsPrimary(Boolean isPrimary) { this.isPrimary = isPrimary; }
+        public String getNotes() { return notes; }
+        public void setNotes(String notes) { this.notes = notes; }
+    }
+
     // ==================== Provider Dual Role (Path 1E, BR-18) ====================
 
     /**
@@ -796,5 +987,83 @@ public class RecipientController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
         }
+    }
+
+    // ==================== SSN UPDATE VIA ALTERNATIVE ID (BR OS 65-66) ====================
+
+    /**
+     * Update a recipient's SSN via the Alternative ID process.
+     *
+     * Per DSD BR OS 65-66 (CI-446456):
+     *   - Records the old SSN as an Alternative ID with type DUPLICATE_SSN
+     *   - Updates the recipient's SSN to the new (master) SSN
+     *   - Sends PR00923A to payroll integration to reflect the SSN change
+     *
+     * @param id         Recipient ID
+     * @param request    { newSsn, masterCin, comment }
+     * @param userId     Requesting user
+     */
+    @PutMapping("/{id}/ssn")
+    @RequirePermission(resource = "Recipient Resource", scope = "edit")
+    public ResponseEntity<?> updateSsnViaAlternativeId(
+            @PathVariable Long id,
+            @RequestBody SsnUpdateRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        try {
+            RecipientEntity recipient = recipientRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Recipient not found"));
+
+            if (request.getNewSsn() == null || request.getNewSsn().isBlank()) {
+                return ResponseEntity.badRequest().body(java.util.Map.of("error", "New SSN is required"));
+            }
+
+            String oldSsn = recipient.getSsn();
+
+            // BR OS 65: Create Alternative ID record for the old SSN
+            AlternativeIdEntity altId = new AlternativeIdEntity();
+            altId.setPersonId(id);
+            altId.setPersonType("RECIPIENT");
+            altId.setAlternativeIdType("DUPLICATE_SSN");
+            altId.setOriginalSsn(oldSsn);
+            altId.setMasterCin(request.getMasterCin() != null ? request.getMasterCin() : recipient.getCin());
+            altId.setComment(request.getComment() != null ? request.getComment()
+                    : "SSN updated from " + (oldSsn != null ? "***-**-" + oldSsn.substring(Math.max(0, oldSsn.length() - 4)) : "N/A")
+                      + " via Alternative ID process");
+            altId.setCreatedBy(userId != null ? userId : "system");
+            alternativeIdRepository.save(altId);
+            log.info("[BR OS 65] Alternative ID created for recipient {}: oldSsn=***-**-{}", id,
+                oldSsn != null ? oldSsn.substring(Math.max(0, oldSsn.length() - 4)) : "????");
+
+            // BR OS 66: Update recipient SSN to new (master) SSN
+            recipient.setSsn(request.getNewSsn().replaceAll("[^0-9]", ""));
+            recipient.setUpdatedBy(userId);
+            RecipientEntity saved = recipientRepository.save(recipient);
+
+            // BR OS 66: Send PR00923A to payroll integration
+            payrollIntegrationService.sendPR00923A(String.valueOf(id), saved.getSsn());
+            log.info("[BR OS 66] PR00923A sent to payroll for recipient {} SSN update", id);
+
+            return ResponseEntity.ok(java.util.Map.of(
+                "recipientId", id,
+                "alternativeIdId", altId.getId(),
+                "message", "SSN updated and PR00923A sent to payroll"
+            ));
+        } catch (RuntimeException e) {
+            log.warn("[updateSsnViaAlternativeId] Failed for recipient {}: {}", id, e.getMessage());
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
+
+    public static class SsnUpdateRequest {
+        private String newSsn;
+        private String masterCin;
+        private String comment;
+
+        public String getNewSsn() { return newSsn; }
+        public void setNewSsn(String newSsn) { this.newSsn = newSsn; }
+        public String getMasterCin() { return masterCin; }
+        public void setMasterCin(String masterCin) { this.masterCin = masterCin; }
+        public String getComment() { return comment; }
+        public void setComment(String comment) { this.comment = comment; }
     }
 }

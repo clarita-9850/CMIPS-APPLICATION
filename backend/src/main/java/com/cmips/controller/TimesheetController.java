@@ -349,6 +349,35 @@ public class TimesheetController {
         }
     }
     
+    @PostMapping("/{id}/reissue")
+    @RequirePermission(resource = "Timesheet Resource", scope = "edit", message = "You don't have permission to reissue timesheets")
+    public ResponseEntity<?> reissueTimesheet(@PathVariable Long id,
+                                              @RequestBody(required = false) Map<String, Object> requestData) {
+        try {
+            String userId = getCurrentUserId();
+            String reason = requestData != null && requestData.get("reason") != null
+                ? requestData.get("reason").toString() : "";
+
+            TimesheetResponse reissued = timesheetService.reissueTimesheet(id, reason, userId);
+
+            Map<String, Object> responseMap = convertTimesheetResponseToMap(reissued);
+            Map<String, Object> filteredResponseMap = fieldLevelAuthzService.filterFields(
+                responseMap, "Timesheet Resource", "read");
+
+            logger.info("Timesheet {} reissued successfully by user {}", id, userId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(filteredResponseMap);
+
+        } catch (IllegalArgumentException e) {
+            logger.error("Timesheet not found for reissue: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body("{\"error\":\"" + e.getMessage() + "\"}");
+        } catch (Exception e) {
+            logger.error("Error reissuing timesheet {}", id, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body("{\"error\":\"Internal server error\",\"message\":\"Failed to reissue timesheet\"}");
+        }
+    }
+
     @GetMapping("/actions")
     @RequirePermission(resource = "Timesheet Resource", scope = "view", message = "You don't have permission to read timesheets")
     public ResponseEntity<?> getAllowedActions() {
