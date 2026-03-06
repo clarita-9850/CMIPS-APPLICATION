@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Tradeoffs & Risk Analysis</title>
+    <style>
+        :root {
+            --primary: #046B99;
+            --primary-dark: #034766;
+            --accent: #FDB81E;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --info: #3B82F6;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-800);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
+
+        .header p {
+            color: var(--gray-600);
+            font-size: 1.1rem;
+        }
+
+        /* Summary Cards */
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .summary-card {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .summary-card.pros {
+            border-top: 4px solid var(--success);
+        }
+
+        .summary-card.cons {
+            border-top: 4px solid var(--danger);
+        }
+
+        .summary-card.neutral {
+            border-top: 4px solid var(--info);
+        }
+
+        .summary-number {
+            font-size: 3rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .summary-card.pros .summary-number { color: var(--success); }
+        .summary-card.cons .summary-number { color: var(--danger); }
+        .summary-card.neutral .summary-number { color: var(--info); }
+
+        .summary-label {
+            font-size: 1rem;
+            color: var(--gray-600);
+            margin-top: 0.5rem;
+        }
+
+        /* Section */
+        .section {
+            background: white;
+            border-radius: 16px;
+            padding: 2.5rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            color: var(--gray-800);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .section-title .icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+        }
+
+        .section-title .icon.danger { background: #FEE2E2; }
+        .section-title .icon.success { background: #D1FAE5; }
+        .section-title .icon.warning { background: #FEF3C7; }
+        .section-title .icon.info { background: #DBEAFE; }
+
+        /* Issue Cards */
+        .issue-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .issue-card {
+            border: 1px solid var(--gray-200);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .issue-header {
+            padding: 1.25rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .issue-header:hover {
+            background: var(--gray-50);
+        }
+
+        .issue-title {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .issue-title h4 {
+            font-size: 1.1rem;
+            color: var(--gray-800);
+        }
+
+        .severity {
+            padding: 0.3rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .severity.high { background: #FEE2E2; color: #991B1B; }
+        .severity.medium { background: #FEF3C7; color: #92400E; }
+        .severity.low { background: #D1FAE5; color: #065F46; }
+
+        .issue-content {
+            padding: 0 1.5rem 1.5rem;
+            border-top: 1px solid var(--gray-100);
+        }
+
+        .issue-section {
+            margin-top: 1.25rem;
+        }
+
+        .issue-section h5 {
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            color: var(--gray-500);
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.5px;
+        }
+
+        .issue-section p, .issue-section li {
+            color: var(--gray-600);
+            font-size: 0.95rem;
+        }
+
+        .issue-section ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .issue-section ul li {
+            padding: 0.35rem 0;
+            padding-left: 1.5rem;
+            position: relative;
+        }
+
+        .issue-section ul li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: var(--gray-400);
+        }
+
+        /* Mitigation Box */
+        .mitigation-box {
+            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            border: 1px solid #6EE7B7;
+            border-radius: 8px;
+            padding: 1rem 1.25rem;
+            margin-top: 1rem;
+        }
+
+        .mitigation-box h5 {
+            color: #065F46;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .mitigation-box p, .mitigation-box li {
+            color: #047857;
+            font-size: 0.9rem;
+        }
+
+        /* Comparison Table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+        }
+
+        .comparison-table th,
+        .comparison-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .comparison-table th {
+            background: var(--gray-50);
+            font-weight: 600;
+            color: var(--gray-700);
+        }
+
+        .comparison-table .pro { color: var(--success); }
+        .comparison-table .con { color: var(--danger); }
+
+        /* Verdict Box */
+        .verdict-box {
+            background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+            border: 2px solid #3B82F6;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-top: 2rem;
+        }
+
+        .verdict-box h3 {
+            color: #1E40AF;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .verdict-box p {
+            color: #1E3A8A;
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        .verdict-box ul {
+            margin-top: 1rem;
+            list-style: none;
+        }
+
+        .verdict-box ul li {
+            padding: 0.5rem 0;
+            color: #1E3A8A;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .verdict-box ul li::before {
+            content: '✓';
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* Alternative Box */
+        .alternative-box {
+            background: white;
+            border: 2px dashed var(--gray-300);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .alternative-box h4 {
+            color: var(--gray-700);
+            margin-bottom: 1rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .summary-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 1.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Architecture Tradeoffs & Risk Analysis</h1>
+            <p>Honest evaluation of the Scheduler + Spring Batch architecture</p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary-grid">
+            <div class="summary-card pros">
+                <div class="summary-number">8</div>
+                <div class="summary-label">Key Advantages</div>
+            </div>
+            <div class="summary-card cons">
+                <div class="summary-number">7</div>
+                <div class="summary-label">Potential Downsides</div>
+            </div>
+            <div class="summary-card neutral">
+                <div class="summary-number">5</div>
+                <div class="summary-label">Mitigations Available</div>
+            </div>
+        </div>
+
+        <!-- CONS Section -->
+        <div class="section">
+            <h2 class="section-title">
+                <span class="icon danger">⚠️</span>
+                Potential Downsides & Challenges
+            </h2>
+
+            <div class="issue-grid">
+                <!-- Issue 1: Network Dependency -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>1. Network Dependency Between Apps</h4>
+                            <span class="severity high">High Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Scheduler triggers jobs via REST calls to CMIPS app. If CMIPS app is down or network fails, scheduled jobs won't execute.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Scenarios</h5>
+                            <ul>
+                                <li>CMIPS app deployment/restart during scheduled job time</li>
+                                <li>Network partition between services</li>
+                                <li>CMIPS app overloaded and timing out</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>Implement retry with exponential backoff (3 retries)</li>
+                                <li>Queue failed triggers in Redis for later retry</li>
+                                <li>Add circuit breaker to prevent cascade failures</li>
+                                <li>Alert on repeated trigger failures</li>
+                                <li>Health check CMIPS app before triggering</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 2: Two Systems to Monitor -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>2. Operational Complexity - Two Systems</h4>
+                            <span class="severity medium">Medium Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Now you have two applications to deploy, monitor, and maintain instead of one. More moving parts = more potential failure points.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Implications</h5>
+                            <ul>
+                                <li>Two deployments to coordinate</li>
+                                <li>Two sets of logs to check when debugging</li>
+                                <li>Two applications to scale independently</li>
+                                <li>Version compatibility between apps</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>Centralized logging (ELK stack or similar)</li>
+                                <li>Unified monitoring dashboard</li>
+                                <li>API versioning for backward compatibility</li>
+                                <li>Docker Compose for local dev, Kubernetes for prod</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 3: Data Consistency -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>3. Data Consistency Across Two Databases</h4>
+                            <span class="severity medium">Medium Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Job definitions live in Scheduler's tables, execution data in Spring Batch tables.
+                               The <code>job_execution_mapping</code> table bridges them, but sync issues could occur.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Risk Scenarios</h5>
+                            <ul>
+                                <li>Scheduler triggers job, CMIPS crashes before recording execution ID</li>
+                                <li>Job completes but mapping table update fails</li>
+                                <li>Orphaned Spring Batch executions with no Scheduler mapping</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>CMIPS app returns execution ID synchronously before starting job</li>
+                                <li>Scheduler persists mapping before considering trigger successful</li>
+                                <li>Reconciliation job to detect and fix orphaned records</li>
+                                <li>Use correlation IDs passed through the entire flow</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 4: Latency -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>4. Added Latency for Job Triggers</h4>
+                            <span class="severity low">Low Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Every job trigger now involves: Scheduler → HTTP call → CMIPS → Spring Batch.
+                               This adds ~50-200ms latency compared to direct in-process triggering.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>When It Matters</h5>
+                            <ul>
+                                <li>High-frequency jobs (every minute or less)</li>
+                                <li>Tight SLA requirements on job start time</li>
+                                <li>Large dependency chains with many sequential triggers</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>For batch jobs (daily/hourly), 200ms is negligible</li>
+                                <li>Use connection pooling and keep-alive</li>
+                                <li>For sub-minute jobs, consider different architecture</li>
+                                <li>Parallel trigger of independent jobs in dependency chain</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 5: Spring Batch Learning Curve -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>5. Spring Batch Learning Curve</h4>
+                            <span class="severity medium">Medium Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Spring Batch is powerful but has a steep learning curve. Concepts like JobInstance vs JobExecution,
+                               chunk processing, step scope, and restartability require understanding.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Challenges</h5>
+                            <ul>
+                                <li>ItemReader/Processor/Writer pattern can feel verbose</li>
+                                <li>Job parameter handling for restartability</li>
+                                <li>Understanding when jobs can/cannot restart</li>
+                                <li>Debugging failed jobs requires knowledge of SB internals</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>Create reusable job templates for common patterns</li>
+                                <li>Good documentation with examples</li>
+                                <li>Start with simple jobs, add complexity gradually</li>
+                                <li>Spring Batch Admin UI for debugging (optional)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 6: No Native DAG in Spring Batch -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>6. Spring Batch Has No Native Job Dependencies</h4>
+                            <span class="severity medium">Medium Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Spring Batch only handles step dependencies WITHIN a job, not dependencies BETWEEN jobs.
+                               We're building our own DAG orchestration in the Scheduler app.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Implications</h5>
+                            <ul>
+                                <li>Custom code to maintain for dependency management</li>
+                                <li>Race conditions if not careful (two parents complete simultaneously)</li>
+                                <li>No built-in visualization of job dependencies</li>
+                                <li>Testing dependency chains is complex</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>Use database transactions for dependency state updates</li>
+                                <li>Build dependency graph visualization in Scheduler UI</li>
+                                <li>Comprehensive integration tests for dependency scenarios</li>
+                                <li>Consider Spring Cloud Data Flow if DAG becomes very complex</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issue 7: Dual Authentication -->
+                <div class="issue-card">
+                    <div class="issue-header">
+                        <div class="issue-title">
+                            <h4>7. Service-to-Service Authentication</h4>
+                            <span class="severity low">Low Impact</span>
+                        </div>
+                    </div>
+                    <div class="issue-content">
+                        <div class="issue-section">
+                            <h5>The Problem</h5>
+                            <p>Scheduler backend needs to authenticate with CMIPS app's API.
+                               This requires service-to-service auth, separate from user auth.</p>
+                        </div>
+                        <div class="issue-section">
+                            <h5>Considerations</h5>
+                            <ul>
+                                <li>Need to manage service account credentials</li>
+                                <li>Token refresh for long-running Scheduler service</li>
+                                <li>Audit trail should show "triggered by scheduler on behalf of cron" vs "triggered by admin X"</li>
+                            </ul>
+                        </div>
+                        <div class="mitigation-box">
+                            <h5>✅ Mitigation Strategy</h5>
+                            <ul>
+                                <li>Use Keycloak service account (client credentials grant)</li>
+                                <li>Pass original user context in headers for audit</li>
+                                <li>Short-lived tokens with auto-refresh</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROS Section -->
+        <div class="section">
+            <h2 class="section-title">
+                <span class="icon success">✅</span>
+                Advantages of This Architecture
+            </h2>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Advantage</th>
+                        <th>Description</th>
+                        <th>Business Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>1. Separation of Concerns</strong></td>
+                        <td>Scheduling logic completely separate from execution logic</td>
+                        <td>Easier to modify scheduling without touching business code</td>
+                    </tr>
+                    <tr>
+                        <td><strong>2. Spring Batch Reliability</strong></td>
+                        <td>Built-in restart, skip, retry - battle-tested at scale</td>
+                        <td>Fewer failed jobs, automatic recovery</td>
+                    </tr>
+                    <tr>
+                        <td><strong>3. Independent Scaling</strong></td>
+                        <td>Scale Scheduler and CMIPS apps independently</td>
+                        <td>Cost-effective resource allocation</td>
+                    </tr>
+                    <tr>
+                        <td><strong>4. Dedicated Admin UI</strong></td>
+                        <td>Purpose-built interface for operations team</td>
+                        <td>Faster incident response, self-service for ops</td>
+                    </tr>
+                    <tr>
+                        <td><strong>5. Audit & Compliance</strong></td>
+                        <td>All scheduling changes tracked separately</td>
+                        <td>Clear audit trail for compliance requirements</td>
+                    </tr>
+                    <tr>
+                        <td><strong>6. Technology Flexibility</strong></td>
+                        <td>Can swap CMIPS's execution engine without changing Scheduler</td>
+                        <td>Future-proof architecture</td>
+                    </tr>
+                    <tr>
+                        <td><strong>7. Team Autonomy</strong></td>
+                        <td>Different teams can own Scheduler vs CMIPS</td>
+                        <td>Parallel development, clear ownership</td>
+                    </tr>
+                    <tr>
+                        <td><strong>8. Centralized Scheduling</strong></td>
+                        <td>One place to see all scheduled jobs across the system</td>
+                        <td>Single pane of glass for operations</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Comparison with Alternatives -->
+        <div class="section">
+            <h2 class="section-title">
+                <span class="icon info">🔄</span>
+                Comparison with Alternatives
+            </h2>
+
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Approach</th>
+                        <th>Pros</th>
+                        <th>Cons</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Our Approach</strong><br/>(Scheduler + Spring Batch)</td>
+                        <td class="pro">
+                            • Full control over scheduling<br/>
+                            • Custom dependency DAG<br/>
+                            • Dedicated admin UI<br/>
+                            • Spring Batch reliability
+                        </td>
+                        <td class="con">
+                            • Two apps to maintain<br/>
+                            • Network dependency<br/>
+                            • Custom DAG code
+                        </td>
+                        <td>Medium-large orgs with custom scheduling needs</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Spring Cloud Data Flow</strong></td>
+                        <td class="pro">
+                            • Built-in DAG support<br/>
+                            • Visual pipeline designer<br/>
+                            • Cloud-native
+                        </td>
+                        <td class="con">
+                            • Heavy infrastructure<br/>
+                            • Steep learning curve<br/>
+                            • Overkill for simple jobs
+                        </td>
+                        <td>Complex data pipelines, streaming + batch</td>
+                    </tr>
+                    <tr>
+                        <td><strong>All-in-One</strong><br/>(Spring Batch + @Scheduled in CMIPS)</td>
+                        <td class="pro">
+                            • Single deployment<br/>
+                            • No network calls<br/>
+                            • Simpler architecture
+                        </td>
+                        <td class="con">
+                            • No dedicated admin UI<br/>
+                            • Scheduling tightly coupled<br/>
+                            • Hard to modify schedules
+                        </td>
+                        <td>Small apps with fixed schedules</td>
+                    </tr>
+                    <tr>
+                        <td><strong>External Orchestrator</strong><br/>(Airflow, Prefect, Temporal)</td>
+                        <td class="pro">
+                            • Mature DAG support<br/>
+                            • Rich UI built-in<br/>
+                            • Large community
+                        </td>
+                        <td class="con">
+                            • Separate infrastructure<br/>
+                            • Python-centric (Airflow)<br/>
+                            • Another system to learn
+                        </td>
+                        <td>Data engineering teams, complex workflows</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="alternative-box">
+                <h4>🤔 When to Reconsider This Architecture</h4>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="padding: 0.5rem 0; color: var(--gray-600);">
+                        <strong>→</strong> If you have <strong>very complex DAGs</strong> (100+ jobs, conditional branching), consider Airflow/Temporal
+                    </li>
+                    <li style="padding: 0.5rem 0; color: var(--gray-600);">
+                        <strong>→</strong> If you need <strong>sub-second scheduling</strong>, this architecture adds too much latency
+                    </li>
+                    <li style="padding: 0.5rem 0; color: var(--gray-600);">
+                        <strong>→</strong> If your team is <strong>very small</strong> and can't maintain two apps, keep it all-in-one
+                    </li>
+                    <li style="padding: 0.5rem 0; color: var(--gray-600);">
+                        <strong>→</strong> If you're already using <strong>Kubernetes CronJobs</strong> and it works, don't over-engineer
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Final Verdict -->
+        <div class="verdict-box">
+            <h3>📋 Final Assessment</h3>
+            <p>
+                This architecture is <strong>well-suited for your use case</strong> - an enterprise application
+                needing a dedicated scheduling interface with reliable batch execution. The downsides are
+                <strong>manageable with proper mitigation strategies</strong>.
+            </p>
+            <ul>
+                <li><strong>Network dependency</strong> is the biggest risk - mitigate with retries and circuit breakers</li>
+                <li><strong>Operational complexity</strong> is real but standard for microservices - use good DevOps practices</li>
+                <li><strong>Spring Batch learning curve</strong> is worth it for the reliability gains</li>
+                <li><strong>Custom DAG</strong> is acceptable for your scale - consider SCDF only if it becomes very complex</li>
+            </ul>
+            <p style="margin-top: 1rem;">
+                <strong>Recommendation:</strong> Proceed with this architecture, but implement the mitigations
+                from day one, especially retry logic and monitoring.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

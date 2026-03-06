@@ -1,0 +1,644 @@
+{
+  "realm": "cmips",
+  "enabled": true,
+  "displayName": "CMIPS - Case Management and Intake Processing System",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>CMIPS</span></div>",
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "offlineSessionIdleTimeout": 2592000,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 5,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en"],
+  "defaultLocale": "en",
+  "roles": {
+    "realm": [
+      {
+        "name": "CM_WORKER",
+        "description": "Case Management Worker - can view and edit cases, submit approvals",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "CM_SUPERVISOR",
+        "description": "Case Management Supervisor - can review, approve, and assign cases",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "HELP_DESK",
+        "description": "Help Desk - can view cases and provide support",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "ADMIN",
+        "description": "System Administrator - full access to all resources",
+        "composite": false,
+        "clientRole": false
+      },
+      {
+        "name": "user",
+        "description": "Default user role",
+        "composite": false,
+        "clientRole": false
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "cmips-backend",
+      "name": "CMIPS Backend API",
+      "description": "Spring Boot backend resource server with authorization services",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "X6282J5tQzu2tzqLcglKmjhwfidB0vh9",
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "authorizationServicesEnabled": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "redirectUris": ["*"],
+      "webOrigins": ["*"],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "authorizationSettings": {
+        "allowRemoteResourceManagement": true,
+        "policyEnforcementMode": "ENFORCING",
+        "resources": [
+          {
+            "name": "Timesheet Resource",
+            "type": "Timesheet",
+            "ownerManagedAccess": false,
+            "uris": [
+              "/api/timesheets/*",
+              "/api/timesheets",
+              "/api/timesheets/*/submit",
+              "/api/timesheets/*/approve",
+              "/api/timesheets/*/reject"
+            ],
+            "scopes": [
+              {"name": "create"},
+              {"name": "read"},
+              {"name": "update"},
+              {"name": "delete"},
+              {"name": "submit"},
+              {"name": "approve"},
+              {"name": "reject"},
+              {"name": "timesheet:employee_id"},
+              {"name": "timesheet:employee_name"},
+              {"name": "timesheet:department"},
+              {"name": "timesheet:location"},
+              {"name": "timesheet:regular_hours"},
+              {"name": "timesheet:overtime_hours"},
+              {"name": "timesheet:holiday_hours"},
+              {"name": "timesheet:sick_hours"},
+              {"name": "timesheet:vacation_hours"},
+              {"name": "timesheet:comments"},
+              {"name": "timesheet:supervisor_comments"},
+              {"name": "timesheet:approval_info"}
+            ]
+          },
+          {
+            "name": "EVV Resource",
+            "type": "EVV",
+            "ownerManagedAccess": false,
+            "uris": ["/api/evv/*", "/api/evv"],
+            "scopes": [
+              {"name": "create"},
+              {"name": "read"},
+              {"name": "update"},
+              {"name": "delete"}
+            ]
+          },
+          {
+            "name": "Provider-Recipient Resource",
+            "type": "ProviderRecipient",
+            "ownerManagedAccess": false,
+            "uris": ["/api/provider-recipient/*", "/api/provider-recipient"],
+            "scopes": [
+              {"name": "create"},
+              {"name": "read"},
+              {"name": "update"},
+              {"name": "delete"}
+            ]
+          },
+          {
+            "name": "Provider Resource",
+            "type": "Provider",
+            "ownerManagedAccess": false,
+            "uris": ["/api/providers/*", "/api/providers"],
+            "scopes": [
+              {"name": "view"},
+              {"name": "create"},
+              {"name": "edit"},
+              {"name": "approve"},
+              {"name": "reinstate"},
+              {"name": "enroll"}
+            ]
+          }
+        ],
+        "policies": [
+          {
+            "name": "CM Worker Policy",
+            "type": "role",
+            "logic": "POSITIVE",
+            "config": {
+              "roles": "[{\"id\":\"CM_WORKER\",\"required\":false}]"
+            }
+          },
+          {
+            "name": "CM Supervisor Policy",
+            "type": "role",
+            "logic": "POSITIVE",
+            "config": {
+              "roles": "[{\"id\":\"CM_SUPERVISOR\",\"required\":false}]"
+            }
+          },
+          {
+            "name": "Admin Policy",
+            "type": "role",
+            "logic": "POSITIVE",
+            "config": {
+              "roles": "[{\"id\":\"ADMIN\",\"required\":false}]"
+            }
+          },
+          {
+            "name": "Help Desk Policy",
+            "type": "role",
+            "logic": "POSITIVE",
+            "config": {
+              "roles": "[{\"id\":\"HELP_DESK\",\"required\":false}]"
+            }
+          },
+          {
+            "name": "Worker or Supervisor Policy",
+            "type": "aggregate",
+            "logic": "POSITIVE",
+            "decisionStrategy": "AFFIRMATIVE",
+            "config": {
+              "applyPolicies": "[\"CM Worker Policy\",\"CM Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Any Authenticated User Policy",
+            "type": "aggregate",
+            "logic": "POSITIVE",
+            "decisionStrategy": "AFFIRMATIVE",
+            "config": {
+              "applyPolicies": "[\"CM Worker Policy\",\"CM Supervisor Policy\",\"Help Desk Policy\",\"Admin Policy\"]"
+            }
+          },
+          {
+            "name": "Timesheet Create Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Timesheet Resource\"]",
+              "scopes": "[\"create\"]",
+              "applyPolicies": "[\"CM Worker Policy\"]"
+            }
+          },
+          {
+            "name": "Timesheet Read Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Timesheet Resource\"]",
+              "scopes": "[\"read\"]",
+              "applyPolicies": "[\"Any Authenticated User Policy\"]"
+            }
+          },
+          {
+            "name": "Timesheet Submit Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Timesheet Resource\"]",
+              "scopes": "[\"submit\"]",
+              "applyPolicies": "[\"CM Worker Policy\"]"
+            }
+          },
+          {
+            "name": "Timesheet Approve Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Timesheet Resource\"]",
+              "scopes": "[\"approve\"]",
+              "applyPolicies": "[\"CM Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Timesheet Reject Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Timesheet Resource\"]",
+              "scopes": "[\"reject\"]",
+              "applyPolicies": "[\"CM Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Basic Field Access Permission",
+            "type": "scope",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "scopes": "[\"timesheet:employee_id\",\"timesheet:employee_name\",\"timesheet:regular_hours\",\"timesheet:overtime_hours\"]",
+              "applyPolicies": "[\"Any Authenticated User Policy\"]"
+            }
+          },
+          {
+            "name": "Extended Field Access Permission",
+            "type": "scope",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "scopes": "[\"timesheet:department\",\"timesheet:location\",\"timesheet:holiday_hours\",\"timesheet:sick_hours\",\"timesheet:vacation_hours\",\"timesheet:comments\"]",
+              "applyPolicies": "[\"Worker or Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Supervisor Field Access Permission",
+            "type": "scope",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "scopes": "[\"timesheet:supervisor_comments\",\"timesheet:approval_info\"]",
+              "applyPolicies": "[\"CM Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Provider View Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Provider Resource\"]",
+              "scopes": "[\"view\"]",
+              "applyPolicies": "[\"Any Authenticated User Policy\"]"
+            }
+          },
+          {
+            "name": "Provider Manage Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Provider Resource\"]",
+              "scopes": "[\"create\",\"edit\",\"enroll\",\"reinstate\"]",
+              "applyPolicies": "[\"Worker or Supervisor Policy\"]"
+            }
+          },
+          {
+            "name": "Provider Approve Permission",
+            "type": "resource",
+            "logic": "POSITIVE",
+            "decisionStrategy": "UNANIMOUS",
+            "config": {
+              "resources": "[\"Provider Resource\"]",
+              "scopes": "[\"approve\"]",
+              "applyPolicies": "[\"CM Supervisor Policy\"]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "clientId": "cmips-frontend",
+      "name": "CMIPS Web Application",
+      "description": "React frontend application",
+      "enabled": true,
+      "publicClient": true,
+      "bearerOnly": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "frontchannelLogout": true,
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "redirectUris": [
+        "http://localhost:3000/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "http://localhost:5173"
+      ],
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "email"
+      ],
+      "optionalClientScopes": [
+        "address",
+        "phone",
+        "offline_access",
+        "microprofile-jwt"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "System",
+      "lastName": "Administrator",
+      "email": "admin@cmips.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["ADMIN", "CM_SUPERVISOR", "CM_WORKER", "user"],
+      "attributes": {
+        "fids": [
+          "FID_CASE_VIEW",
+          "FID_CASE_CREATE",
+          "FID_CASE_EDIT",
+          "FID_CASE_DELETE",
+          "FID_CASE_ASSIGN",
+          "FID_CASE_CLOSE",
+          "FID_EVIDENCE_VIEW",
+          "FID_EVIDENCE_UPLOAD",
+          "FID_EVIDENCE_VERIFY",
+          "FID_EVIDENCE_DELETE",
+          "FID_APPROVAL_SUBMIT",
+          "FID_APPROVAL_REVIEW",
+          "FID_APPROVAL_APPROVE",
+          "FID_APPROVAL_REJECT",
+          "FID_APPROVAL_OVERRIDE",
+          "FID_PAYMENT_VIEW",
+          "FID_PAYMENT_CALCULATE",
+          "FID_PAYMENT_AUTHORIZE",
+          "FID_PAYMENT_ISSUE",
+          "FID_ADMIN_USER_MANAGE",
+          "FID_ADMIN_CONFIG_EDIT",
+          "FID_ADMIN_AUDIT_VIEW"
+        ]
+      }
+    },
+    {
+      "username": "supervisor",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Case",
+      "lastName": "Supervisor",
+      "email": "supervisor@cmips.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["CM_SUPERVISOR", "CM_WORKER", "user"],
+      "attributes": {
+        "fids": [
+          "FID_CASE_VIEW",
+          "FID_CASE_CREATE",
+          "FID_CASE_EDIT",
+          "FID_CASE_ASSIGN",
+          "FID_CASE_CLOSE",
+          "FID_EVIDENCE_VIEW",
+          "FID_EVIDENCE_UPLOAD",
+          "FID_EVIDENCE_VERIFY",
+          "FID_APPROVAL_SUBMIT",
+          "FID_APPROVAL_REVIEW",
+          "FID_APPROVAL_APPROVE",
+          "FID_APPROVAL_REJECT"
+        ]
+      }
+    },
+    {
+      "username": "cmworker",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Case",
+      "lastName": "Worker",
+      "email": "cmworker@cmips.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["CM_WORKER", "user"],
+      "attributes": {
+        "fids": [
+          "FID_CASE_VIEW",
+          "FID_CASE_CREATE",
+          "FID_CASE_EDIT",
+          "FID_EVIDENCE_VIEW",
+          "FID_EVIDENCE_UPLOAD",
+          "FID_APPROVAL_SUBMIT"
+        ]
+      }
+    },
+    {
+      "username": "helpdesk",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Help",
+      "lastName": "Desk",
+      "email": "helpdesk@cmips.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["HELP_DESK", "user"],
+      "attributes": {
+        "fids": [
+          "FID_CASE_VIEW",
+          "FID_EVIDENCE_VIEW"
+        ]
+      }
+    },
+    {
+      "username": "caseworker1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Case",
+      "lastName": "Worker",
+      "email": "caseworker1@cmips.com",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["CM_WORKER", "user"],
+      "attributes": {
+        "fids": [
+          "FID_CASE_VIEW",
+          "FID_CASE_CREATE",
+          "FID_CASE_EDIT",
+          "FID_EVIDENCE_VIEW",
+          "FID_EVIDENCE_UPLOAD",
+          "FID_APPROVAL_SUBMIT"
+        ]
+      }
+    }
+  ],
+  "scopeMappings": [
+    {
+      "clientScope": "offline_access",
+      "roles": ["offline_access"]
+    }
+  ],
+  "clientScopeMappings": {
+    "cmips-backend": [
+      {
+        "client": "cmips-frontend",
+        "roles": ["CM_WORKER", "CM_SUPERVISOR", "HELP_DESK", "ADMIN"]
+      }
+    ]
+  },
+  "serviceAccountClientRoles": {
+    "cmips-backend": {
+      "realm-management": [
+        "manage-clients",
+        "view-clients",
+        "manage-authorization",
+        "view-authorization",
+        "view-users",
+        "view-realm"
+      ]
+    }
+  },
+  "clientScopes": [
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "client roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "audience resolve",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-resolve-mapper",
+          "consentRequired": false,
+          "config": {}
+        },
+        {
+          "name": "fids-mapper",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "fids",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "fids",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "defaultDefaultClientScopes": [
+    "role_list",
+    "profile",
+    "email",
+    "roles"
+  ],
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "smtpServer": {},
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging"],
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "REFRESH_TOKEN",
+    "UPDATE_PASSWORD"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}

@@ -1,0 +1,29 @@
+# Profile to disable security for testing
+cmips:
+  security:
+    disable: true
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5434/cmips_mvp
+    username: cmips_user
+    password: cmips_password
+    driver-class-name: org.postgresql.Driver
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Point to a non-existent endpoint to bypass JWT decoding
+          jwk-set-uri: http://localhost:9999/not-used
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.resource.servlet.OAuth2ResourceServerAutoConfiguration
+
+# Disable Kafka (not needed for basic testing)
+  kafka:
+    bootstrap-servers: localhost:9092
+
+logging:
+  level:
+    org.springframework.security: DEBUG

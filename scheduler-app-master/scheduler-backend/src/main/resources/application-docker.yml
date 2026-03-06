@@ -1,0 +1,32 @@
+# Docker Profile Configuration
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:scheduler-postgres}:${DB_PORT:5432}/${DB_NAME:scheduler_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:scheduler-redis}
+      port: ${REDIS_PORT:6379}
+
+  # Exclude OAuth2 client auto-configuration until Keycloak realm is configured
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Use main Keycloak from sajeevs-codebase-main
+          issuer-uri: http://cmips-keycloak:8080/realms/cmips
+
+cmips:
+  backend:
+    base-url: ${CMIPS_BACKEND_URL:http://cmips-backend:8081}
+
+logging:
+  level:
+    com.ihss.scheduler: INFO
+    root: INFO

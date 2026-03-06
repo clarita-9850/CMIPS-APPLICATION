@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: scheduler-postgres
+    environment:
+      POSTGRES_DB: scheduler_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Pub/Sub
+  redis:
+    image: redis:7-alpine
+    container_name: scheduler-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # NOTE: Keycloak is NOT included here - use the main Keycloak from sajeevs-codebase-main/cmipsapplication
+  # Main Keycloak runs on cmips-keycloak:8080 (external port 8085)
+  # Make sure sajeevs-codebase docker-compose is running first
+
+  # Scheduler Backend
+  scheduler-backend:
+    build:
+      context: ./scheduler-backend
+      dockerfile: Dockerfile
+    container_name: scheduler-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: scheduler-postgres
+      DB_PORT: 5432
+      DB_NAME: scheduler_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: scheduler-redis
+      REDIS_PORT: 6379
+      # Use main Keycloak from sajeevs-codebase-main (cmips-keycloak container)
+      KEYCLOAK_URL: http://cmips-keycloak:8080
+      KEYCLOAK_REALM: cmips
+      KEYCLOAK_CLIENT_ID: batch-scheduler-app
+      CMIPS_BACKEND_URL: http://cmips-backend:8081
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://cmips-keycloak:8080/realms/cmips
+      KEYCLOAK_EXTERNAL_ISSUER_URI: http://localhost:8085/realms/cmips
+    ports:
+      - "8084:8084"
+    networks:
+      - default
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # Scheduler Frontend
+  scheduler-frontend:
+    build:
+      context: ./scheduler-frontend
+      dockerfile: Dockerfile
+    container_name: scheduler-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8084
+      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8085
+      NEXT_PUBLIC_KEYCLOAK_REALM: cmips
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: batch-scheduler-app
+    ports:
+      - "3002:3002"
+    depends_on:
+      - scheduler-backend
+
+  # NOTE: CMIPS Backend is NOT defined here.
+  # Run cmips-backend separately or use the main cmipsapplication/docker-compose.yml
+  # CMIPS backend connects to scheduler-postgres and redis via cmips-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    external: true
+    name: cmips-shared-network
