@@ -36,7 +36,7 @@ public class SickLeaveClaimEntity {
     @Column(name = "case_id", nullable = false)
     private Long caseId;
 
-    @Column(name = "case_number", length = 20, nullable = false)
+    @Column(name = "case_number", length = 50, nullable = false)
     private String caseNumber;
 
     @Column(name = "recipient_id")

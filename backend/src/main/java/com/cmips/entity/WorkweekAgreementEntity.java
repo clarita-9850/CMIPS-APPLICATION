@@ -36,7 +36,7 @@ public class WorkweekAgreementEntity {
     @Column(name = "recipient_name", length = 200)
     private String recipientName;
 
-    @Column(name = "case_number", length = 20)
+    @Column(name = "case_number", length = 50)
     private String caseNumber;
 
     // Workweek schedule: FLSA-defined 7-consecutive-day period

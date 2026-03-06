@@ -41,7 +41,7 @@ public class BackupProviderHoursEntity {
     @Column(name = "case_id")
     private Long caseId;
 
-    @Column(name = "case_number", length = 20)
+    @Column(name = "case_number", length = 50)
     private String caseNumber;
 
     @Column(name = "recipient_id")

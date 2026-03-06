@@ -30,7 +30,7 @@ public class CaseAttachmentEntity {
     @Column(name = "case_id", nullable = false)
     private Long caseId;
 
-    @Column(name = "case_number", length = 20)
+    @Column(name = "case_number", length = 50)
     private String caseNumber;
 
     @Enumerated(EnumType.STRING)

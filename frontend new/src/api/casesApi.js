@@ -168,3 +168,14 @@ export const printNoa = (noaId) =>
 
 export const suppressNoa = (noaId) =>
   http.put(`/cases/noas/${noaId}/suppress`).then(r => r.data);
+
+
+// ── FPO Eligibility (CI-67555) ────────────────────────────────────
+export const getFpoEligibility = (caseId) =>
+  http.get(`/cases/${caseId}/fpo-eligibility`).then(r => r.data);
+
+export const setFpoEligibility = (caseId, data) =>
+  http.put(`/cases/${caseId}/fpo-eligibility`, data).then(r => r.data);
+
+export const getFpoEligibilityHistory = (caseId) =>
+  http.get(`/cases/${caseId}/fpo-eligibility/history`).then(r => r.data);

@@ -35,7 +35,7 @@ public class TravelTimeEntity {
     @Column(name = "to_recipient_name", length = 200)
     private String toRecipientName;
 
-    @Column(name = "to_case_number", length = 20)
+    @Column(name = "to_case_number", length = 50)
     private String toCaseNumber;
 
     // The recipient the provider is traveling FROM (CI-480867: "Select Traveling From Recipient")
@@ -45,7 +45,7 @@ public class TravelTimeEntity {
     @Column(name = "from_recipient_name", length = 200)
     private String fromRecipientName;
 
-    @Column(name = "from_case_number", length = 20)
+    @Column(name = "from_case_number", length = 50)
     private String fromCaseNumber;
 
     // Travel time details

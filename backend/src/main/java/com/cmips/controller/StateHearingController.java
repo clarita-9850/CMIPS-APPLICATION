@@ -207,7 +207,11 @@ public class StateHearingController {
     public ResponseEntity<?> createStateHearing(@RequestBody Map<String, Object> request) {
         // --- Validate required fields ---
         Long caseId = request.get("caseId") != null ? Long.valueOf(request.get("caseId").toString()) : null;
+        // Accept both "appealNumber" and "hearingNumber" as field names
         String appealNumber = (String) request.get("appealNumber");
+        if (appealNumber == null || appealNumber.isBlank()) {
+            appealNumber = (String) request.get("hearingNumber");
+        }
 
         if (caseId == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Case ID is required"));
@@ -307,7 +311,7 @@ public class StateHearingController {
      *              + Set all fields except Compliance Form Sent Date to non-editable
      */
     @PutMapping("/{id}")
-    @RequirePermission(resource = "Case Resource", scope = "update")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
     public ResponseEntity<?> modifyStateHearing(@PathVariable Long id,
                                                  @RequestBody Map<String, Object> request) {
         Optional<StateHearingEntity> opt = stateHearingRepository.findById(id);

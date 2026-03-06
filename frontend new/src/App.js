@@ -73,6 +73,7 @@ import { SpecialTransactionsPage } from './pages/SpecialTransactionsPage';
 import { PaymentCorrectionsPage } from './pages/PaymentCorrectionsPage';
 import { OverpaymentRecoveryPage } from './pages/OverpaymentRecoveryPage';
 import { CareerPathwaysPage } from './pages/CareerPathwaysPage';
+import { CaseViewFPOEligibilityPage } from './features/case/pages/CaseViewFPOEligibilityPage';
 
 // Organization / Admin
 import { OrganizationPage } from './pages/OrganizationPage';
@@ -248,6 +249,7 @@ function App() {
             <Route path="/cases/:caseId/special-transactions" element={<SpecialTransactionsPage />} />
             <Route path="/cases/:caseId/payment-corrections" element={<PaymentCorrectionsPage />} />
             <Route path="/cases/:caseId/overpayments" element={<OverpaymentRecoveryPage />} />
+            <Route path="/cases/:caseId/fpo-eligibility" element={<CaseViewFPOEligibilityPage />} />
 
             {/* Work Queues */}
             <Route path="/work-queues" element={<WorkQueuesPage />} />

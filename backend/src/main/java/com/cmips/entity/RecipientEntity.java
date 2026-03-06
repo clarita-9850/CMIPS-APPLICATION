@@ -94,6 +94,13 @@ public class RecipientEntity {
     @Column(name = "residence_county", length = 100)
     private String residenceCounty;
 
+    // Geocoded coordinates (populated by GeocodingService on address update)
+    @Column(name = "residence_latitude")
+    private Double residenceLatitude;
+
+    @Column(name = "residence_longitude")
+    private Double residenceLongitude;
+
     // Mailing Address (if different)
     @Column(name = "mailing_street_number", length = 20)
     private String mailingStreetNumber;
@@ -453,6 +460,13 @@ public class RecipientEntity {
     public void setResidenceCounty(String residenceCounty) {
         this.residenceCounty = residenceCounty;
     }
+
+    public Double getResidenceLatitude() { return residenceLatitude; }
+    public void setResidenceLatitude(Double residenceLatitude) { this.residenceLatitude = residenceLatitude; }
+
+    public Double getResidenceLongitude() { return residenceLongitude; }
+    public void setResidenceLongitude(Double residenceLongitude) { this.residenceLongitude = residenceLongitude; }
+
 
     public String getMailingStreetNumber() {
         return mailingStreetNumber;

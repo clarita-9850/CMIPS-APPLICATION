@@ -112,7 +112,29 @@ public class ServiceEligibilityEntity {
     @Column(name = "skin_care_hours")
     private Double skinCareHours;
 
-    // Functional Ranks (1-5 scale)
+    // Additional Service Types (DSD Section 21 — completing all 25)
+    @Column(name = "menstrual_care_hours")
+    private Double menstrualCareHours;
+
+    @Column(name = "accompaniment_medical_hours")
+    private Double accompanimentMedicalHours;
+
+    @Column(name = "accompaniment_alt_resources_hours")
+    private Double accompanimentAltResourcesHours;
+
+    @Column(name = "heavy_cleaning_hours")
+    private Double heavyCleaningHours;
+
+    @Column(name = "yard_hazard_abatement_hours")
+    private Double yardHazardAbatementHours;
+
+    @Column(name = "snow_removal_hours")
+    private Double snowRemovalHours;
+
+    @Column(name = "teaching_demo_hours")
+    private Double teachingDemoHours;
+
+    // Functional Ranks (1-5 scale, legacy category-level)
     @Column(name = "functional_rank_domestic")
     private Integer functionalRankDomestic;
 
@@ -124,6 +146,22 @@ public class ServiceEligibilityEntity {
 
     @Column(name = "functional_rank_paramedical")
     private Integer functionalRankParamedical;
+
+    // Functional Index Scores per DSD Section 21 (14 functional areas, 1-6 scale, 6=Paramedical Need)
+    @Column(name = "fi_housework") private Integer fiHousework;
+    @Column(name = "fi_laundry")   private Integer fiLaundry;
+    @Column(name = "fi_shopping")  private Integer fiShopping;
+    @Column(name = "fi_meal_prep") private Integer fiMealPrep;
+    @Column(name = "fi_ambulation") private Integer fiAmbulation;
+    @Column(name = "fi_bathing")   private Integer fiBathing;
+    @Column(name = "fi_dressing")  private Integer fiDressing;
+    @Column(name = "fi_bowel_bladder") private Integer fiBowelBladder;
+    @Column(name = "fi_transfer")  private Integer fiTransfer;
+    @Column(name = "fi_feeding")   private Integer fiFeeding;
+    @Column(name = "fi_respiration") private Integer fiRespiration;
+    @Column(name = "fi_memory")    private Integer fiMemory;
+    @Column(name = "fi_orientation") private Integer fiOrientation;
+    @Column(name = "fi_judgment")  private Integer fiJudgment;
 
     // HTG (Hourly Task Guideline) Indicators
     // +: Exceeds HTG, -: Below HTG, blank: Within HTG
@@ -254,6 +292,27 @@ public class ServiceEligibilityEntity {
         this.feedingHours = builder.feedingHours;
         this.respirationHours = builder.respirationHours;
         this.skinCareHours = builder.skinCareHours;
+        this.menstrualCareHours = builder.menstrualCareHours;
+        this.accompanimentMedicalHours = builder.accompanimentMedicalHours;
+        this.accompanimentAltResourcesHours = builder.accompanimentAltResourcesHours;
+        this.heavyCleaningHours = builder.heavyCleaningHours;
+        this.yardHazardAbatementHours = builder.yardHazardAbatementHours;
+        this.snowRemovalHours = builder.snowRemovalHours;
+        this.teachingDemoHours = builder.teachingDemoHours;
+        this.fiHousework = builder.fiHousework;
+        this.fiLaundry = builder.fiLaundry;
+        this.fiShopping = builder.fiShopping;
+        this.fiMealPrep = builder.fiMealPrep;
+        this.fiAmbulation = builder.fiAmbulation;
+        this.fiBathing = builder.fiBathing;
+        this.fiDressing = builder.fiDressing;
+        this.fiBowelBladder = builder.fiBowelBladder;
+        this.fiTransfer = builder.fiTransfer;
+        this.fiFeeding = builder.fiFeeding;
+        this.fiRespiration = builder.fiRespiration;
+        this.fiMemory = builder.fiMemory;
+        this.fiOrientation = builder.fiOrientation;
+        this.fiJudgment = builder.fiJudgment;
         this.functionalRankDomestic = builder.functionalRankDomestic;
         this.functionalRankRelated = builder.functionalRankRelated;
         this.functionalRankPersonal = builder.functionalRankPersonal;
@@ -309,29 +368,97 @@ public class ServiceEligibilityEntity {
     }
 
     /**
-     * Calculate Total Assessed Need per BR SE 01
+     * Calculate Total Assessed Need per BR SE 01 and BR SE 02.
+     *
+     * All service hour fields represent authorized hours per WEEK.
+     * Steps per DSD:
+     *   1. Sum all 25 service category weekly hours → raw weekly total
+     *   2. Apply adjustmentsHours (± correction field, e.g. protective supervision caps)
+     *   3. Apply prorationFactor (0.0–1.0) when recipient has partial-month eligibility
+     *      — prorationFactor = null or 1.0 means no proration (full month)
+     *
+     * Returns monthly total hours (weekly × 4.33), rounded to 2 decimal places.
      */
     public Double calculateTotalAssessedNeed() {
-        double total = 0.0;
-        if (domesticServicesHours != null) total += domesticServicesHours;
-        if (relatedServicesHours != null) total += relatedServicesHours;
-        if (personalCareHours != null) total += personalCareHours;
-        if (paramedicalHours != null) total += paramedicalHours;
-        if (protectiveSupervisionHours != null) total += protectiveSupervisionHours;
-        if (mealPreparationHours != null) total += mealPreparationHours;
-        if (mealCleanupHours != null) total += mealCleanupHours;
-        if (laundryHours != null) total += laundryHours;
-        if (shoppingErrandsHours != null) total += shoppingErrandsHours;
-        if (ambulationHours != null) total += ambulationHours;
-        if (bathingOralHygieneHours != null) total += bathingOralHygieneHours;
-        if (groomingHours != null) total += groomingHours;
-        if (dressingHours != null) total += dressingHours;
-        if (bowelBladderCareHours != null) total += bowelBladderCareHours;
-        if (transferRepositioningHours != null) total += transferRepositioningHours;
-        if (feedingHours != null) total += feedingHours;
-        if (respirationHours != null) total += respirationHours;
-        if (skinCareHours != null) total += skinCareHours;
-        return total;
+        // Step 1: Sum all 25 service categories (weekly hours)
+        double weeklyTotal = 0.0;
+        if (domesticServicesHours != null) weeklyTotal += domesticServicesHours;
+        if (relatedServicesHours != null) weeklyTotal += relatedServicesHours;
+        if (personalCareHours != null) weeklyTotal += personalCareHours;
+        if (paramedicalHours != null) weeklyTotal += paramedicalHours;
+        if (protectiveSupervisionHours != null) weeklyTotal += protectiveSupervisionHours;
+        if (mealPreparationHours != null) weeklyTotal += mealPreparationHours;
+        if (mealCleanupHours != null) weeklyTotal += mealCleanupHours;
+        if (laundryHours != null) weeklyTotal += laundryHours;
+        if (shoppingErrandsHours != null) weeklyTotal += shoppingErrandsHours;
+        if (ambulationHours != null) weeklyTotal += ambulationHours;
+        if (bathingOralHygieneHours != null) weeklyTotal += bathingOralHygieneHours;
+        if (groomingHours != null) weeklyTotal += groomingHours;
+        if (dressingHours != null) weeklyTotal += dressingHours;
+        if (bowelBladderCareHours != null) weeklyTotal += bowelBladderCareHours;
+        if (transferRepositioningHours != null) weeklyTotal += transferRepositioningHours;
+        if (feedingHours != null) weeklyTotal += feedingHours;
+        if (respirationHours != null) weeklyTotal += respirationHours;
+        if (skinCareHours != null) weeklyTotal += skinCareHours;
+        if (menstrualCareHours != null) weeklyTotal += menstrualCareHours;
+        if (accompanimentMedicalHours != null) weeklyTotal += accompanimentMedicalHours;
+        if (accompanimentAltResourcesHours != null) weeklyTotal += accompanimentAltResourcesHours;
+        if (heavyCleaningHours != null) weeklyTotal += heavyCleaningHours;
+        if (yardHazardAbatementHours != null) weeklyTotal += yardHazardAbatementHours;
+        if (snowRemovalHours != null) weeklyTotal += snowRemovalHours;
+        if (teachingDemoHours != null) weeklyTotal += teachingDemoHours;
+
+        // Step 2: Add adjustments (positive or negative correction hours per week)
+        if (adjustmentsHours != null) weeklyTotal += adjustmentsHours;
+
+        // Ensure no negative total
+        weeklyTotal = Math.max(0.0, weeklyTotal);
+
+        // Step 3: Convert weekly → monthly (DSD: 4.33 weeks/month)
+        double monthlyTotal = weeklyTotal * 4.33;
+
+        // Step 4: Apply proration factor (partial-month eligibility, BR SE 02)
+        if (prorationFactor != null && prorationFactor > 0.0 && prorationFactor < 1.0) {
+            monthlyTotal = monthlyTotal * prorationFactor;
+        }
+
+        // Round to 2 decimal places
+        return Math.round(monthlyTotal * 100.0) / 100.0;
+    }
+
+    /**
+     * Weekly assessed need (before monthly conversion and proration).
+     * Used by checkEligibility preview.
+     */
+    public Double calculateWeeklyAssessedNeed() {
+        double weeklyTotal = 0.0;
+        if (domesticServicesHours != null) weeklyTotal += domesticServicesHours;
+        if (relatedServicesHours != null) weeklyTotal += relatedServicesHours;
+        if (personalCareHours != null) weeklyTotal += personalCareHours;
+        if (paramedicalHours != null) weeklyTotal += paramedicalHours;
+        if (protectiveSupervisionHours != null) weeklyTotal += protectiveSupervisionHours;
+        if (mealPreparationHours != null) weeklyTotal += mealPreparationHours;
+        if (mealCleanupHours != null) weeklyTotal += mealCleanupHours;
+        if (laundryHours != null) weeklyTotal += laundryHours;
+        if (shoppingErrandsHours != null) weeklyTotal += shoppingErrandsHours;
+        if (ambulationHours != null) weeklyTotal += ambulationHours;
+        if (bathingOralHygieneHours != null) weeklyTotal += bathingOralHygieneHours;
+        if (groomingHours != null) weeklyTotal += groomingHours;
+        if (dressingHours != null) weeklyTotal += dressingHours;
+        if (bowelBladderCareHours != null) weeklyTotal += bowelBladderCareHours;
+        if (transferRepositioningHours != null) weeklyTotal += transferRepositioningHours;
+        if (feedingHours != null) weeklyTotal += feedingHours;
+        if (respirationHours != null) weeklyTotal += respirationHours;
+        if (skinCareHours != null) weeklyTotal += skinCareHours;
+        if (menstrualCareHours != null) weeklyTotal += menstrualCareHours;
+        if (accompanimentMedicalHours != null) weeklyTotal += accompanimentMedicalHours;
+        if (accompanimentAltResourcesHours != null) weeklyTotal += accompanimentAltResourcesHours;
+        if (heavyCleaningHours != null) weeklyTotal += heavyCleaningHours;
+        if (yardHazardAbatementHours != null) weeklyTotal += yardHazardAbatementHours;
+        if (snowRemovalHours != null) weeklyTotal += snowRemovalHours;
+        if (teachingDemoHours != null) weeklyTotal += teachingDemoHours;
+        if (adjustmentsHours != null) weeklyTotal += adjustmentsHours;
+        return Math.max(0.0, Math.round(weeklyTotal * 100.0) / 100.0);
     }
 
     /**
@@ -436,6 +563,56 @@ public class ServiceEligibilityEntity {
 
     public Double getSkinCareHours() { return skinCareHours; }
     public void setSkinCareHours(Double skinCareHours) { this.skinCareHours = skinCareHours; }
+
+    public Double getMenstrualCareHours() { return menstrualCareHours; }
+    public void setMenstrualCareHours(Double v) { this.menstrualCareHours = v; }
+
+    public Double getAccompanimentMedicalHours() { return accompanimentMedicalHours; }
+    public void setAccompanimentMedicalHours(Double v) { this.accompanimentMedicalHours = v; }
+
+    public Double getAccompanimentAltResourcesHours() { return accompanimentAltResourcesHours; }
+    public void setAccompanimentAltResourcesHours(Double v) { this.accompanimentAltResourcesHours = v; }
+
+    public Double getHeavyCleaningHours() { return heavyCleaningHours; }
+    public void setHeavyCleaningHours(Double v) { this.heavyCleaningHours = v; }
+
+    public Double getYardHazardAbatementHours() { return yardHazardAbatementHours; }
+    public void setYardHazardAbatementHours(Double v) { this.yardHazardAbatementHours = v; }
+
+    public Double getSnowRemovalHours() { return snowRemovalHours; }
+    public void setSnowRemovalHours(Double v) { this.snowRemovalHours = v; }
+
+    public Double getTeachingDemoHours() { return teachingDemoHours; }
+    public void setTeachingDemoHours(Double v) { this.teachingDemoHours = v; }
+
+    public Integer getFiHousework() { return fiHousework; }
+    public void setFiHousework(Integer v) { this.fiHousework = v; }
+    public Integer getFiLaundry() { return fiLaundry; }
+    public void setFiLaundry(Integer v) { this.fiLaundry = v; }
+    public Integer getFiShopping() { return fiShopping; }
+    public void setFiShopping(Integer v) { this.fiShopping = v; }
+    public Integer getFiMealPrep() { return fiMealPrep; }
+    public void setFiMealPrep(Integer v) { this.fiMealPrep = v; }
+    public Integer getFiAmbulation() { return fiAmbulation; }
+    public void setFiAmbulation(Integer v) { this.fiAmbulation = v; }
+    public Integer getFiBathing() { return fiBathing; }
+    public void setFiBathing(Integer v) { this.fiBathing = v; }
+    public Integer getFiDressing() { return fiDressing; }
+    public void setFiDressing(Integer v) { this.fiDressing = v; }
+    public Integer getFiBowelBladder() { return fiBowelBladder; }
+    public void setFiBowelBladder(Integer v) { this.fiBowelBladder = v; }
+    public Integer getFiTransfer() { return fiTransfer; }
+    public void setFiTransfer(Integer v) { this.fiTransfer = v; }
+    public Integer getFiFeeding() { return fiFeeding; }
+    public void setFiFeeding(Integer v) { this.fiFeeding = v; }
+    public Integer getFiRespiration() { return fiRespiration; }
+    public void setFiRespiration(Integer v) { this.fiRespiration = v; }
+    public Integer getFiMemory() { return fiMemory; }
+    public void setFiMemory(Integer v) { this.fiMemory = v; }
+    public Integer getFiOrientation() { return fiOrientation; }
+    public void setFiOrientation(Integer v) { this.fiOrientation = v; }
+    public Integer getFiJudgment() { return fiJudgment; }
+    public void setFiJudgment(Integer v) { this.fiJudgment = v; }
 
     public Integer getFunctionalRankDomestic() { return functionalRankDomestic; }
     public void setFunctionalRankDomestic(Integer functionalRankDomestic) { this.functionalRankDomestic = functionalRankDomestic; }
@@ -567,6 +744,16 @@ public class ServiceEligibilityEntity {
         private Double feedingHours;
         private Double respirationHours;
         private Double skinCareHours;
+        private Double menstrualCareHours;
+        private Double accompanimentMedicalHours;
+        private Double accompanimentAltResourcesHours;
+        private Double heavyCleaningHours;
+        private Double yardHazardAbatementHours;
+        private Double snowRemovalHours;
+        private Double teachingDemoHours;
+        private Integer fiHousework, fiLaundry, fiShopping, fiMealPrep, fiAmbulation;
+        private Integer fiBathing, fiDressing, fiBowelBladder, fiTransfer, fiFeeding;
+        private Integer fiRespiration, fiMemory, fiOrientation, fiJudgment;
         private Integer functionalRankDomestic;
         private Integer functionalRankRelated;
         private Integer functionalRankPersonal;
@@ -630,6 +817,13 @@ public class ServiceEligibilityEntity {
         public Builder feedingHours(Double feedingHours) { this.feedingHours = feedingHours; return this; }
         public Builder respirationHours(Double respirationHours) { this.respirationHours = respirationHours; return this; }
         public Builder skinCareHours(Double skinCareHours) { this.skinCareHours = skinCareHours; return this; }
+        public Builder menstrualCareHours(Double v) { this.menstrualCareHours = v; return this; }
+        public Builder accompanimentMedicalHours(Double v) { this.accompanimentMedicalHours = v; return this; }
+        public Builder accompanimentAltResourcesHours(Double v) { this.accompanimentAltResourcesHours = v; return this; }
+        public Builder heavyCleaningHours(Double v) { this.heavyCleaningHours = v; return this; }
+        public Builder yardHazardAbatementHours(Double v) { this.yardHazardAbatementHours = v; return this; }
+        public Builder snowRemovalHours(Double v) { this.snowRemovalHours = v; return this; }
+        public Builder teachingDemoHours(Double v) { this.teachingDemoHours = v; return this; }
         public Builder functionalRankDomestic(Integer functionalRankDomestic) { this.functionalRankDomestic = functionalRankDomestic; return this; }
         public Builder functionalRankRelated(Integer functionalRankRelated) { this.functionalRankRelated = functionalRankRelated; return this; }
         public Builder functionalRankPersonal(Integer functionalRankPersonal) { this.functionalRankPersonal = functionalRankPersonal; return this; }

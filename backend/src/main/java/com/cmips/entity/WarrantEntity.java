@@ -84,7 +84,7 @@ public class WarrantEntity {
     /**
      * IHSS Case Number.
      */
-    @Column(name = "case_number", nullable = false, length = 20)
+    @Column(name = "case_number", nullable = false, length = 50)
     private String caseNumber;
 
     /**

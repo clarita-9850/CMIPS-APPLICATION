@@ -8,6 +8,7 @@ import * as caseAttachmentsApi from '../api/caseAttachmentsApi';
 import * as homeVisitsApi from '../api/homeVisitsApi';
 import * as flexibleHoursApi from '../api/flexibleHoursApi';
 import * as formsApi from '../api/formsApi';
+import * as stateHearingsApi from '../api/stateHearingsApi';
 import { AddNoteModal } from './modals/AddNoteModal';
 import { AddContactModal } from './modals/AddContactModal';
 import { AssignCaseModal } from './modals/AssignCaseModal';
@@ -46,6 +47,9 @@ export const CaseDetailPage = () => {
   const [flexibleHours, setFlexibleHours] = useState([]);
   const [contractorInvoices, setContractorInvoices] = useState([]);
   const [mediCalSoc, setMediCalSoc] = useState(null);
+  const [hearings, setHearings] = useState([]);
+  const [showHearingModal, setShowHearingModal] = useState(false);
+  const [hearingForm, setHearingForm] = useState({});
   const [noas, setNoas] = useState([]);
   const [healthCerts, setHealthCerts] = useState([]);
   const [showNoaModal, setShowNoaModal] = useState(false);
@@ -65,6 +69,19 @@ export const CaseDetailPage = () => {
   const [showFlexModal, setShowFlexModal] = useState(false);
   const [showContractorModal, setShowContractorModal] = useState(false);
   const [showReassessModal, setShowReassessModal] = useState(false);
+
+  // Eligibility tab state
+  const [selectedAssessment, setSelectedAssessment] = useState(null);
+  const [showNewAssessmentModal, setShowNewAssessmentModal] = useState(false);
+  const [newAssessmentType, setNewAssessmentType] = useState('INITIAL');
+  const [serviceHoursForm, setServiceHoursForm] = useState({});
+  const [functionalIndexForm, setFunctionalIndexForm] = useState({});
+  const [socForm, setSocForm] = useState({});
+  const [eligibilityPreview, setEligibilityPreview] = useState(null);
+  const [showEligibilityPreview, setShowEligibilityPreview] = useState(false);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+
   const [showInactivateAgreementConfirm, setShowInactivateAgreementConfirm] = useState(null);
   const [inactivateReason, setInactivateReason] = useState('');
   const [modalError, setModalError] = useState('');
@@ -143,6 +160,8 @@ export const CaseDetailPage = () => {
       homeVisitsApi.getHomeVisits(id).then(d => setHomeVisits(Array.isArray(d) ? d : [])).catch(() => setHomeVisits([]));
     } else if (activeTab === 'contractor') {
       formsApi.getContractorInvoices(id).then(d => setContractorInvoices(Array.isArray(d) ? d : [])).catch(() => setContractorInvoices([]));
+    } else if (activeTab === 'hearings') {
+      stateHearingsApi.getHearingsByCase(id).then(d => setHearings(Array.isArray(d) ? d : [])).catch(() => setHearings([]));
     } else if (activeTab === 'medicalSoc') {
       casesApi.getMediCalSoc(id).then(d => setMediCalSoc(d)).catch(() => setMediCalSoc(null));
     } else if (activeTab === 'noa') {
@@ -272,6 +291,7 @@ export const CaseDetailPage = () => {
         <button className={`wq-tab ${activeTab === 'forms' ? 'active' : ''}`} onClick={() => setActiveTab('forms')}>Forms</button>
         <button className={`wq-tab ${activeTab === 'visits' ? 'active' : ''}`} onClick={() => setActiveTab('visits')}>Visits</button>
         <button className={`wq-tab ${activeTab === 'contractor' ? 'active' : ''}`} onClick={() => setActiveTab('contractor')}>Contractor</button>
+        <button className={`wq-tab ${activeTab === 'hearings' ? 'active' : ''}`} onClick={() => setActiveTab('hearings')}>Hearings</button>
         <button className={`wq-tab ${activeTab === 'medicalSoc' ? 'active' : ''}`} onClick={() => setActiveTab('medicalSoc')}>Medi-Cal</button>
         <button className={`wq-tab ${activeTab === 'noa' ? 'active' : ''}`} onClick={() => setActiveTab('noa')}>NOA</button>
         <button className={`wq-tab ${activeTab === 'healthCert' ? 'active' : ''}`} onClick={() => setActiveTab('healthCert')}>Health Cert</button>
@@ -453,90 +473,510 @@ export const CaseDetailPage = () => {
         </>
       )}
 
-      {/* Eligibility Tab */}
+      {/* Eligibility Tab — DSD Section 21 (Needs Assessment) + Section 22 (Final Determination) */}
       {activeTab === 'eligibility' && (
+        <>
+          {/* Assessment List */}
+          {!selectedAssessment && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Assessments ({assessments.length})</h4>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setNewAssessmentType('INITIAL'); setShowNewAssessmentModal(true); }}>New Assessment</button>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {assessments.length === 0 ? (
+                  <p className="wq-empty">No assessments for this case. Click "New Assessment" to begin.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead>
+                      <tr><th>ID</th><th>Type</th><th>Status</th><th>Assessment Date</th><th>Home Visit</th><th>Total Hrs/Mo</th><th>Reassessment Due</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody>
+                      {assessments.map(a => (
+                        <tr key={a.id}>
+                          <td>{a.id}</td>
+                          <td>{a.assessmentType || '—'}</td>
+                          <td><span className={`wq-badge wq-badge-${(a.status || 'pending').toLowerCase().replace(/_/g,'-')}`}>{a.status || 'PENDING'}</span></td>
+                          <td>{a.assessmentDate ? new Date(a.assessmentDate).toLocaleDateString() : '—'}</td>
+                          <td>{a.homeVisitDate ? new Date(a.homeVisitDate).toLocaleDateString() : '—'}</td>
+                          <td>{a.totalAuthorizedHoursMonthly != null ? a.totalAuthorizedHoursMonthly.toFixed(1) : '—'}</td>
+                          <td>{a.reassessmentDueDate ? new Date(a.reassessmentDueDate).toLocaleDateString() : '—'}</td>
+                          <td>
+                            <button className="wq-btn wq-btn-sm" onClick={() => {
+                              setSelectedAssessment(a);
+                              setServiceHoursForm({
+                                domesticServicesHours: a.domesticServicesHours ?? '',
+                                mealPreparationHours: a.mealPreparationHours ?? '',
+                                mealCleanupHours: a.mealCleanupHours ?? '',
+                                laundryHours: a.laundryHours ?? '',
+                                shoppingErrandsHours: a.shoppingErrandsHours ?? '',
+                                relatedServicesHours: a.relatedServicesHours ?? '',
+                                respirationHours: a.respirationHours ?? '',
+                                bowelBladderCareHours: a.bowelBladderCareHours ?? '',
+                                feedingHours: a.feedingHours ?? '',
+                                bathingOralHygieneHours: a.bathingOralHygieneHours ?? '',
+                                dressingHours: a.dressingHours ?? '',
+                                menstrualCareHours: a.menstrualCareHours ?? '',
+                                ambulationHours: a.ambulationHours ?? '',
+                                transferRepositioningHours: a.transferRepositioningHours ?? '',
+                                groomingHours: a.groomingHours ?? '',
+                                skinCareHours: a.skinCareHours ?? '',
+                                accompanimentMedicalHours: a.accompanimentMedicalHours ?? '',
+                                accompanimentAltResourcesHours: a.accompanimentAltResourcesHours ?? '',
+                                protectiveSupervisionHours: a.protectiveSupervisionHours ?? '',
+                                paramedicalHours: a.paramedicalHours ?? '',
+                                heavyCleaningHours: a.heavyCleaningHours ?? '',
+                                yardHazardAbatementHours: a.yardHazardAbatementHours ?? '',
+                                snowRemovalHours: a.snowRemovalHours ?? '',
+                                teachingDemoHours: a.teachingDemoHours ?? '',
+                                personalCareHours: a.personalCareHours ?? '',
+                              });
+                              setFunctionalIndexForm({
+                                fiHousework: a.fiHousework ?? '', fiLaundry: a.fiLaundry ?? '',
+                                fiShopping: a.fiShopping ?? '', fiMealPrep: a.fiMealPrep ?? '',
+                                fiAmbulation: a.fiAmbulation ?? '', fiBathing: a.fiBathing ?? '',
+                                fiDressing: a.fiDressing ?? '', fiBowelBladder: a.fiBowelBladder ?? '',
+                                fiTransfer: a.fiTransfer ?? '', fiFeeding: a.fiFeeding ?? '',
+                                fiRespiration: a.fiRespiration ?? '', fiMemory: a.fiMemory ?? '',
+                                fiOrientation: a.fiOrientation ?? '', fiJudgment: a.fiJudgment ?? '',
+                              });
+                              setSocForm({ netIncome: a.netIncome ?? '', countableIncome: a.countableIncome ?? '' });
+                            }}>Open</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Assessment Detail Panel */}
+          {selectedAssessment && (() => {
+            const a = selectedAssessment;
+            const isPending = ['PENDING', 'IN_PROGRESS'].includes(a.status);
+            const isPendingReview = a.status === 'PENDING_SUPERVISOR_REVIEW' || a.status === 'PENDING_APPROVAL';
+            const isApproved = a.status === 'APPROVED';
+
+            const saveServiceHours = () => {
+              const clean = {};
+              Object.entries(serviceHoursForm).forEach(([k, v]) => { if (v !== '') clean[k] = parseFloat(v) || 0; });
+              eligibilityApi.updateServiceHours(a.id, clean)
+                .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                .catch(err => setActionError(err?.response?.data?.message || 'Failed to save hours'));
+            };
+
+            const saveFunctionalIndex = () => {
+              const clean = {};
+              Object.entries(functionalIndexForm).forEach(([k, v]) => { if (v !== '') clean[k] = parseInt(v); });
+              // send as part of functionalRanks update — map fi* fields
+              eligibilityApi.updateFunctionalRanks(a.id, clean)
+                .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                .catch(err => setActionError(err?.response?.data?.message || 'Failed to save functional index'));
+            };
+
+            const saveSoc = () => {
+              eligibilityApi.updateShareOfCost(a.id, { netIncome: parseFloat(socForm.netIncome) || 0, countableIncome: parseFloat(socForm.countableIncome) || 0 })
+                .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                .catch(err => setActionError(err?.response?.data?.message || 'Failed to save SOC'));
+            };
+
+            const SERVICE_TYPES = [
+              { key: 'domesticServicesHours',            label: '1. Domestic Services' },
+              { key: 'mealPreparationHours',             label: '2. Preparation of Meals' },
+              { key: 'mealCleanupHours',                 label: '3. Meal Clean-up' },
+              { key: 'laundryHours',                     label: '4. Laundry' },
+              { key: 'shoppingErrandsHours',             label: '5. Shopping for Food' },
+              { key: 'relatedServicesHours',             label: '6. Other Shopping & Errands' },
+              { key: 'respirationHours',                 label: '7. Respiration' },
+              { key: 'bowelBladderCareHours',            label: '8. Bowel & Bladder Care' },
+              { key: 'feedingHours',                     label: '9. Feeding' },
+              { key: 'bathingOralHygieneHours',          label: '10. Bathing, Oral Hygiene & Grooming' },
+              { key: 'dressingHours',                    label: '11. Dressing' },
+              { key: 'menstrualCareHours',               label: '12. Menstrual Care' },
+              { key: 'ambulationHours',                  label: '13. Ambulation' },
+              { key: 'transferRepositioningHours',       label: '14. Transfer' },
+              { key: 'groomingHours',                    label: '15. Grooming' },
+              { key: 'skinCareHours',                    label: '16. Rubbing Skin / Repositioning' },
+              { key: 'personalCareHours',                label: '17. Care with Prosthesis' },
+              { key: 'accompanimentMedicalHours',        label: '18. Accompaniment – Medical Appt' },
+              { key: 'accompanimentAltResourcesHours',   label: '19. Accompaniment – Alt Resources' },
+              { key: 'protectiveSupervisionHours',       label: '20. Protective Supervision' },
+              { key: 'paramedicalHours',                 label: '21. Paramedical Services' },
+              { key: 'heavyCleaningHours',               label: '22. Heavy Cleaning' },
+              { key: 'yardHazardAbatementHours',         label: '23. Yard Hazard Abatement' },
+              { key: 'snowRemovalHours',                 label: '24. Removal of Snow / Ice' },
+              { key: 'teachingDemoHours',                label: '25. Teaching & Demonstration' },
+            ];
+
+            const FUNC_AREAS = [
+              { key: 'fiHousework',    label: 'Housework' },
+              { key: 'fiLaundry',      label: 'Laundry' },
+              { key: 'fiShopping',     label: 'Shopping' },
+              { key: 'fiMealPrep',     label: 'Meal Preparation' },
+              { key: 'fiAmbulation',   label: 'Ambulation' },
+              { key: 'fiBathing',      label: 'Bathing / Grooming' },
+              { key: 'fiDressing',     label: 'Dressing' },
+              { key: 'fiBowelBladder', label: 'Bowel/Bladder/Menstrual Care' },
+              { key: 'fiTransfer',     label: 'Transfer' },
+              { key: 'fiFeeding',      label: 'Feeding' },
+              { key: 'fiRespiration',  label: 'Respiration' },
+              { key: 'fiMemory',       label: 'Memory' },
+              { key: 'fiOrientation',  label: 'Orientation' },
+              { key: 'fiJudgment',     label: 'Judgment' },
+            ];
+
+            return (
+              <>
+                {/* Detail Header */}
+                <div className="wq-panel">
+                  <div className="wq-panel-header">
+                    <h4>Assessment #{a.id} — {a.assessmentType}</h4>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <span className={`wq-badge wq-badge-${(a.status || 'pending').toLowerCase().replace(/_/g,'-')}`}>{a.status || 'PENDING'}</span>
+                      <button className="wq-btn wq-btn-outline" onClick={() => setSelectedAssessment(null)}>Back to List</button>
+                    </div>
+                  </div>
+                  <div className="wq-panel-body">
+                    <div className="wq-detail-grid">
+                      <div className="wq-detail-row"><span className="wq-detail-label">Assessment Date:</span><span className="wq-detail-value">{a.assessmentDate || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Home Visit Date:</span><span className="wq-detail-value">{a.homeVisitDate || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Reassessment Due:</span><span className="wq-detail-value">{a.reassessmentDueDate || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Auth Start:</span><span className="wq-detail-value">{a.authorizationStartDate || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Auth End:</span><span className="wq-detail-value">{a.authorizationEndDate || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Waiver Program:</span><span className="wq-detail-value">{a.waiverProgram || 'IHSS'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Total Hours/Month:</span><span className="wq-detail-value"><strong>{a.totalAuthorizedHoursMonthly != null ? a.totalAuthorizedHoursMonthly.toFixed(2) : '—'}</strong></span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Total Hours/Week:</span><span className="wq-detail-value">{a.totalAuthorizedHoursWeekly != null ? a.totalAuthorizedHoursWeekly.toFixed(2) : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Assessor:</span><span className="wq-detail-value">{a.assessorName || a.createdBy || '—'}</span></div>
+                    </div>
+
+                    {/* Record Home Visit */}
+                    {isPending && !a.homeVisitDate && (
+                      <div style={{ marginTop: '1rem' }}>
+                        <label style={{ fontWeight: 600, display: 'block', marginBottom: 4 }}>Record Home Visit Date</label>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <input type="date" id="hvDate" className="wq-input" style={{ width: 180 }} />
+                          <button className="wq-btn wq-btn-outline" onClick={() => {
+                            const d = document.getElementById('hvDate').value;
+                            if (!d) return;
+                            eligibilityApi.recordHomeVisit(a.id, d)
+                              .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                              .catch(err => setActionError(err?.response?.data?.message || 'Failed to record home visit'));
+                          }}>Save</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Workflow Buttons — DSD Section 22 */}
+                    <div style={{ marginTop: '1rem', display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                      <button className="wq-btn wq-btn-outline" onClick={() => {
+                        eligibilityApi.checkEligibility(a.id)
+                          .then(preview => { setEligibilityPreview(preview); setShowEligibilityPreview(true); })
+                          .catch(err => setActionError(err?.response?.data?.message || 'Check Eligibility failed'));
+                      }}>Check Eligibility (Preview)</button>
+
+                      {isPending && (
+                        <button className="wq-btn wq-btn-primary" onClick={() => {
+                          eligibilityApi.submitForApproval(a.id)
+                            .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                            .catch(err => setActionError(err?.response?.data?.message || 'Submit failed'));
+                        }}>Submit for Approval</button>
+                      )}
+
+                      {isPendingReview && (
+                        <>
+                          <button className="wq-btn wq-btn-primary" onClick={() => {
+                            eligibilityApi.approveAssessment(a.id)
+                              .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); })
+                              .catch(err => setActionError(err?.response?.data?.message || 'Approval failed'));
+                          }}>Approve</button>
+                          <button className="wq-btn wq-btn-danger" onClick={() => { setRejectReason(''); setShowRejectModal(true); }}>Reject</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 25-Service Type Hours Grid */}
+                <div className="wq-panel">
+                  <div className="wq-panel-header">
+                    <h4>Service Type Hours — All 25 IHSS Services (BR SE 01)</h4>
+                    {(isPending || isPendingReview) && (
+                      <button className="wq-btn wq-btn-primary" onClick={saveServiceHours}>Save Hours</button>
+                    )}
+                  </div>
+                  <div className="wq-panel-body">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.75rem' }}>
+                      {SERVICE_TYPES.map(({ key, label }) => (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <label style={{ flex: 1, fontSize: '0.85rem' }}>{label}</label>
+                          <input
+                            type="number" min="0" step="0.25"
+                            className="wq-input"
+                            style={{ width: 80, textAlign: 'right' }}
+                            value={serviceHoursForm[key] ?? ''}
+                            disabled={isApproved}
+                            onChange={e => setServiceHoursForm(prev => ({ ...prev, [key]: e.target.value }))}
+                          />
+                          <span style={{ fontSize: '0.8rem', color: '#666', width: 30 }}>hrs</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: '1rem', padding: '0.5rem', background: '#f0f4ff', borderRadius: 4, fontSize: '0.9rem' }}>
+                      <strong>Total Assessed Need:</strong> {
+                        Object.values(serviceHoursForm).reduce((s, v) => s + (parseFloat(v) || 0), 0).toFixed(2)
+                      } hrs/month &nbsp;|&nbsp;
+                      {(Object.values(serviceHoursForm).reduce((s, v) => s + (parseFloat(v) || 0), 0) / 4.33).toFixed(2)} hrs/week
+                    </div>
+                  </div>
+                </div>
+
+                {/* Functional Index Scores (14 areas, 1-6) */}
+                <div className="wq-panel">
+                  <div className="wq-panel-header">
+                    <h4>Functional Index Scores — 14 Functional Areas (1=No Impairment, 6=Paramedical Need)</h4>
+                    {(isPending || isPendingReview) && (
+                      <button className="wq-btn wq-btn-primary" onClick={saveFunctionalIndex}>Save Scores</button>
+                    )}
+                  </div>
+                  <div className="wq-panel-body">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.75rem' }}>
+                      {FUNC_AREAS.map(({ key, label }) => (
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          <label style={{ flex: 1, fontSize: '0.85rem' }}>{label}</label>
+                          <select
+                            className="wq-input"
+                            style={{ width: 70 }}
+                            value={functionalIndexForm[key] ?? ''}
+                            disabled={isApproved}
+                            onChange={e => setFunctionalIndexForm(prev => ({ ...prev, [key]: e.target.value }))}
+                          >
+                            <option value="">—</option>
+                            {[1,2,3,4,5,6].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Share of Cost */}
+                <div className="wq-panel">
+                  <div className="wq-panel-header">
+                    <h4>Share of Cost / Income (BR SE 13-15)</h4>
+                    {isPending && <button className="wq-btn wq-btn-primary" onClick={saveSoc}>Save</button>}
+                  </div>
+                  <div className="wq-panel-body">
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', maxWidth: 600 }}>
+                      <div>
+                        <label className="wq-label">Net Income ($)</label>
+                        <input type="number" className="wq-input" value={socForm.netIncome} disabled={!isPending}
+                          onChange={e => setSocForm(prev => ({ ...prev, netIncome: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">Countable Income ($)</label>
+                        <input type="number" className="wq-input" value={socForm.countableIncome} disabled={!isPending}
+                          onChange={e => setSocForm(prev => ({ ...prev, countableIncome: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">IHSS Share of Cost ($)</label>
+                        <input type="number" className="wq-input" value={a.ihssShareOfCost ?? ''} disabled readOnly />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+
+          {/* New Assessment Modal */}
+          {showNewAssessmentModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowNewAssessmentModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+                <div className="wq-modal-header"><h3>New Assessment</h3></div>
+                <div className="wq-modal-body">
+                  <label className="wq-label">Assessment Type</label>
+                  <select className="wq-input" value={newAssessmentType} onChange={e => setNewAssessmentType(e.target.value)}>
+                    <option value="INITIAL">INITIAL</option>
+                    <option value="CHANGE">CHANGE</option>
+                    <option value="REASSESSMENT">REASSESSMENT</option>
+                    <option value="INTER_COUNTY_TRANSFER">INTER_COUNTY_TRANSFER</option>
+                    <option value="TELEHEALTH">TELEHEALTH</option>
+                  </select>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowNewAssessmentModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" onClick={() => {
+                    eligibilityApi.createAssessment({ caseId: parseInt(id), assessmentType: newAssessmentType })
+                      .then(created => {
+                        setAssessments(prev => [created, ...prev]);
+                        setShowNewAssessmentModal(false);
+                      })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to create assessment'));
+                  }}>Create</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Check Eligibility Preview Modal */}
+          {showEligibilityPreview && eligibilityPreview && (
+            <div className="wq-modal-overlay" onClick={() => setShowEligibilityPreview(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+                <div className="wq-modal-header"><h3>Eligibility Preview — DSD Section 22</h3></div>
+                <div className="wq-modal-body">
+                  <div style={{ background: '#fffbeb', border: '1px solid #f6ad55', borderLeft: '4px solid #dd6b20', padding: '0.5rem 0.75rem', borderRadius: 4, marginBottom: '1rem', fontSize: '0.85rem' }}>
+                    {eligibilityPreview.message}
+                  </div>
+                  <div className="wq-detail-grid">
+                    <div className="wq-detail-row"><span className="wq-detail-label">Determination:</span><span className="wq-detail-value"><strong style={{ color: eligibilityPreview.eligible ? '#276749' : '#c53030' }}>{eligibilityPreview.determination}</strong></span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">Total Need (Monthly):</span><span className="wq-detail-value">{eligibilityPreview.totalAssessedNeedMonthly} hrs</span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">Total Need (Weekly):</span><span className="wq-detail-value">{eligibilityPreview.totalAssessedNeedWeekly} hrs</span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">Estimated SOC:</span><span className="wq-detail-value">${eligibilityPreview.estimatedShareOfCost}</span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">Mode of Service:</span><span className="wq-detail-value">{eligibilityPreview.modeOfService}</span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">Funding Source:</span><span className="wq-detail-value">{eligibilityPreview.fundingSource}</span></div>
+                    <div className="wq-detail-row"><span className="wq-detail-label">NOA Generated:</span><span className="wq-detail-value">No (Preview Only)</span></div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-primary" onClick={() => setShowEligibilityPreview(false)}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Reject Modal */}
+          {showRejectModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowRejectModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 420 }}>
+                <div className="wq-modal-header"><h3>Reject Assessment</h3></div>
+                <div className="wq-modal-body">
+                  <label className="wq-label">Rejection Reason (required)</label>
+                  <textarea className="wq-input" rows={3} value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                    placeholder="Enter reason for rejection..." style={{ width: '100%' }} />
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowRejectModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-danger" disabled={!rejectReason.trim()} onClick={() => {
+                    eligibilityApi.rejectAssessment(selectedAssessment.id, rejectReason)
+                      .then(updated => { setSelectedAssessment(updated); setAssessments(prev => prev.map(x => x.id === updated.id ? updated : x)); setShowRejectModal(false); })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Rejection failed'));
+                  }}>Reject Assessment</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Hearings Tab — DSD Section 20 (State Hearings per CI-67779/67705/67680) */}
+      {activeTab === 'hearings' && (
         <>
           <div className="wq-panel">
             <div className="wq-panel-header">
-              <h4>Assessments ({assessments.length})</h4>
-              <button className="wq-btn wq-btn-primary" onClick={() => {
-                eligibilityApi.createAssessment(id, { assessmentType: 'INITIAL', requestedBy: username })
-                  .then(() => setActiveTab('eligibility'))
-                  .catch(err => setActionError(err?.message || 'Failed to create assessment'));
-              }}>New Assessment</button>
+              <h4>State Hearings ({hearings.length})</h4>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="wq-btn wq-btn-outline" onClick={() => window.open('/cases/state-hearing', '_blank')}>Search All Hearings</button>
+                <button className="wq-btn wq-btn-primary" onClick={() => { setHearingForm({ caseId: id, hearingRequestDate: '', scheduledHearingDate: '', hearingIssue: '' }); setShowHearingModal(true); }}>Schedule Hearing</button>
+              </div>
             </div>
             <div className="wq-panel-body" style={{ padding: 0 }}>
-              {assessments.length === 0 ? (
-                <p className="wq-empty">No assessments for this case.</p>
+              {hearings.length === 0 ? (
+                <p className="wq-empty">No state hearings on record for this case.</p>
               ) : (
                 <table className="wq-table">
                   <thead>
-                    <tr><th>ID</th><th>Type</th><th>Status</th><th>Date</th><th>Authorized Hours</th></tr>
+                    <tr>
+                      <th>Hearing ID</th>
+                      <th>Status</th>
+                      <th>Request Date</th>
+                      <th>Scheduled Date</th>
+                      <th>Issue</th>
+                      <th>Outcome</th>
+                      <th>Compliance Date</th>
+                    </tr>
                   </thead>
                   <tbody>
-                    {assessments.map(a => (
-                      <tr key={a.id}>
-                        <td>{a.id}</td>
-                        <td>{a.assessmentType || a.type || '\u2014'}</td>
-                        <td><span className={`wq-badge wq-badge-${(a.status || '').toLowerCase()}`}>{a.status || '\u2014'}</span></td>
-                        <td>{a.assessmentDate ? new Date(a.assessmentDate).toLocaleDateString() : '\u2014'}</td>
-                        <td>{a.authorizedHours ?? '\u2014'}</td>
-                      </tr>
-                    ))}
+                    {hearings.map(h => {
+                      const statusColor = h.stateHearingStatus === 'RESOLVED'
+                        ? { bg: '#c6f6d5', color: '#276749' }
+                        : h.stateHearingStatus === 'SCHEDULED'
+                        ? { bg: '#bee3f8', color: '#2b6cb0' }
+                        : { bg: '#feebc8', color: '#c05621' };
+                      return (
+                        <tr key={h.id}>
+                          <td>{h.id}</td>
+                          <td>
+                            <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontWeight: 600, fontSize: '0.82rem', backgroundColor: statusColor.bg, color: statusColor.color }}>
+                              {h.stateHearingStatus || '—'}
+                            </span>
+                          </td>
+                          <td>{h.hearingRequestDate ? new Date(h.hearingRequestDate).toLocaleDateString() : '—'}</td>
+                          <td>{h.scheduledHearingDate ? new Date(h.scheduledHearingDate).toLocaleDateString() : '—'}</td>
+                          <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.hearingIssue || '—'}</td>
+                          <td>{h.hearingOutcome || '—'}</td>
+                          <td>{h.complianceDate ? new Date(h.complianceDate).toLocaleDateString() : '—'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
             </div>
           </div>
 
-          <div className="wq-panel">
-            <div className="wq-panel-header">
-              <h4>Service Plans ({servicePlans.length})</h4>
-              <button className="wq-btn wq-btn-primary" onClick={() => {
-                eligibilityApi.createServicePlan(id, { createdBy: username })
-                  .then(() => setActiveTab('eligibility'))
-                  .catch(err => setActionError(err?.message || 'Failed to create service plan'));
-              }}>New Service Plan</button>
+          {/* Schedule Hearing Modal */}
+          {showHearingModal && (
+            <div className="wq-modal-overlay" onClick={() => setShowHearingModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 480 }}>
+                <div className="wq-modal-header"><h3>Schedule State Hearing</h3></div>
+                <div className="wq-modal-body">
+                  {modalError && <div style={{ color: '#c53030', marginBottom: 8, fontSize: '0.875rem' }}>{modalError}</div>}
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div>
+                      <label className="wq-label">Hearing Request Date <span style={{ color: 'red' }}>*</span></label>
+                      <input type="date" className="wq-input" value={hearingForm.hearingRequestDate || ''}
+                        onChange={e => setHearingForm(p => ({ ...p, hearingRequestDate: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="wq-label">Scheduled Hearing Date</label>
+                      <input type="date" className="wq-input" value={hearingForm.scheduledHearingDate || ''}
+                        onChange={e => setHearingForm(p => ({ ...p, scheduledHearingDate: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="wq-label">Hearing Issue <span style={{ color: 'red' }}>*</span></label>
+                      <textarea className="wq-input" rows={3} value={hearingForm.hearingIssue || ''}
+                        onChange={e => setHearingForm(p => ({ ...p, hearingIssue: e.target.value }))}
+                        placeholder="Describe the issue being appealed..." style={{ width: '100%' }} />
+                    </div>
+                    <div>
+                      <label className="wq-label">County</label>
+                      <input type="text" className="wq-input" value={hearingForm.countyCode || ''}
+                        onChange={e => setHearingForm(p => ({ ...p, countyCode: e.target.value }))}
+                        placeholder="e.g. Sacramento" />
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => { setShowHearingModal(false); setModalError(''); }}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" onClick={() => {
+                    if (!hearingForm.hearingRequestDate || !hearingForm.hearingIssue) {
+                      setModalError('Hearing Request Date and Issue are required.');
+                      return;
+                    }
+                    stateHearingsApi.createHearing({ ...hearingForm, caseId: parseInt(id), createdBy: username })
+                      .then(created => {
+                        setHearings(prev => [created, ...prev]);
+                        setShowHearingModal(false);
+                        setModalError('');
+                      })
+                      .catch(err => setModalError(err?.response?.data?.message || 'Failed to schedule hearing'));
+                  }}>Schedule</button>
+                </div>
+              </div>
             </div>
-            <div className="wq-panel-body" style={{ padding: 0 }}>
-              {servicePlans.length === 0 ? (
-                <p className="wq-empty">No service plans for this case.</p>
-              ) : (
-                <table className="wq-table">
-                  <thead>
-                    <tr><th>ID</th><th>Status</th><th>Start Date</th><th>End Date</th><th>Created By</th></tr>
-                  </thead>
-                  <tbody>
-                    {servicePlans.map(sp => (
-                      <tr key={sp.id}>
-                        <td>{sp.id}</td>
-                        <td><span className={`wq-badge wq-badge-${(sp.status || '').toLowerCase()}`}>{sp.status || '\u2014'}</span></td>
-                        <td>{sp.startDate ? new Date(sp.startDate).toLocaleDateString() : '\u2014'}</td>
-                        <td>{sp.endDate ? new Date(sp.endDate).toLocaleDateString() : '\u2014'}</td>
-                        <td>{sp.createdBy || '\u2014'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-
-          <div className="wq-panel">
-            <div className="wq-panel-header">
-              <h4>Schedule Reassessment</h4>
-            </div>
-            <div className="wq-panel-body">
-              <button className="wq-btn wq-btn-outline" onClick={() => {
-                const date = prompt('Enter reassessment date (YYYY-MM-DD):');
-                if (date) {
-                  eligibilityApi.scheduleReassessment(id, { scheduledDate: date, scheduledBy: username })
-                    .then(() => alert('Reassessment scheduled.'))
-                    .catch(err => setActionError(err?.message || 'Failed to schedule'));
-                }
-              }}>Schedule Reassessment</button>
-            </div>
-          </div>
+          )}
         </>
       )}
 

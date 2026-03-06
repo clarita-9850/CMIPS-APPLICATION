@@ -46,6 +46,7 @@ public class CaseManagementService {
     private final CaseMaintenanceTaskService cmTaskService; // DSD Section 30 — Case Maintenance tasks/notifications
     private final TaskAutoCloseService taskAutoCloseService; // DSD GAP 3 — Auto-close tasks on business events
     private final BusinessDayCalculator businessDayCalc;
+    private final FPOEligibilityRepository fpoEligibilityRepository;
 
     // Aid codes excluded from S8 notification per BR OS 16
     private static final Set<String> EXCLUDED_AID_CODES = Set.of("10", "20", "60");
@@ -68,7 +69,8 @@ public class CaseManagementService {
             PayrollIntegrationService payrollIntegrationService,
             CaseMaintenanceTaskService cmTaskService,
             TaskAutoCloseService taskAutoCloseService,
-            BusinessDayCalculator businessDayCalc) {
+            BusinessDayCalculator businessDayCalc,
+            FPOEligibilityRepository fpoEligibilityRepository) {
         this.caseRepository = caseRepository;
         this.recipientRepository = recipientRepository;
         this.serviceEligibilityRepository = serviceEligibilityRepository;
@@ -87,6 +89,7 @@ public class CaseManagementService {
         this.cmTaskService = cmTaskService;
         this.taskAutoCloseService = taskAutoCloseService;
         this.businessDayCalc = businessDayCalc;
+        this.fpoEligibilityRepository = fpoEligibilityRepository;
     }
 
     // ==================== CASE CREATION ====================
@@ -1554,5 +1557,56 @@ public class CaseManagementService {
                 return new CaseStatistics(pendingCount, eligibleCount, onLeaveCount, deniedCount, terminatedCount);
             }
         }
+    }
+
+    // ==================== FPO ELIGIBILITY (CI-67555) ====================
+
+    /**
+     * Get current active FPO eligibility for a case.
+     * Returns the most recent ACTIVE record, or null if none exists.
+     */
+    public FPOEligibilityEntity getFpoEligibility(Long caseId) {
+        return fpoEligibilityRepository.findActiveByCaseId(caseId).orElse(null);
+    }
+
+    /**
+     * Get full FPO eligibility history for a case (all records, newest first).
+     */
+    public List<FPOEligibilityEntity> getFpoEligibilityHistory(Long caseId) {
+        return fpoEligibilityRepository.findHistoryByCaseId(caseId);
+    }
+
+    /**
+     * Set (create or update) FPO eligibility for a case.
+     * If an ACTIVE record already exists, inactivate it and create a new one.
+     * This preserves the full audit history.
+     */
+    @Transactional
+    public FPOEligibilityEntity setFpoEligibility(Long caseId, Boolean fpoEligible,
+                                                   LocalDate beginDate, LocalDate endDate,
+                                                   String notes, String userId) {
+        caseRepository.findById(caseId)
+                .orElseThrow(() -> new RuntimeException("Case not found: " + caseId));
+
+        // Inactivate any existing active record
+        fpoEligibilityRepository.findActiveByCaseId(caseId).ifPresent(existing -> {
+            existing.setStatus("INACTIVE");
+            existing.setInactivatedDate(LocalDate.now());
+            existing.setInactivatedBy(userId);
+            fpoEligibilityRepository.save(existing);
+        });
+
+        FPOEligibilityEntity record = new FPOEligibilityEntity();
+        record.setCaseId(caseId);
+        record.setFpoEligible(fpoEligible);
+        record.setBeginDate(beginDate);
+        record.setEndDate(endDate);
+        record.setNotes(notes);
+        record.setStatus("ACTIVE");
+        record.setCreatedBy(userId);
+        record.setUpdatedBy(userId);
+
+        log.info("FPO eligibility set to {} for case {} by {}", fpoEligible, caseId, userId);
+        return fpoEligibilityRepository.save(record);
     }
 }

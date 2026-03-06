@@ -175,7 +175,7 @@ public class CaseEntity {
     @Column(name = "withdrawal_date")
     private LocalDate withdrawalDate;
 
-    @Column(name = "withdrawal_reason", length = 50)
+    @Column(name = "withdrawal_reason", length = 500)
     private String withdrawalReason;
 
     // Leave tracking (DSD Section 3.2)

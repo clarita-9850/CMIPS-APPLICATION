@@ -41,6 +41,7 @@ public class ProviderManagementService {
     private final CaseRepository caseRepository;
     private final TaskService taskService;
     private final TaskAutoCloseService taskAutoCloseService;
+    private final ProviderTrainingRepository providerTrainingRepository;
 
     public ProviderManagementService(
             ProviderRepository providerRepository,
@@ -55,7 +56,8 @@ public class ProviderManagementService {
             BackupProviderHoursRepository backupProviderHoursRepository,
             CaseRepository caseRepository,
             TaskService taskService,
-            TaskAutoCloseService taskAutoCloseService) {
+            TaskAutoCloseService taskAutoCloseService,
+            ProviderTrainingRepository providerTrainingRepository) {
         this.providerRepository = providerRepository;
         this.providerCoriRepository = providerCoriRepository;
         this.providerAssignmentRepository = providerAssignmentRepository;
@@ -69,6 +71,7 @@ public class ProviderManagementService {
         this.caseRepository = caseRepository;
         this.taskService = taskService;
         this.taskAutoCloseService = taskAutoCloseService;
+        this.providerTrainingRepository = providerTrainingRepository;
     }
 
     // ==================== PROVIDER ENROLLMENT ====================
@@ -1338,5 +1341,138 @@ public class ProviderManagementService {
             log.warn("Provider {} terminated due to SSN verification result: {}", providerId, verificationStatus);
         }
         return providerRepository.save(provider);
+    }
+
+    // ==================== PROVIDER TRAINING (CI-117545 / CI-67804) ====================
+
+    /**
+     * List all training records for a provider, sorted by completion date descending.
+     */
+    public List<ProviderTrainingEntity> getProviderTraining(Long providerId) {
+        return providerTrainingRepository.findByProviderIdOrderByCompletionDateDesc(providerId);
+    }
+
+    /**
+     * Record a training completion for a provider.
+     * Automatically computes required hours for annual refresher records based on fiscal year.
+     */
+    @Transactional
+    public ProviderTrainingEntity recordTraining(Long providerId, ProviderTrainingEntity training, String userId) {
+        providerRepository.findById(providerId)
+                .orElseThrow(() -> new RuntimeException("Provider not found: " + providerId));
+
+        training.setProviderId(providerId);
+        training.setCreatedBy(userId);
+        training.setUpdatedBy(userId);
+
+        // Auto-set fiscal year and required hours for annual refresher
+        if ("ANNUAL_REFRESHER".equals(training.getTrainingType()) && training.getCompletionDate() != null) {
+            if (training.getFiscalYear() == null) {
+                training.setFiscalYear(ProviderTrainingEntity.fiscalYearFor(training.getCompletionDate()));
+            }
+            if (training.getHoursRequiredMinutes() == null) {
+                // Use July 1 of the fiscal year start to determine required hours
+                String fy = training.getFiscalYear();
+                int startYear = Integer.parseInt(fy.substring(0, 4));
+                LocalDate fyStart = LocalDate.of(startYear, 7, 1);
+                training.setHoursRequiredMinutes(
+                        ProviderTrainingEntity.requiredHoursMinutesForFiscalYearStart(fyStart));
+            }
+        }
+
+        // Update ProviderEntity orientation fields when initial orientation is recorded
+        if ("INITIAL_ORIENTATION".equals(training.getTrainingType()) && training.getCompletionDate() != null) {
+            providerRepository.findById(providerId).ifPresent(p -> {
+                p.setOrientationCompleted(true);
+                p.setOrientationDate(training.getCompletionDate());
+                p.setUpdatedBy(userId);
+                providerRepository.save(p);
+            });
+        }
+
+        log.info("Training {} recorded for provider {} by {}", training.getTrainingType(), providerId, userId);
+        return providerTrainingRepository.save(training);
+    }
+
+    /**
+     * Provider Qualification Summary — CI-67804 / CI-117545
+     *
+     * Returns a checklist of all DSD Section 23 enrollment requirements and their completion status.
+     * Used by the Provider Qualification page to show the overall qualification status.
+     */
+    public java.util.Map<String, Object> getQualificationSummary(Long providerId) {
+        ProviderEntity provider = providerRepository.findById(providerId)
+                .orElseThrow(() -> new RuntimeException("Provider not found: " + providerId));
+
+        List<ProviderCoriEntity> activeCori = providerCoriRepository.findActiveCoriByProviderId(providerId);
+        boolean hasTier1 = providerCoriRepository.hasActiveTier1Conviction(providerId);
+        boolean hasTier2WithoutWaiver = providerCoriRepository.hasTier2WithoutWaiver(providerId);
+
+        String currentFiscalYear = ProviderTrainingEntity.fiscalYearFor(LocalDate.now());
+        java.util.Optional<ProviderTrainingEntity> currentYearTraining =
+                providerTrainingRepository.findActiveByProviderAndFiscalYear(providerId, currentFiscalYear);
+
+        LocalDate fyStart = LocalDate.of(Integer.parseInt(currentFiscalYear.substring(0, 4)), 7, 1);
+        int requiredMinutes = ProviderTrainingEntity.requiredHoursMinutesForFiscalYearStart(fyStart);
+
+        // Determine CORI status
+        String coriStatus;
+        if (activeCori.isEmpty()) {
+            coriStatus = "CLEAR";
+        } else if (hasTier1) {
+            coriStatus = "DISQUALIFYING_TIER_1";
+        } else if (hasTier2WithoutWaiver) {
+            coriStatus = "TIER_2_WAIVER_REQUIRED";
+        } else {
+            coriStatus = "TIER_2_WAIVED";
+        }
+
+        // Determine annual training status
+        String trainingStatus;
+        int completedMinutes = 0;
+        if (currentYearTraining.isPresent()) {
+            completedMinutes = currentYearTraining.get().getHoursCompletedMinutes() != null
+                    ? currentYearTraining.get().getHoursCompletedMinutes() : 0;
+            trainingStatus = completedMinutes >= requiredMinutes ? "COMPLETE" : "INCOMPLETE";
+        } else {
+            trainingStatus = "NOT_STARTED";
+        }
+
+        // Overall eligibility: all required items must be complete
+        boolean qualificationMet = Boolean.TRUE.equals(provider.getSoc426Completed())
+                && Boolean.TRUE.equals(provider.getOrientationCompleted())
+                && Boolean.TRUE.equals(provider.getBackgroundCheckCompleted())
+                && Boolean.TRUE.equals(provider.getProviderAgreementSigned())
+                && "CLEAR".equals(coriStatus) || "TIER_2_WAIVED".equals(coriStatus);
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("providerId", providerId);
+        result.put("providerNumber", provider.getProviderNumber() != null ? provider.getProviderNumber() : "");
+        result.put("providerName", (provider.getFirstName() != null ? provider.getFirstName() : "") + " " + (provider.getLastName() != null ? provider.getLastName() : ""));
+        result.put("eligibilityStatus", provider.getEligible() != null ? provider.getEligible() : "PENDING");
+        result.put("ineligibleReason", provider.getIneligibleReason() != null ? provider.getIneligibleReason() : "");
+        // Enrollment requirements
+        result.put("soc426Completed", Boolean.TRUE.equals(provider.getSoc426Completed()));
+        result.put("soc426Date", provider.getSoc426Date() != null ? provider.getSoc426Date().toString() : null);
+        result.put("orientationCompleted", Boolean.TRUE.equals(provider.getOrientationCompleted()));
+        result.put("orientationDate", provider.getOrientationDate() != null ? provider.getOrientationDate().toString() : null);
+        result.put("backgroundCheckCompleted", Boolean.TRUE.equals(provider.getBackgroundCheckCompleted()));
+        result.put("backgroundCheckDate", provider.getBackgroundCheckDate() != null ? provider.getBackgroundCheckDate().toString() : null);
+        result.put("backgroundCheckStatus", provider.getBackgroundCheckStatus() != null ? provider.getBackgroundCheckStatus() : "");
+        result.put("providerAgreementSigned", Boolean.TRUE.equals(provider.getProviderAgreementSigned()));
+        result.put("paRegistered", Boolean.TRUE.equals(provider.getPaRegistered()));
+        result.put("paTrainingCompleted", Boolean.TRUE.equals(provider.getPaTrainingCompleted()));
+        result.put("paFingerprintingCompleted", Boolean.TRUE.equals(provider.getPaFingerprintingCompleted()));
+        // CORI
+        result.put("coriStatus", coriStatus);
+        result.put("activeCoriCount", activeCori.size());
+        // Annual training
+        result.put("currentFiscalYear", currentFiscalYear);
+        result.put("trainingStatus", trainingStatus);
+        result.put("trainingCompletedMinutes", completedMinutes);
+        result.put("trainingRequiredMinutes", requiredMinutes);
+        // Overall
+        result.put("qualificationMet", qualificationMet);
+        return result;
     }
 }

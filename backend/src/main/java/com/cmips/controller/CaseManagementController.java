@@ -945,4 +945,53 @@ public class CaseManagementController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    // ==================== FPO ELIGIBILITY (CI-67555) ====================
+
+    /** GET current active FPO eligibility for a case */
+    @GetMapping("/{caseId}/fpo-eligibility")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getFpoEligibility(
+            @PathVariable Long caseId) {
+        try {
+            return ResponseEntity.ok(caseManagementService.getFpoEligibility(caseId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** GET full FPO eligibility history for a case */
+    @GetMapping("/{caseId}/fpo-eligibility/history")
+    @RequirePermission(resource = "Case Resource", scope = "view")
+    public ResponseEntity<?> getFpoEligibilityHistory(
+            @PathVariable Long caseId) {
+        try {
+            return ResponseEntity.ok(caseManagementService.getFpoEligibilityHistory(caseId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT set (create or update) FPO eligibility for a case */
+    @PutMapping("/{caseId}/fpo-eligibility")
+    @RequirePermission(resource = "Case Resource", scope = "edit")
+    public ResponseEntity<?> setFpoEligibility(
+            @PathVariable Long caseId,
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            Boolean fpoEligible = request.get("fpoEligible") != null
+                    ? Boolean.parseBoolean(request.get("fpoEligible").toString()) : null;
+            LocalDate beginDate = request.get("beginDate") != null
+                    ? LocalDate.parse(request.get("beginDate").toString()) : null;
+            LocalDate endDate = request.get("endDate") != null
+                    ? LocalDate.parse(request.get("endDate").toString()) : null;
+            String notes = request.get("notes") != null ? request.get("notes").toString() : null;
+
+            return ResponseEntity.ok(caseManagementService.setFpoEligibility(
+                    caseId, fpoEligible, beginDate, endDate, notes, userId));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
 }

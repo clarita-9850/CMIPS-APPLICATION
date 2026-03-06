@@ -1012,6 +1012,45 @@ public class ProviderManagementController {
         }
     }
 
+    // ==================== PROVIDER TRAINING (CI-117545 / CI-67804) ====================
+
+    /** GET all training records for a provider */
+    @GetMapping("/{id}/training")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getProviderTraining(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(providerService.getProviderTraining(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** POST record a training completion for a provider */
+    @PostMapping("/{id}/training")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> recordTraining(@PathVariable Long id,
+                                            @RequestBody com.cmips.entity.ProviderTrainingEntity training,
+                                            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        try {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                    .body(providerService.recordTraining(id, training, userId));
+        } catch (Exception e) {
+            log.error("Error recording training for provider {}", id, e);
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** GET provider qualification summary — all enrollment requirements + CORI + training status */
+    @GetMapping("/{id}/qualification-summary")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getQualificationSummary(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(providerService.getQualificationSummary(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     // ==================== INNER REQUEST CLASSES ====================
 
     static class CountyDisputeRequest { public String comments; }

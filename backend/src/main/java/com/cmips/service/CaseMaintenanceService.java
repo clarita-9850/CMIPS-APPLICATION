@@ -741,7 +741,14 @@ public class CaseMaintenanceService {
         noa.setRecipientId(c.getRecipientId());
 
         String noaTypeStr = (String) request.get("noaType");
-        noa.setNoaType(NoaType.valueOf(noaTypeStr));
+        if (noaTypeStr == null || noaTypeStr.isBlank()) {
+            throw new RuntimeException("noaType is required (e.g. NA_1250, NA_1251, APPROVAL, DENIAL)");
+        }
+        try {
+            noa.setNoaType(NoaType.valueOf(noaTypeStr));
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid noaType: " + noaTypeStr);
+        }
 
         String langStr = (String) request.getOrDefault("language", "ENGLISH");
         try { noa.setLanguage(NoticeOfActionEntity.Language.valueOf(langStr)); } catch (Exception e) { noa.setLanguage(NoticeOfActionEntity.Language.ENGLISH); }
