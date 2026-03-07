@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.TemporalAdjusters;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
@@ -267,6 +269,13 @@ public class SickLeaveClaimService {
     }
 
     /**
+     * List claims by case ID.
+     */
+    public List<SickLeaveClaimEntity> listClaimsByCase(Long caseId) {
+        return claimRepository.findByCaseIdOrderByClaimEnteredDateDesc(caseId);
+    }
+
+    /**
      * CI-794528: Update time entries for an existing claim (same-day, manual only).
      */
     @Transactional
@@ -340,6 +349,253 @@ public class SickLeaveClaimService {
     public SickLeaveClaimEntity getClaimByNumber(String claimNumber) {
         return claimRepository.findByClaimNumber(claimNumber)
                 .orElseThrow(() -> new RuntimeException("Claim not found: " + claimNumber));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DSD Section 24/32 — PMEC Validation Rules (batch 80/SDINDN)
+    // 26 business rules, 19 PMEC error codes
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Validate a sick leave claim against all PMEC rules.
+     * Returns list of error messages. Empty list = valid.
+     */
+    public List<String> validateClaimPMEC(SickLeaveClaimEntity claim) {
+        List<String> errors = new ArrayList<>();
+
+        // PMEC004: Provider number does not exist
+        Optional<ProviderEntity> provOpt = providerRepository.findById(claim.getProviderId());
+        if (provOpt.isEmpty()) {
+            errors.add("PMEC004: Provider Number does not exist.");
+            return errors; // can't continue without provider
+        }
+        ProviderEntity provider = provOpt.get();
+
+        // PMEC005: Case number does not exist
+        Optional<CaseEntity> caseOpt = caseRepository.findById(claim.getCaseId());
+        if (caseOpt.isEmpty()) {
+            errors.add("PMEC005: Case Number does not exist.");
+            return errors;
+        }
+        CaseEntity caseEntity = caseOpt.get();
+
+        // PMEC003: Provider does not have active provider segment
+        boolean hasActiveAssignment = assignmentRepository.existsByProviderIdAndCaseIdAndStatus(
+                provider.getId(), caseEntity.getId(), AssignmentStatus.ACTIVE);
+        if (!hasActiveAssignment || provider.getProviderStatus() != ProviderStatus.ACTIVE) {
+            errors.add("PMEC003: Provider does not have an Active provider segment for the indicated pay period.");
+        }
+
+        LocalDate payBegin = claim.getPayPeriodBeginDate();
+
+        // PMEC016: Pay period begin date must be 1st or 16th
+        if (payBegin != null) {
+            int day = payBegin.getDayOfMonth();
+            if (day != 1 && day != 16) {
+                errors.add("PMEC016: Service Period From Date must be the 1st or the 16th of a month.");
+            }
+        }
+
+        // PMEC011: Future pay period
+        if (payBegin != null && payBegin.isAfter(LocalDate.now())) {
+            errors.add("PMEC011: Sick Leave claim may not be submitted for a future pay period.");
+        }
+
+        // Parse time entries
+        List<SickLeaveSaveRequest.TimeEntry> entries = parseTimeEntries(claim.getTimeEntries());
+
+        // PMEC019: No entries greater than zero
+        int totalMinutes = entries.stream().mapToInt(SickLeaveSaveRequest.TimeEntry::getMinutes).sum();
+        if (totalMinutes == 0) {
+            errors.add("PMEC019: Entry in at least one time entry field is required.");
+        }
+
+        // PMEC020: Negative or invalid values
+        for (SickLeaveSaveRequest.TimeEntry e : entries) {
+            if (e.getMinutes() < 0) {
+                errors.add("PMEC020: Negative or Invalid values not allowed.");
+                break;
+            }
+        }
+
+        // PMEC006: Daily hours > 24
+        for (SickLeaveSaveRequest.TimeEntry e : entries) {
+            if (e.getMinutes() > 24 * 60) {
+                errors.add("PMEC006: Sick Leave Hours may not exceed 24 hours per day on " + e.getDate() + ".");
+                break;
+            }
+        }
+
+        // PMEC012: Hours entered for future date
+        for (SickLeaveSaveRequest.TimeEntry e : entries) {
+            if (e.getDate() != null) {
+                try {
+                    LocalDate entryDate = LocalDate.parse(e.getDate());
+                    if (entryDate.isAfter(LocalDate.now())) {
+                        errors.add("PMEC012: Sick Leave may not be claimed for a future date.");
+                        break;
+                    }
+                } catch (DateTimeParseException ignored) {}
+            }
+        }
+
+        // PMEC022: Time recorded beyond pay period
+        if (payBegin != null) {
+            LocalDate payEnd = payBegin.getDayOfMonth() == 1
+                    ? payBegin.plusDays(14) : payBegin.with(TemporalAdjusters.lastDayOfMonth());
+            for (SickLeaveSaveRequest.TimeEntry e : entries) {
+                if (e.getDate() != null && e.getMinutes() > 0) {
+                    try {
+                        LocalDate entryDate = LocalDate.parse(e.getDate());
+                        if (entryDate.isBefore(payBegin) || entryDate.isAfter(payEnd)) {
+                            errors.add("PMEC022: Time recorded beyond pay period start date or end date.");
+                            break;
+                        }
+                    } catch (DateTimeParseException ignored) {}
+                }
+            }
+        }
+
+        // Sick leave accrual checks
+        double accruedBalance = provider.getSickLeaveAccruedHours() != null
+                ? provider.getSickLeaveAccruedHours() : 0.0;
+
+        // PMEC018: No remaining sick leave hours
+        if (accruedBalance <= 0.0) {
+            errors.add("PMEC018: The provider has no remaining sick leave hours for the fiscal year.");
+        }
+
+        // PMEC014: Provider has not met eligibility criteria
+        LocalDate eligDate = provider.getSickLeaveEligibleDate();
+        if (eligDate == null) {
+            errors.add("PMEC014: Provider has not met Sick Leave eligibility criteria.");
+        }
+
+        // PMEC013: Provider not eligible until eligibility date
+        if (eligDate != null && payBegin != null && payBegin.isBefore(eligDate)) {
+            errors.add("PMEC013: Provider not eligible to claim sick leave until " +
+                    eligDate.format(DateTimeFormatter.ofPattern("MM/dd/yyyy")) + ".");
+        }
+
+        // PMEC008/009/017: Hour increment rules
+        if (accruedBalance >= 1.0) {
+            // PMEC008: Must claim in at least 1-hour increments when remaining >= 1:00
+            for (SickLeaveSaveRequest.TimeEntry e : entries) {
+                if (e.getMinutes() > 0 && e.getMinutes() < 60) {
+                    errors.add("PMEC008: Sick Leave Hours must be claimed in at least one hour increments when Remaining Hours >= 1:00.");
+                    break;
+                }
+            }
+            // PMEC009: Must claim in 30-minute increments when remaining > 1:00
+            for (SickLeaveSaveRequest.TimeEntry e : entries) {
+                if (e.getMinutes() > 60 && (e.getMinutes() % 30 != 0)) {
+                    errors.add("PMEC009: Remaining Sick Leave Hours greater than 1:00 hour must be claimed in 30 minute increments.");
+                    break;
+                }
+            }
+        } else if (accruedBalance > 0.0 && accruedBalance < 1.0) {
+            // PMEC017: Must claim in 30-minute increments when remaining < 1:00
+            if (totalMinutes > 0 && totalMinutes != 30) {
+                errors.add("PMEC017: Sick Leave Hours must be claimed in 30 minute increments when Remaining Hours are less than 1:00 hour.");
+            }
+        }
+
+        // PMEC015: Claimed hours exceed remaining — cutback
+        double claimedHoursDecimal = totalMinutes / 60.0;
+        if (claimedHoursDecimal > accruedBalance && accruedBalance > 0) {
+            // DSD Rule 23: Don't block — cutback and flag
+            String fy = getFiscalYearString(payBegin);
+            errors.add("PMEC015: Claimed Hours exceed provider's Sick Leave Remaining Hours " +
+                    formatHHMM((int)(accruedBalance * 60)) + " for fiscal year " + fy + ". Hours will be cutback.");
+        }
+
+        // PMEC007: Provider/Recipient on leave
+        if (caseEntity.getCaseStatus() == CaseEntity.CaseStatus.ON_LEAVE) {
+            errors.add("PMEC007: Recipient on leave on date Sick Leave is claimed.");
+        }
+
+        return errors;
+    }
+
+    /**
+     * DSD Rule 23: Cutback excess sick leave hours to remaining balance.
+     * Creates PRIOR_TO_CUTBACK snapshot status.
+     */
+    @Transactional
+    public SickLeaveClaimEntity cutbackIfNeeded(SickLeaveClaimEntity claim) {
+        Optional<ProviderEntity> provOpt = providerRepository.findById(claim.getProviderId());
+        if (provOpt.isEmpty()) return claim;
+        ProviderEntity provider = provOpt.get();
+        double remaining = provider.getSickLeaveAccruedHours() != null ? provider.getSickLeaveAccruedHours() : 0.0;
+        int claimedMinutes = claim.getClaimedHours() != null ? claim.getClaimedHours() : 0;
+        double claimedHours = claimedMinutes / 60.0;
+
+        if (claimedHours > remaining && remaining > 0) {
+            int cutbackMinutes = (int)(remaining * 60);
+            log.info("[SickLeave] Cutback: claimNumber={}, claimed={} min, cutback to={} min",
+                    claim.getClaimNumber(), claimedMinutes, cutbackMinutes);
+            claim.setClaimedHours(cutbackMinutes);
+            return claimRepository.save(claim);
+        }
+        return claim;
+    }
+
+    /**
+     * DSD Rule 24: Deduct claimed hours from provider's accrued balance.
+     */
+    @Transactional
+    public void deductFromAccrual(SickLeaveClaimEntity claim) {
+        providerRepository.findById(claim.getProviderId()).ifPresent(provider -> {
+            double remaining = provider.getSickLeaveAccruedHours() != null ? provider.getSickLeaveAccruedHours() : 0.0;
+            double claimed = (claim.getClaimedHours() != null ? claim.getClaimedHours() : 0) / 60.0;
+            double newBalance = Math.max(0, remaining - claimed);
+            provider.setSickLeaveAccruedHours(newBalance);
+            providerRepository.save(provider);
+            log.info("[SickLeave] Deducted: providerId={}, claimed={} hrs, newBalance={} hrs",
+                    claim.getProviderId(), claimed, newBalance);
+        });
+    }
+
+    /**
+     * Generate PRDS108A-compatible sick leave payroll record.
+     * DSD Interface: PRDS108A sick leave data to SCO.
+     */
+    public String generatePayrollRecord(SickLeaveClaimEntity claim) {
+        return String.format("%-10s%-30s%010d%010d%08.2f%-8s%-8s%-5s",
+                "SLC-PAY",
+                claim.getClaimNumber(),
+                claim.getProviderId(),
+                claim.getCaseId(),
+                claim.getClaimedHours() != null ? claim.getClaimedHours() / 60.0 : 0.0,
+                claim.getPayPeriodBeginDate() != null
+                        ? claim.getPayPeriodBeginDate().format(DateTimeFormatter.ofPattern("yyyyMMdd")) : "",
+                claim.getProviderType() != null ? claim.getProviderType() : "IHSS",
+                claim.getStatus());
+    }
+
+    // ── Helper methods ──
+
+    private List<SickLeaveSaveRequest.TimeEntry> parseTimeEntries(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json,
+                    objectMapper.getTypeFactory().constructCollectionType(
+                            List.class, SickLeaveSaveRequest.TimeEntry.class));
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private String getFiscalYearString(LocalDate date) {
+        if (date == null) return "N/A";
+        int startYear = date.getMonthValue() >= 7 ? date.getYear() : date.getYear() - 1;
+        return startYear + "-" + (startYear + 1);
+    }
+
+    private String formatHHMM(int totalMinutes) {
+        int h = totalMinutes / 60;
+        int m = totalMinutes % 60;
+        return String.format("%d:%02d", h, m);
     }
 
     private String generateClaimNumber() {

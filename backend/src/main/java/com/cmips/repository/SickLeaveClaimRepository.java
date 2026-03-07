@@ -17,6 +17,8 @@ public interface SickLeaveClaimRepository extends JpaRepository<SickLeaveClaimEn
 
     List<SickLeaveClaimEntity> findByProviderIdOrderByClaimEnteredDateDesc(Long providerId);
 
+    List<SickLeaveClaimEntity> findByCaseIdOrderByClaimEnteredDateDesc(Long caseId);
+
     Optional<SickLeaveClaimEntity> findByClaimNumber(String claimNumber);
 
     /**

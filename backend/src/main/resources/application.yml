@@ -110,6 +110,27 @@ baw:
     retry-attempts: ${BAW_RETRY_ATTEMPTS:3}
     circuit-breaker:
       enabled: true
+  sftp:
+    tpf:
+      host: ${BAW_SFTP_TPF_HOST:localhost}
+      port: ${BAW_SFTP_TPF_PORT:22}
+      username: ${BAW_SFTP_TPF_USER:cmips_tpf}
+      password: ${BAW_SFTP_TPF_PASS:}
+      private-key-path: ${BAW_SFTP_TPF_KEY:}
+      inbound-path: ${BAW_SFTP_TPF_INBOUND:/tpf/outbound}
+      archive-path: ${BAW_SFTP_TPF_ARCHIVE:/tpf/archive}
+      error-path: ${BAW_SFTP_TPF_ERROR:/tpf/error}
+  processing:
+    tpf-batch-file-pattern: ${BAW_TPF_FILE_PATTERN:PRNR998_*.DAT}
+
+# MEDS POS API Configuration (Medi-Cal Eligibility Data System - Point of Service)
+meds:
+  pos:
+    api:
+      url: ${MEDS_POS_API_URL:}
+      api-key: ${MEDS_POS_API_KEY:}
+      timeout: ${MEDS_POS_API_TIMEOUT:5000}
+      enabled: ${MEDS_POS_API_ENABLED:false}
 
 # Scheduler App Event Channels (Redis Pub/Sub)
 # These channel names must match the channels the Scheduler subscribes to

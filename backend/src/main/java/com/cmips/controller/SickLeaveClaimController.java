@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -116,6 +117,69 @@ public class SickLeaveClaimController {
         try {
             SickLeaveClaimEntity claim = sickLeaveService.getClaimByNumber(claimNumber);
             return ResponseEntity.ok(claim);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * List claims by case ID.
+     */
+    @GetMapping("/case/{caseId}")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<List<SickLeaveClaimEntity>> listByCase(@PathVariable Long caseId) {
+        return ResponseEntity.ok(sickLeaveService.listClaimsByCase(caseId));
+    }
+
+    /**
+     * DSD Section 24/32 — Validate claim against all PMEC rules.
+     */
+    @PostMapping("/{claimNumber}/validate")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> validateClaim(@PathVariable String claimNumber) {
+        try {
+            SickLeaveClaimEntity claim = sickLeaveService.getClaimByNumber(claimNumber);
+            List<String> errors = sickLeaveService.validateClaimPMEC(claim);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("claimNumber", claimNumber);
+            result.put("valid", errors.isEmpty());
+            result.put("errors", errors);
+            return ResponseEntity.ok(result);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * DSD: Send sick leave claim to payroll (PRDS108A).
+     * Applies cutback if needed, deducts from accrual, generates payroll record.
+     */
+    @PostMapping("/{claimNumber}/send-to-payroll")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> sendToPayroll(@PathVariable String claimNumber) {
+        try {
+            SickLeaveClaimEntity claim = sickLeaveService.getClaimByNumber(claimNumber);
+            // Validate first
+            List<String> errors = sickLeaveService.validateClaimPMEC(claim);
+            // Filter blocking errors (skip PMEC015 cutback warning)
+            List<String> blocking = errors.stream()
+                    .filter(e -> !e.startsWith("PMEC015"))
+                    .collect(java.util.stream.Collectors.toList());
+            if (!blocking.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("message", "Validation failed", "errors", blocking));
+            }
+            // Cutback if needed (DSD Rule 23)
+            claim = sickLeaveService.cutbackIfNeeded(claim);
+            // Deduct from accrual (DSD Rule 24)
+            sickLeaveService.deductFromAccrual(claim);
+            // Generate payroll record
+            String payrollRecord = sickLeaveService.generatePayrollRecord(claim);
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("claimNumber", claim.getClaimNumber());
+            result.put("status", "SENT_TO_PAYROLL");
+            result.put("payrollRecord", payrollRecord);
+            result.put("claimedHoursAfterCutback", claim.getClaimedHours());
+            return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }

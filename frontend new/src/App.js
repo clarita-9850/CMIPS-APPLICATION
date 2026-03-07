@@ -67,6 +67,8 @@ import { WarrantReplacementsPage } from './pages/WarrantReplacementsPage';
 import { BVITimesheetReissuePage } from './pages/BVITimesheetReissuePage';
 import { TravelClaimPage } from './pages/TravelClaimPage';
 import { DirectDepositPage } from './pages/DirectDepositPage';
+import { BviQueuePage } from './pages/BviQueuePage';
+import { EvvExceptionPage } from './pages/EvvExceptionPage';
 import { SickLeavePage } from './pages/SickLeavePage';
 import { PaymentSearchPage } from './pages/PaymentSearchPage';
 import { SpecialTransactionsPage } from './pages/SpecialTransactionsPage';
@@ -100,6 +102,8 @@ import { LiveInProviderPage } from './pages/LiveInProviderPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { PreferencesPage } from './pages/PreferencesPage';
 import { WageRatePage } from './pages/WageRatePage';
+import { IssuancePage } from './pages/IssuancePage';
+import { CodeTablePage } from './pages/CodeTablePage';
 
 /**
  * Logged Out Page
@@ -237,6 +241,8 @@ function App() {
             <Route path="/payments/timesheets" element={<TimesheetsPage />} />
             <Route path="/payments/timesheets/new" element={<TimesheetCreatePage />} />
             <Route path="/payments/timesheets/:id" element={<TimesheetDetailPage />} />
+            <Route path="/payments/bvi-queue" element={<BviQueuePage />} />
+            <Route path="/payments/evv-exceptions" element={<EvvExceptionPage />} />
             <Route path="/payments/warrant-replacements" element={<WarrantReplacementsPage />} />
             <Route path="/payments/bvi-timesheet" element={<BVITimesheetReissuePage />} />
             <Route path="/payments/travel-claim" element={<TravelClaimPage />} />
@@ -246,6 +252,8 @@ function App() {
             <Route path="/payments/special-transactions" element={<SpecialTransactionsPage />} />
             <Route path="/payments/payment-corrections" element={<PaymentCorrectionsPage />} />
             <Route path="/payments/career-pathways" element={<CareerPathwaysPage />} />
+            <Route path="/payments/issuance" element={<IssuancePage />} />
+            <Route path="/payments/code-tables" element={<CodeTablePage />} />
             <Route path="/cases/:caseId/special-transactions" element={<SpecialTransactionsPage />} />
             <Route path="/cases/:caseId/payment-corrections" element={<PaymentCorrectionsPage />} />
             <Route path="/cases/:caseId/overpayments" element={<OverpaymentRecoveryPage />} />
