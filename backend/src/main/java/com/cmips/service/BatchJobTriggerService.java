@@ -199,14 +199,35 @@ public class BatchJobTriggerService {
 
     /**
      * Get a Job bean by name from the application context.
+     * Looks up by bean name first, then falls back to scanning all Job beans
+     * for one whose internal job name matches (supports scheduler sending
+     * the internal job name like "DE34_NEW_HIRE_REPORT_JOB" when the bean
+     * name is "de34NewHireReportJob").
      */
     private Job getJobByName(String jobName) {
+        // Try direct bean name lookup first
         try {
             return applicationContext.getBean(jobName, Job.class);
-        } catch (Exception e) {
-            log.error("Failed to find job bean: {}", jobName, e);
-            return null;
+        } catch (Exception ignored) {
+            // Bean name didn't match, try matching by internal job name
         }
+
+        // Scan all Job beans for one matching the internal job name
+        try {
+            String[] beanNames = applicationContext.getBeanNamesForType(Job.class);
+            for (String beanName : beanNames) {
+                Job job = applicationContext.getBean(beanName, Job.class);
+                if (jobName.equals(job.getName())) {
+                    log.debug("Resolved job '{}' via internal name match (bean: {})", jobName, beanName);
+                    return job;
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error scanning job beans for: {}", jobName, e);
+        }
+
+        log.error("Job not found by bean name or internal name: {}", jobName);
+        return null;
     }
 
     /**

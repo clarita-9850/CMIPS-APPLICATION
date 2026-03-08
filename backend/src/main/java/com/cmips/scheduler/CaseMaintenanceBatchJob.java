@@ -23,7 +23,6 @@ import com.cmips.service.TaskService;
 import com.cmips.util.BusinessDayCalculator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -33,8 +32,8 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Scheduled batch jobs for DSD Section 30 — Case Maintenance time-based triggers.
- * Runs daily at 6:00 AM and monthly on the 1st at 5:00 AM.
+ * Batch logic for DSD Section 30 — Case Maintenance time-based triggers.
+ * Scheduling moved to external scheduler app (CASE_MAINTENANCE_DAILY_JOB, CASE_MAINTENANCE_MONTHLY_JOB, NIGHTLY_BATCH_PRINT_JOB).
  */
 @Component
 public class CaseMaintenanceBatchJob {
@@ -75,10 +74,9 @@ public class CaseMaintenanceBatchJob {
     }
 
     /**
-     * Daily batch — runs at 6:00 AM every day.
+     * Daily batch — triggered by scheduler via CASE_MAINTENANCE_DAILY_JOB.
      * Checks for time-based triggers: advance pay, health care certs, pending authorizations, etc.
      */
-    @Scheduled(cron = "0 0 6 * * ?")
     public void dailyBatch() {
         log.info("Starting Case Maintenance daily batch...");
         LocalDate today = LocalDate.now();
@@ -198,10 +196,9 @@ public class CaseMaintenanceBatchJob {
     }
 
     /**
-     * Monthly batch — runs on the 1st of each month at 5:00 AM.
+     * Monthly batch — triggered by scheduler via CASE_MAINTENANCE_MONTHLY_JOB.
      * Checks for age-based triggers.
      */
-    @Scheduled(cron = "0 0 5 1 * ?")
     public void monthlyBatch() {
         log.info("Starting Case Maintenance monthly batch...");
         int count = 0;
@@ -245,12 +242,11 @@ public class CaseMaintenanceBatchJob {
     }
 
     /**
-     * Nightly batch print — runs at 2:30 AM every day.
+     * Nightly batch print — triggered by scheduler via NIGHTLY_BATCH_PRINT_JOB.
      * Per DSD Section 31 (CI-116202): all NIGHTLY_BATCH NOAs and forms with status PENDING
      * are marked PRINTED, simulating the Curam Correspondence → XSL Processor → Printer pipeline.
      * Each printed NOA also generates a mailing task for the case worker.
      */
-    @Scheduled(cron = "0 30 2 * * ?")
     public void nightlyBatchPrint() {
         log.info("Starting Nightly Batch Print job (NOAs + Forms)...");
         LocalDate today = LocalDate.now();

@@ -7,7 +7,6 @@ import com.cmips.repository.TaskTypeRepository;
 import com.cmips.service.TaskLifecycleService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -41,7 +40,6 @@ public class TaskEscalationJob {
         this.lifecycleService = lifecycleService;
     }
 
-    @Scheduled(fixedDelay = 900000) // Every 15 minutes
     public void checkOverdueTasks() {
         LocalDateTime now = LocalDateTime.now();
         log.info("Escalation check started at {}", now);

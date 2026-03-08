@@ -6,7 +6,6 @@ import com.cmips.repository.TaskRepository;
 import com.cmips.repository.TaskHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,7 +30,6 @@ public class DeferredTaskRestartJob {
         this.historyRepository = historyRepository;
     }
 
-    @Scheduled(fixedDelay = 3600000) // Every hour
     @Transactional
     public void restartDeferredTasks() {
         LocalDateTime now = LocalDateTime.now();

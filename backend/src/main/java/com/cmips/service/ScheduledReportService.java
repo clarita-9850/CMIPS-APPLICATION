@@ -9,7 +9,6 @@ import com.cmips.entity.Timesheet;
 import com.cmips.util.RoleMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -204,7 +203,6 @@ public class ScheduledReportService {
     /**
      * Daily report generation - runs at 4:15 PM daily (configurable via application.yml)
      */
-    @Scheduled(cron = "${report.scheduling.daily-report-cron:0 30 5 * * ?}", zone = "Asia/Kolkata")
     public void generateDailyReports() {
         if (!schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: Scheduling disabled, skipping daily reports");
@@ -256,7 +254,6 @@ public class ScheduledReportService {
     /**
      * Weekly report generation - runs at 9 AM every Monday
      */
-    @Scheduled(cron = "${report.scheduling.weekly-report-cron:0 30 5 * * MON}", zone = "Asia/Kolkata")
     public void generateWeeklyReports() {
         if (!schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: Scheduling disabled, skipping weekly reports");
@@ -295,7 +292,6 @@ public class ScheduledReportService {
     /**
      * Monthly report generation - runs at 9 AM on the 1st day of every month
      */
-    @Scheduled(cron = "${report.scheduling.monthly-report-cron:0 30 5 1 * ?}", zone = "Asia/Kolkata")
     public void generateMonthlyReports() {
         if (!schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: Scheduling disabled, skipping monthly reports");
@@ -332,7 +328,6 @@ public class ScheduledReportService {
     /**
      * Quarterly report generation - runs at 9 AM on the 1st day of every quarter (Jan, Apr, Jul, Oct)
      */
-    @Scheduled(cron = "${report.scheduling.quarterly-report-cron:0 30 5 1 1,4,7,10 ?}", zone = "Asia/Kolkata")
     public void generateQuarterlyReports() {
         if (!schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: Scheduling disabled, skipping quarterly reports");
@@ -369,7 +364,6 @@ public class ScheduledReportService {
     /**
      * Yearly report generation - runs at 9 AM on January 1st
      */
-    @Scheduled(cron = "${report.scheduling.yearly-report-cron:0 30 5 1 1 ?}", zone = "Asia/Kolkata")
     public void generateYearlyReports() {
         if (!schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: Scheduling disabled, skipping yearly reports");
@@ -1062,7 +1056,6 @@ public class ScheduledReportService {
         System.out.println("🔄 ScheduledReportService: Scheduler run count reset to 0");
     }
     
-    @Scheduled(cron = "${report.scheduler.system-scheduler.cron:0 */5 * * * ?}", zone = "Asia/Kolkata")
     public void generateCountyReportsForScheduler() {
         if (!systemSchedulerEnabled || !schedulingEnabled) {
             System.out.println("⏰ ScheduledReportService: SYSTEM_SCHEDULER batch processing disabled, skipping");

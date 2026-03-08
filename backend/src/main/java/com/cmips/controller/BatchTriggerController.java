@@ -241,6 +241,59 @@ public class BatchTriggerController {
     }
 
     /**
+     * Restart a failed job by triggerId.
+     * Called by the Scheduler application to restart a previously failed job execution.
+     * Creates a new execution of the same job with the same parameters.
+     *
+     * @param triggerId The scheduler's trigger ID
+     * @return Result of the restart operation
+     */
+    @PostMapping("/api/batch/restart/{triggerId}")
+    @RequirePermission(resource = "Batch Job Resource", scope = "trigger")
+    public ResponseEntity<BatchTriggerResponse> restartJobByTriggerId(@PathVariable String triggerId) {
+        log.info("Restart request for trigger ID: {}", triggerId);
+
+        try {
+            // Find the original execution
+            JobExecution originalExecution = batchJobTriggerService.findExecutionByTriggerId(triggerId);
+            if (originalExecution == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            String jobName = originalExecution.getJobInstance().getJobName();
+
+            // Re-trigger the same job with a new run ID (RunIdIncrementer handles uniqueness)
+            JobExecution newExecution = batchJobTriggerService.triggerJob(
+                jobName, triggerId, java.util.Map.of()
+            );
+
+            BatchTriggerResponse response = BatchTriggerResponse.builder()
+                .success(true)
+                .executionId(newExecution.getId())
+                .jobName(jobName)
+                .triggerId(triggerId)
+                .status(newExecution.getStatus().name())
+                .message("Job restarted successfully (new execution)")
+                .build();
+
+            log.info("Job restarted: {} -> execution {}", jobName, newExecution.getId());
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            log.error("Failed to restart job for trigger ID: {}", triggerId, e);
+
+            BatchTriggerResponse response = BatchTriggerResponse.builder()
+                .success(false)
+                .triggerId(triggerId)
+                .status("FAILED")
+                .message("Failed to restart job: " + e.getMessage())
+                .build();
+
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    /**
      * Health check endpoint for the batch trigger service.
      */
     @GetMapping("/api/batch/trigger/health")

@@ -8,7 +8,6 @@ import com.cmips.repository.PersonNoteRepository;
 import com.cmips.repository.TimesheetRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,10 +26,8 @@ import java.util.List;
  *  - Notifications:     purge read notifications older than 90 days
  *  - Closed cases:      flag cases closed more than 7 years ago for archival
  *
- * Schedules (all run at 02:00 AM):
- *  - Daily  at 02:00: notifications cleanup
- *  - Weekly on Sunday 02:00: cancelled case-notes cleanup, old timesheet purge
- *  - Monthly on 1st   02:00: closed case archival flag
+ * Scheduling moved to external scheduler app (DATA_RETENTION_DAILY_JOB,
+ * DATA_RETENTION_WEEKLY_JOB, DATA_RETENTION_MONTHLY_AUDIT_JOB).
  *
  * All jobs are idempotent — safe to re-run if interrupted.
  */
@@ -74,7 +71,6 @@ public class DataRetentionService {
      * Purge old read notifications.
      * Runs every day at 02:00 AM.
      */
-    @Scheduled(cron = "0 0 2 * * *")
     @Transactional
     public void purgeOldNotifications() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(NOTIFICATION_RETENTION_DAYS);
@@ -98,7 +94,6 @@ public class DataRetentionService {
      * Purge CANCELLED case notes older than 5 years.
      * CaseNoteEntity uses status='CANCELLED' and cancelledAt timestamp.
      */
-    @Scheduled(cron = "0 10 2 * * SUN")
     @Transactional
     public void purgeCancelledCaseNotes() {
         LocalDateTime cutoff = LocalDateTime.now().minusYears(CASE_NOTE_RETENTION_YEARS);
@@ -122,7 +117,6 @@ public class DataRetentionService {
      * Purge PROCESSED timesheets older than 7 years.
      * Timesheets use TimesheetStatus.PROCESSED and createdAt timestamp.
      */
-    @Scheduled(cron = "0 20 2 * * SUN")
     @Transactional
     public void purgeOldTimesheets() {
         LocalDateTime cutoff = LocalDateTime.now().minusYears(TIMESHEET_RETENTION_YEARS);
@@ -150,7 +144,6 @@ public class DataRetentionService {
      * CMIPS data retention policy (California Government Code §12946):
      * IHSS case records must be retained for 7 years after closure.
      */
-    @Scheduled(cron = "0 30 2 1 * *")
     @Transactional(readOnly = true)
     public void flagClosedCasesForArchival() {
         LocalDate cutoffDate = LocalDate.now().minusYears(CLOSED_CASE_ARCHIVE_YEARS);
@@ -185,7 +178,6 @@ public class DataRetentionService {
      * Purge inactive (active=false) PersonNoteEntity records older than 5 years.
      * PersonNoteEntity uses the 'active' boolean field and 'createdAt' timestamp.
      */
-    @Scheduled(cron = "0 40 2 * * SUN")
     @Transactional
     public void purgeInactivePersonNotes() {
         LocalDateTime cutoff = LocalDateTime.now().minusYears(CASE_NOTE_RETENTION_YEARS);
