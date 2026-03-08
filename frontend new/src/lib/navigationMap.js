@@ -88,6 +88,19 @@ export const SIDE_NAV_ROUTES = {
   'special-transactions': '/payments/special-transactions',
   'payment-corrections': '/payments/payment-corrections',
   'career-pathways': '/payments/career-pathways',
+
+  // Payroll Admin (DSD Sections 14-19)
+  'payroll-admin': '/payments/payroll-admin',
+  'pay-rates': '/payments/payroll-admin',
+
+  // Reports & Program Mgmt (DSD Sections 26-28)
+  'reports-admin': '/admin/reports',
+  'fraud-cases': '/admin/reports',
+  'death-match': '/admin/reports',
+
+  // Internal Operations (DSD Section 32)
+  'internal-ops': '/admin/internal-ops',
+  'garnishments': '/admin/internal-ops',
 };
 
 /**

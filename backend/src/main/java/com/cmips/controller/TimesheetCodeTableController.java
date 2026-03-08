@@ -63,4 +63,34 @@ public class TimesheetCodeTableController {
     public ResponseEntity<TimesheetCodeTableEntity> create(@RequestBody TimesheetCodeTableEntity entry) {
         return ResponseEntity.ok(codeTableRepo.save(entry));
     }
+
+    @PutMapping("/{id}")
+    @RequirePermission(resource = "Timesheet Resource", scope = "edit")
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody TimesheetCodeTableEntity updates) {
+        return codeTableRepo.findById(id).map(existing -> {
+            if (updates.getCode() != null) existing.setCode(updates.getCode());
+            if (updates.getDescription() != null) existing.setDescription(updates.getDescription());
+            if (updates.getDisplayOrder() != null) existing.setDisplayOrder(updates.getDisplayOrder());
+            if (updates.getEffectiveDate() != null) existing.setEffectiveDate(updates.getEffectiveDate());
+            if (updates.getExpirationDate() != null) existing.setExpirationDate(updates.getExpirationDate());
+            return ResponseEntity.ok(codeTableRepo.save(existing));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/{id}/toggle-active")
+    @RequirePermission(resource = "Timesheet Resource", scope = "edit")
+    public ResponseEntity<?> toggleActive(@PathVariable Long id) {
+        return codeTableRepo.findById(id).map(existing -> {
+            existing.setActive(!Boolean.TRUE.equals(existing.getActive()));
+            return ResponseEntity.ok(codeTableRepo.save(existing));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping("/{id}")
+    @RequirePermission(resource = "Timesheet Resource", scope = "edit")
+    public ResponseEntity<?> delete(@PathVariable Long id) {
+        if (!codeTableRepo.existsById(id)) return ResponseEntity.notFound().build();
+        codeTableRepo.deleteById(id);
+        return ResponseEntity.ok(Map.of("message", "Deleted", "id", id));
+    }
 }

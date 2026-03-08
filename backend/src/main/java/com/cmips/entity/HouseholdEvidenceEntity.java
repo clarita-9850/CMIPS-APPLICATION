@@ -1,91 +1,59 @@
 package com.cmips.entity;
 
 import jakarta.persistence.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
- * Household Evidence Entity — DSD Section 21, BR SE 26-27
+ * Household Evidence Entity - IHSS Assessment household details.
  *
- * Tracks household composition, living arrangements, and companion case links
- * for IHSS eligibility determination. Companion cases are identified when
- * another active case shares the same address (BR SE 26-27).
+ * Tracks appliance indicators, living arrangement, residence type,
+ * and room counts linked to a service eligibility assessment.
  */
 @Entity
 @Table(name = "household_evidence", indexes = {
-        @Index(name = "idx_he_case", columnList = "case_id"),
-        @Index(name = "idx_he_status", columnList = "status")
+        @Index(name = "idx_he_assessment", columnList = "assessment_evidence_id")
 })
 public class HouseholdEvidenceEntity {
-
-    public enum LivingArrangement {
-        LIVES_ALONE,
-        WITH_SPOUSE_PARTNER,
-        WITH_FAMILY_MEMBER,
-        WITH_NON_FAMILY,
-        BOARD_AND_CARE,
-        ASSISTED_LIVING,
-        OTHER
-    }
-
-    public enum HousingType {
-        OWN_HOME,
-        RENTS,
-        LIVES_WITH_OTHERS_FREE,
-        BOARD_AND_CARE_FACILITY,
-        OTHER
-    }
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "case_id", nullable = false)
+    @Column(name = "case_id")
     private Long caseId;
 
-    @Column(name = "recipient_id")
-    private Long recipientId;
+    @Column(name = "assessment_evidence_id")
+    private Long assessmentEvidenceId;
 
-    /** Total number of people in the household including recipient */
-    @Column(name = "number_of_members")
-    private Integer numberOfMembers;
+    @Column(name = "stove_ind")
+    private Boolean stoveInd;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "living_arrangement", length = 30)
-    private LivingArrangement livingArrangement;
+    @Column(name = "refrigerator_ind")
+    private Boolean refrigeratorInd;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "housing_type", length = 30)
-    private HousingType housingType;
+    @Column(name = "washer_ind")
+    private Boolean washerInd;
 
-    /** BR SE 26: Companion case flag — another active IHSS case at the same address */
-    @Column(name = "has_companion_case")
-    private Boolean hasCompanionCase;
+    @Column(name = "dryer_ind")
+    private Boolean dryerInd;
 
-    /** BR SE 27: Companion case ID (if hasCompanionCase = true) */
-    @Column(name = "companion_case_id")
-    private Long companionCaseId;
+    @Column(name = "yard_ind")
+    private Boolean yardInd;
 
-    /** Address used for companion-case detection (stored for audit) */
-    @Column(name = "shared_address", length = 200)
-    private String sharedAddress;
+    @Column(name = "living_arrange_code", length = 10)
+    private String livingArrangeCode;
 
-    /** Whether recipient has live-in provider (affects OT rules) */
-    @Column(name = "has_live_in_provider")
-    private Boolean hasLiveInProvider;
+    @Column(name = "residence_type_code", length = 10)
+    private String residenceTypeCode;
 
-    /** Recipient lives alone — no one else in household */
-    @Column(name = "lives_alone")
-    private Boolean livesAlone;
+    @Column(name = "rooms_private")
+    private Integer roomsPrivate;
 
-    @Column(name = "notes", columnDefinition = "TEXT")
-    private String notes;
+    @Column(name = "rooms_shared")
+    private Integer roomsShared;
 
-    @Column(name = "evidence_status", length = 20)
-    private String status; // PENDING, ACTIVE, INACTIVE
-
-    @Column(name = "effective_date")
-    private LocalDate effectiveDate;
+    @Column(name = "rooms_unused")
+    private Integer roomsUnused;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -103,7 +71,11 @@ public class HouseholdEvidenceEntity {
     protected void onCreate() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        if (status == null) status = "ACTIVE";
+        if (stoveInd == null) stoveInd = false;
+        if (refrigeratorInd == null) refrigeratorInd = false;
+        if (washerInd == null) washerInd = false;
+        if (dryerInd == null) dryerInd = false;
+        if (yardInd == null) yardInd = false;
     }
 
     @PreUpdate
@@ -119,41 +91,38 @@ public class HouseholdEvidenceEntity {
     public Long getCaseId() { return caseId; }
     public void setCaseId(Long caseId) { this.caseId = caseId; }
 
-    public Long getRecipientId() { return recipientId; }
-    public void setRecipientId(Long recipientId) { this.recipientId = recipientId; }
+    public Long getAssessmentEvidenceId() { return assessmentEvidenceId; }
+    public void setAssessmentEvidenceId(Long assessmentEvidenceId) { this.assessmentEvidenceId = assessmentEvidenceId; }
 
-    public Integer getNumberOfMembers() { return numberOfMembers; }
-    public void setNumberOfMembers(Integer numberOfMembers) { this.numberOfMembers = numberOfMembers; }
+    public Boolean getStoveInd() { return stoveInd; }
+    public void setStoveInd(Boolean stoveInd) { this.stoveInd = stoveInd; }
 
-    public LivingArrangement getLivingArrangement() { return livingArrangement; }
-    public void setLivingArrangement(LivingArrangement livingArrangement) { this.livingArrangement = livingArrangement; }
+    public Boolean getRefrigeratorInd() { return refrigeratorInd; }
+    public void setRefrigeratorInd(Boolean refrigeratorInd) { this.refrigeratorInd = refrigeratorInd; }
 
-    public HousingType getHousingType() { return housingType; }
-    public void setHousingType(HousingType housingType) { this.housingType = housingType; }
+    public Boolean getWasherInd() { return washerInd; }
+    public void setWasherInd(Boolean washerInd) { this.washerInd = washerInd; }
 
-    public Boolean getHasCompanionCase() { return hasCompanionCase; }
-    public void setHasCompanionCase(Boolean hasCompanionCase) { this.hasCompanionCase = hasCompanionCase; }
+    public Boolean getDryerInd() { return dryerInd; }
+    public void setDryerInd(Boolean dryerInd) { this.dryerInd = dryerInd; }
 
-    public Long getCompanionCaseId() { return companionCaseId; }
-    public void setCompanionCaseId(Long companionCaseId) { this.companionCaseId = companionCaseId; }
+    public Boolean getYardInd() { return yardInd; }
+    public void setYardInd(Boolean yardInd) { this.yardInd = yardInd; }
 
-    public String getSharedAddress() { return sharedAddress; }
-    public void setSharedAddress(String sharedAddress) { this.sharedAddress = sharedAddress; }
+    public String getLivingArrangeCode() { return livingArrangeCode; }
+    public void setLivingArrangeCode(String livingArrangeCode) { this.livingArrangeCode = livingArrangeCode; }
 
-    public Boolean getHasLiveInProvider() { return hasLiveInProvider; }
-    public void setHasLiveInProvider(Boolean hasLiveInProvider) { this.hasLiveInProvider = hasLiveInProvider; }
+    public String getResidenceTypeCode() { return residenceTypeCode; }
+    public void setResidenceTypeCode(String residenceTypeCode) { this.residenceTypeCode = residenceTypeCode; }
 
-    public Boolean getLivesAlone() { return livesAlone; }
-    public void setLivesAlone(Boolean livesAlone) { this.livesAlone = livesAlone; }
+    public Integer getRoomsPrivate() { return roomsPrivate; }
+    public void setRoomsPrivate(Integer roomsPrivate) { this.roomsPrivate = roomsPrivate; }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public Integer getRoomsShared() { return roomsShared; }
+    public void setRoomsShared(Integer roomsShared) { this.roomsShared = roomsShared; }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-
-    public LocalDate getEffectiveDate() { return effectiveDate; }
-    public void setEffectiveDate(LocalDate effectiveDate) { this.effectiveDate = effectiveDate; }
+    public Integer getRoomsUnused() { return roomsUnused; }
+    public void setRoomsUnused(Integer roomsUnused) { this.roomsUnused = roomsUnused; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

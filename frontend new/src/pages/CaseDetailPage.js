@@ -9,6 +9,7 @@ import * as homeVisitsApi from '../api/homeVisitsApi';
 import * as flexibleHoursApi from '../api/flexibleHoursApi';
 import * as formsApi from '../api/formsApi';
 import * as stateHearingsApi from '../api/stateHearingsApi';
+import * as determinationApi from '../api/determinationApi';
 import { AddNoteModal } from './modals/AddNoteModal';
 import { AddContactModal } from './modals/AddContactModal';
 import { AssignCaseModal } from './modals/AssignCaseModal';
@@ -98,6 +99,17 @@ export const CaseDetailPage = () => {
   const [showEligibilityPreview, setShowEligibilityPreview] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+
+  // Final Determination (DSD Section 22)
+  const [activeAuth, setActiveAuth] = useState(null);
+  const [authHistory, setAuthHistory] = useState([]);
+  const [authorizedServices, setAuthorizedServices] = useState([]);
+  const [activeMOS, setActiveMOS] = useState(null);
+  const [socHoursList, setSocHoursList] = useState([]);
+  const [caseServiceMonths, setCaseServiceMonths] = useState([]);
+  const [showMOSModal, setShowMOSModal] = useState(false);
+  const [mosForm, setMosForm] = useState({ ipMinutes: 0, ccMinutes: 0, hmMinutes: 0 });
+  const [determinationLoading, setDeterminationLoading] = useState(false);
 
   const [showInactivateAgreementConfirm, setShowInactivateAgreementConfirm] = useState(null);
   const [inactivateReason, setInactivateReason] = useState('');
@@ -189,6 +201,12 @@ export const CaseDetailPage = () => {
         setAuthSegments(Array.isArray(segs) ? segs : []);
       });
       eligibilityApi.getAllCountyRates().then(d => setCountyRates(Array.isArray(d) ? d : [])).catch(() => {});
+      // Final Determination data (DSD Section 22)
+      determinationApi.getActiveAuthorization(id).then(d => setActiveAuth(d?.id ? d : null)).catch(() => setActiveAuth(null));
+      determinationApi.getAuthorizationHistory(id).then(d => setAuthHistory(Array.isArray(d) ? d : [])).catch(() => setAuthHistory([]));
+      determinationApi.getActiveModeOfService(id).then(d => setActiveMOS(d?.id ? d : null)).catch(() => setActiveMOS(null));
+      determinationApi.getSOCHours(id).then(d => setSocHoursList(Array.isArray(d) ? d : [])).catch(() => setSocHoursList([]));
+      determinationApi.getCaseServiceMonths(id).then(d => setCaseServiceMonths(Array.isArray(d) ? d : [])).catch(() => setCaseServiceMonths([]));
     } else if (activeTab === 'agreements') {
       casesApi.getWorkweekAgreements(id).then(d => setWorkweekAgreements(Array.isArray(d) ? d : [])).catch(() => setWorkweekAgreements([]));
       casesApi.getOvertimeAgreements(id).then(d => setOvertimeAgreements(Array.isArray(d) ? d : [])).catch(() => setOvertimeAgreements([]));
@@ -523,7 +541,7 @@ export const CaseDetailPage = () => {
         <>
           {/* Eligibility Sub-Tab Nav */}
           <div className="wq-tabs" style={{ marginBottom: '1rem' }}>
-            {[['assessments','Assessments'],['authorization','Authorization Summary'],['household','Household Evidence'],['program','Program Evidence'],['disaster','Disaster Preparedness'],['segments','Auth Segments'],['rates','County Pay Rates']].map(([k,l]) => (
+            {[['assessments','Assessments'],['determination','Final Determination'],['authorization','Authorization Summary'],['serviceMonths','Service Months'],['household','Household Evidence'],['program','Program Evidence'],['disaster','Disaster Preparedness'],['segments','Auth Segments'],['rates','County Pay Rates']].map(([k,l]) => (
               <button key={k} className={`wq-tab ${eligibilitySubTab === k ? 'active' : ''}`} onClick={() => setEligibilitySubTab(k)}>{l}</button>
             ))}
           </div>
@@ -1435,6 +1453,189 @@ export const CaseDetailPage = () => {
                       .then(() => { eligibilityApi.getAllCountyRates().then(d => setCountyRates(Array.isArray(d) ? d : [])); setShowCountyRateModal(false); setEvidenceModalForm({}); })
                       .catch(err => setActionError(err?.response?.data?.message || 'Failed to save county rate'));
                   }}>Save</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Final Determination sub-tab (DSD Section 22) ── */}
+          {eligibilitySubTab === 'determination' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Final Determination — DSD Section 22</h4>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {assessments.some(a => a.status === 'ACTIVE') && !activeAuth && (
+                    <button className="wq-btn wq-btn-primary" disabled={determinationLoading} onClick={() => {
+                      const activeAssessment = assessments.find(a => a.status === 'ACTIVE');
+                      if (!activeAssessment) { setActionError('No ACTIVE assessment found'); return; }
+                      setDeterminationLoading(true);
+                      determinationApi.executeFinalDetermination(activeAssessment.id)
+                        .then(result => {
+                          setInfoMessage(`Final determination completed: ${result.noaType || 'authorization created'}`);
+                          determinationApi.getActiveAuthorization(id).then(d => setActiveAuth(d?.id ? d : null)).catch(() => {});
+                          determinationApi.getActiveModeOfService(id).then(d => setActiveMOS(d?.id ? d : null)).catch(() => {});
+                          determinationApi.getCaseServiceMonths(id).then(d => setCaseServiceMonths(Array.isArray(d) ? d : [])).catch(() => {});
+                          determinationApi.getSOCHours(id).then(d => setSocHoursList(Array.isArray(d) ? d : [])).catch(() => {});
+                        })
+                        .catch(err => setActionError(err?.response?.data?.message || 'Final determination failed'))
+                        .finally(() => setDeterminationLoading(false));
+                    }}>
+                      {determinationLoading ? 'Processing...' : 'Execute Final Determination'}
+                    </button>
+                  )}
+                  {activeAuth && (
+                    <button className="wq-btn wq-btn-outline" onClick={() => setShowMOSModal(true)}>Assign Modes of Service</button>
+                  )}
+                </div>
+              </div>
+              <div className="wq-panel-body">
+                {!activeAuth ? (
+                  <p className="wq-empty">No active authorization. Approve an assessment and run Final Determination to create one.</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                    {/* Authorization Summary */}
+                    <div>
+                      <h5 style={{ marginBottom: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>IHSS Authorization</h5>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Authorization ID:</span><span className="wq-detail-value">{activeAuth.id}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Status:</span><span className="wq-detail-value"><span className={`wq-badge wq-badge-${(activeAuth.statusCode || '').toLowerCase()}`}>{activeAuth.statusCode}</span></span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">FI Score:</span><span className="wq-detail-value">{activeAuth.functionalIndexScore}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Auth to Purchase:</span><span className="wq-detail-value">{activeAuth.authToPurchaseMin != null ? `${(activeAuth.authToPurchaseMin / 60).toFixed(1)} hrs/mo` : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Unmet Need:</span><span className="wq-detail-value">{activeAuth.totalUnmetNeedMin != null ? `${(activeAuth.totalUnmetNeedMin / 60).toFixed(1)} hrs/mo` : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Severely Impaired:</span><span className="wq-detail-value">{activeAuth.severelyImpairedInd ? 'Yes' : 'No'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Calculated SOC:</span><span className="wq-detail-value">${activeAuth.calculatedSOC || '0.00'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Funding Aid Code:</span><span className="wq-detail-value">{activeAuth.fundingAidCode || '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Auth Start:</span><span className="wq-detail-value">{activeAuth.authStartDate ? new Date(activeAuth.authStartDate).toLocaleDateString() : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Auth End:</span><span className="wq-detail-value">{activeAuth.authEndDate ? new Date(activeAuth.authEndDate).toLocaleDateString() : '—'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Advance Pay:</span><span className="wq-detail-value">{activeAuth.advancePayInd ? 'Yes' : 'No'}</span></div>
+                      <div className="wq-detail-row"><span className="wq-detail-label">Monthly OT Max:</span><span className="wq-detail-value">{activeAuth.caseMonthlyOTMax != null ? `${(activeAuth.caseMonthlyOTMax / 60).toFixed(1)} hrs` : '—'}</span></div>
+                    </div>
+                    {/* Mode of Service */}
+                    <div>
+                      <h5 style={{ marginBottom: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>Mode of Service</h5>
+                      {!activeMOS ? (
+                        <p className="wq-empty">No active mode of service assigned.</p>
+                      ) : (
+                        <>
+                          <div className="wq-detail-row"><span className="wq-detail-label">IP Hours:</span><span className="wq-detail-value">{activeMOS.ipHoursMin != null ? `${(activeMOS.ipHoursMin / 60).toFixed(1)} hrs/mo` : '—'}</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">CC Hours:</span><span className="wq-detail-value">{activeMOS.ccHoursMin != null ? `${(activeMOS.ccHoursMin / 60).toFixed(1)} hrs/mo` : '—'}</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">HM Hours:</span><span className="wq-detail-value">{activeMOS.hmHoursMin != null ? `${(activeMOS.hmHoursMin / 60).toFixed(1)} hrs/mo` : '—'}</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">Start Date:</span><span className="wq-detail-value">{activeMOS.modeOfServiceStartDate ? new Date(activeMOS.modeOfServiceStartDate).toLocaleDateString() : '—'}</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">End Date:</span><span className="wq-detail-value">{activeMOS.modeOfServiceEndDate ? new Date(activeMOS.modeOfServiceEndDate).toLocaleDateString() : '—'}</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">Case Cost:</span><span className="wq-detail-value">${activeMOS.caseCost || '0.00'}/mo</span></div>
+                          <div className="wq-detail-row"><span className="wq-detail-label">Status:</span><span className="wq-detail-value"><span className={`wq-badge wq-badge-${(activeMOS.statusCode || '').toLowerCase()}`}>{activeMOS.statusCode}</span></span></div>
+                        </>
+                      )}
+                      {/* SOC Summary */}
+                      {socHoursList.length > 0 && (
+                        <>
+                          <h5 style={{ marginTop: '1.5rem', marginBottom: '0.75rem', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.5rem' }}>SOC Spend Down</h5>
+                          {socHoursList.slice(0, 3).map(sh => (
+                            <div key={sh.id} style={{ marginBottom: '0.75rem', padding: '0.5rem', background: '#f7fafc', borderRadius: '4px' }}>
+                              <div className="wq-detail-row"><span className="wq-detail-label">Month:</span><span className="wq-detail-value">{sh.serviceMonth ? new Date(sh.serviceMonth).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : '—'}</span></div>
+                              <div className="wq-detail-row"><span className="wq-detail-label">Auth Hours:</span><span className="wq-detail-value">{sh.ihssAuthHours != null ? `${(sh.ihssAuthHours / 60).toFixed(1)} hrs` : '—'}</span></div>
+                              <div className="wq-detail-row"><span className="wq-detail-label">SOC Amount:</span><span className="wq-detail-value">${sh.socAuthAmt || '0.00'}</span></div>
+                              <div className="wq-detail-row"><span className="wq-detail-label">Available Hours:</span><span className="wq-detail-value">{sh.availableHours != null ? `${(sh.availableHours / 60).toFixed(1)} hrs` : '—'}</span></div>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Service Months sub-tab ── */}
+          {eligibilitySubTab === 'serviceMonths' && (
+            <div className="wq-panel">
+              <div className="wq-panel-header">
+                <h4>Case Service Months ({caseServiceMonths.length})</h4>
+              </div>
+              <div className="wq-panel-body" style={{ padding: 0 }}>
+                {caseServiceMonths.length === 0 ? (
+                  <p className="wq-empty">No service months initialized. Run Final Determination to create the first service month.</p>
+                ) : (
+                  <table className="wq-table">
+                    <thead>
+                      <tr><th>Month</th><th>Auth to Purchase</th><th>IP Remaining</th><th>CC Remaining</th><th>HM Remaining</th><th>Weekly Cap</th><th>OT Max</th><th>Status</th></tr>
+                    </thead>
+                    <tbody>
+                      {caseServiceMonths.map(csm => (
+                        <tr key={csm.id}>
+                          <td>{csm.serviceMonth ? new Date(csm.serviceMonth).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : '—'}</td>
+                          <td>{csm.authToPurchaseMin != null ? `${(csm.authToPurchaseMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td>{csm.ipRemainingMin != null ? `${(csm.ipRemainingMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td>{csm.ccRemainingMin != null ? `${(csm.ccRemainingMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td>{csm.hmRemainingMin != null ? `${(csm.hmRemainingMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td>{csm.weeklyCapMin != null ? `${(csm.weeklyCapMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td>{csm.otMaxMin != null ? `${(csm.otMaxMin / 60).toFixed(1)}h` : '—'}</td>
+                          <td><span className={`wq-badge wq-badge-${(csm.statusCode || 'open').toLowerCase()}`}>{csm.statusCode || 'OPEN'}</span></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Assign Modes of Service Modal ── */}
+          {showMOSModal && activeAuth && (
+            <div className="wq-modal-overlay" onClick={() => setShowMOSModal(false)}>
+              <div className="wq-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 500 }}>
+                <div className="wq-modal-header"><h3>Assign Modes of Service</h3></div>
+                <div className="wq-modal-body">
+                  <p style={{ marginBottom: '1rem', color: '#718096' }}>
+                    Auth to Purchase: <strong>{activeAuth.authToPurchaseMin != null ? `${(activeAuth.authToPurchaseMin / 60).toFixed(1)} hrs/mo (${activeAuth.authToPurchaseMin} min)` : '—'}</strong>
+                  </p>
+                  <div style={{ display: 'grid', gap: '1rem' }}>
+                    <div>
+                      <label className="wq-label">IP (Individual Provider) Minutes</label>
+                      <input type="number" className="wq-input" value={mosForm.ipMinutes} onChange={e => setMosForm(p => ({ ...p, ipMinutes: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <label className="wq-label">CC (County Contractor) Minutes</label>
+                      <input type="number" className="wq-input" value={mosForm.ccMinutes} onChange={e => setMosForm(p => ({ ...p, ccMinutes: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <div>
+                      <label className="wq-label">HM (Homemaker) Minutes</label>
+                      <input type="number" className="wq-input" value={mosForm.hmMinutes} onChange={e => setMosForm(p => ({ ...p, hmMinutes: parseInt(e.target.value) || 0 }))} />
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: '#718096' }}>
+                      Total: {mosForm.ipMinutes + mosForm.ccMinutes + mosForm.hmMinutes} min / {((mosForm.ipMinutes + mosForm.ccMinutes + mosForm.hmMinutes) / 60).toFixed(1)} hrs
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                      <div>
+                        <label className="wq-label">Start Date</label>
+                        <input type="date" className="wq-input" value={mosForm.startDate || ''} onChange={e => setMosForm(p => ({ ...p, startDate: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="wq-label">End Date</label>
+                        <input type="date" className="wq-input" value={mosForm.endDate || ''} onChange={e => setMosForm(p => ({ ...p, endDate: e.target.value }))} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="wq-modal-footer">
+                  <button className="wq-btn wq-btn-outline" onClick={() => setShowMOSModal(false)}>Cancel</button>
+                  <button className="wq-btn wq-btn-primary" disabled={!mosForm.startDate} onClick={() => {
+                    determinationApi.assignModesOfService({
+                      authorizationId: activeAuth.id,
+                      ipMinutes: mosForm.ipMinutes,
+                      ccMinutes: mosForm.ccMinutes,
+                      hmMinutes: mosForm.hmMinutes,
+                      startDate: mosForm.startDate,
+                      endDate: mosForm.endDate
+                    })
+                      .then(() => {
+                        setShowMOSModal(false);
+                        setInfoMessage('Modes of service assigned successfully');
+                        determinationApi.getActiveModeOfService(id).then(d => setActiveMOS(d?.id ? d : null)).catch(() => {});
+                        determinationApi.getCaseServiceMonths(id).then(d => setCaseServiceMonths(Array.isArray(d) ? d : [])).catch(() => {});
+                      })
+                      .catch(err => setActionError(err?.response?.data?.message || 'Failed to assign modes of service'));
+                  }}>Assign</button>
                 </div>
               </div>
             </div>

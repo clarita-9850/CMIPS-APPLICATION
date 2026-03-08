@@ -105,6 +105,11 @@ import { WageRatePage } from './pages/WageRatePage';
 import { IssuancePage } from './pages/IssuancePage';
 import { CodeTablePage } from './pages/CodeTablePage';
 
+// DSD Sections 14-19, 26-28, 32
+import { PayrollAdminPage } from './pages/PayrollAdminPage';
+import { ReportsAdminPage } from './pages/ReportsAdminPage';
+import { InternalOpsPage } from './pages/InternalOpsPage';
+
 /**
  * Logged Out Page
  */
@@ -258,6 +263,15 @@ function App() {
             <Route path="/cases/:caseId/payment-corrections" element={<PaymentCorrectionsPage />} />
             <Route path="/cases/:caseId/overpayments" element={<OverpaymentRecoveryPage />} />
             <Route path="/cases/:caseId/fpo-eligibility" element={<CaseViewFPOEligibilityPage />} />
+
+            {/* Payroll Admin (DSD Sections 14-19) */}
+            <Route path="/payments/payroll-admin" element={<PayrollAdminPage />} />
+
+            {/* Reports & Program Mgmt (DSD Sections 26-28) */}
+            <Route path="/admin/reports" element={<ReportsAdminPage />} />
+
+            {/* Internal Operations (DSD Section 32) */}
+            <Route path="/admin/internal-ops" element={<InternalOpsPage />} />
 
             {/* Work Queues */}
             <Route path="/work-queues" element={<WorkQueuesPage />} />

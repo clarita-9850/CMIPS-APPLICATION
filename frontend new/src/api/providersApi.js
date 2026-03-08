@@ -162,3 +162,39 @@ export const getProviderTraining = (id) =>
   http.get(`/providers/${id}/training`).then(r => r.data);
 export const recordProviderTraining = (id, data) =>
   http.post(`/providers/${id}/training`, data).then(r => r.data);
+
+// ── Sick Leave Accrual (DSD Section 23.9) ────────────────────────────────────
+export const getSickLeaveAccruals = (id) =>
+  http.get(`/providers/${id}/sick-leave-accruals`).then(r => r.data);
+export const getCurrentSickLeaveAccrual = (id) =>
+  http.get(`/providers/${id}/sick-leave-accruals/current`).then(r => r.data);
+export const createOrUpdateSickLeaveAccrual = (id, data) =>
+  http.post(`/providers/${id}/sick-leave-accruals`, data).then(r => r.data);
+export const getSickLeaveClaims = (id) =>
+  http.get(`/providers/${id}/sick-leave-claims`).then(r => r.data);
+
+// ── Notification Preferences (DSD Section 23.10) ────────────────────────────
+export const getNotificationPreferences = (id) =>
+  http.get(`/providers/${id}/notification-preferences`).then(r => r.data);
+export const updateNotificationPreferences = (id, data) =>
+  http.put(`/providers/${id}/notification-preferences`, data).then(r => r.data);
+export const verifyCellPhone = (id) =>
+  http.put(`/providers/${id}/verify-cell-phone`).then(r => r.data);
+export const stopETimesheet = (id) =>
+  http.put(`/providers/${id}/stop-e-timesheet`).then(r => r.data);
+
+// ── Recipient Waivers (DSD Section 23.3) ─────────────────────────────────────
+export const getProviderWaivers = (id) =>
+  http.get(`/providers/${id}/waivers`).then(r => r.data);
+export const getWaiver = (waiverId) =>
+  http.get(`/providers/waivers/${waiverId}`).then(r => r.data);
+export const modifyWaiver = (waiverId, data) =>
+  http.put(`/providers/waivers/${waiverId}`, data).then(r => r.data);
+export const inactivateWaiver = (waiverId, data) =>
+  http.put(`/providers/waivers/${waiverId}/inactivate`, data).then(r => r.data);
+
+// ── State Violation Review (DSD Section 23.6) ────────────────────────────────
+export const stateReviewViolation = (violationId, data) =>
+  http.put(`/providers/violations/${violationId}/state-review`, data).then(r => r.data);
+export const stateSupervisorReviewViolation = (violationId, data) =>
+  http.put(`/providers/violations/${violationId}/state-supervisor-review`, data).then(r => r.data);

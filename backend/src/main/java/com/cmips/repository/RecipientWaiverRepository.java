@@ -25,6 +25,9 @@ public interface RecipientWaiverRepository extends JpaRepository<RecipientWaiver
     // Find by provider ID
     List<RecipientWaiverEntity> findByProviderId(Long providerId);
 
+    // Find by provider ID, sorted by created date
+    List<RecipientWaiverEntity> findByProviderIdOrderByCreatedAtDesc(Long providerId);
+
     // Find by recipient and provider
     Optional<RecipientWaiverEntity> findByRecipientIdAndProviderId(Long recipientId, Long providerId);
 

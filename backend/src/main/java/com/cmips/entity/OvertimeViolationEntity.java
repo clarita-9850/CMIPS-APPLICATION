@@ -134,6 +134,32 @@ public class OvertimeViolationEntity {
     @Column(name = "county_dispute_task_id")
     private Long countyDisputeTaskId;
 
+    // State Review (DSD Section 23.6 — Level 2)
+    @Column(name = "state_review_outcome", length = 50)
+    private String stateReviewOutcome;
+
+    @Column(name = "state_review_comments", columnDefinition = "TEXT")
+    private String stateReviewComments;
+
+    @Column(name = "state_reviewed_by", length = 100)
+    private String stateReviewedBy;
+
+    @Column(name = "state_review_date")
+    private LocalDate stateReviewDate;
+
+    // State Supervisor Review (DSD Section 23.6 — Level 2 supervisor)
+    @Column(name = "state_supervisor_outcome", length = 50)
+    private String stateSupervisorOutcome;
+
+    @Column(name = "state_supervisor_comments", columnDefinition = "TEXT")
+    private String stateSupervisorComments;
+
+    @Column(name = "state_supervisor_id", length = 100)
+    private String stateSupervisorId;
+
+    @Column(name = "state_supervisor_review_date")
+    private LocalDate stateSupervisorReviewDate;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -353,6 +379,30 @@ public class OvertimeViolationEntity {
 
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
+
+    public String getStateReviewOutcome() { return stateReviewOutcome; }
+    public void setStateReviewOutcome(String stateReviewOutcome) { this.stateReviewOutcome = stateReviewOutcome; }
+
+    public String getStateReviewComments() { return stateReviewComments; }
+    public void setStateReviewComments(String stateReviewComments) { this.stateReviewComments = stateReviewComments; }
+
+    public String getStateReviewedBy() { return stateReviewedBy; }
+    public void setStateReviewedBy(String stateReviewedBy) { this.stateReviewedBy = stateReviewedBy; }
+
+    public LocalDate getStateReviewDate() { return stateReviewDate; }
+    public void setStateReviewDate(LocalDate stateReviewDate) { this.stateReviewDate = stateReviewDate; }
+
+    public String getStateSupervisorOutcome() { return stateSupervisorOutcome; }
+    public void setStateSupervisorOutcome(String stateSupervisorOutcome) { this.stateSupervisorOutcome = stateSupervisorOutcome; }
+
+    public String getStateSupervisorComments() { return stateSupervisorComments; }
+    public void setStateSupervisorComments(String stateSupervisorComments) { this.stateSupervisorComments = stateSupervisorComments; }
+
+    public String getStateSupervisorId() { return stateSupervisorId; }
+    public void setStateSupervisorId(String stateSupervisorId) { this.stateSupervisorId = stateSupervisorId; }
+
+    public LocalDate getStateSupervisorReviewDate() { return stateSupervisorReviewDate; }
+    public void setStateSupervisorReviewDate(LocalDate stateSupervisorReviewDate) { this.stateSupervisorReviewDate = stateSupervisorReviewDate; }
 
     public static Builder builder() { return new Builder(); }
 

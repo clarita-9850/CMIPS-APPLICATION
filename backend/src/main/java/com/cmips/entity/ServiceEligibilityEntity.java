@@ -211,6 +211,16 @@ public class ServiceEligibilityEntity {
     @Column(name = "verified_by_case_owner_or_supervisor")
     private Boolean verifiedByCaseOwnerOrSupervisor;
 
+    // DSD Section 22 authorization indicators
+    @Column(name = "restaurant_meals_allowed")
+    private Boolean restaurantMealsAllowed;
+
+    @Column(name = "parent_of_minor_provider")
+    private Boolean parentOfMinorProvider;
+
+    @Column(name = "spouse_provider")
+    private Boolean spouseProvider;
+
     // Advance Pay (per BR SE 09)
     @Column(name = "advance_pay_indicated")
     private Boolean advancePayIndicated;
@@ -664,6 +674,15 @@ public class ServiceEligibilityEntity {
 
     public String getSocialWorkerCertification() { return socialWorkerCertification; }
     public void setSocialWorkerCertification(String socialWorkerCertification) { this.socialWorkerCertification = socialWorkerCertification; }
+
+    public Boolean getRestaurantMealsAllowed() { return restaurantMealsAllowed; }
+    public void setRestaurantMealsAllowed(Boolean restaurantMealsAllowed) { this.restaurantMealsAllowed = restaurantMealsAllowed; }
+
+    public Boolean getParentOfMinorProvider() { return parentOfMinorProvider; }
+    public void setParentOfMinorProvider(Boolean parentOfMinorProvider) { this.parentOfMinorProvider = parentOfMinorProvider; }
+
+    public Boolean getSpouseProvider() { return spouseProvider; }
+    public void setSpouseProvider(Boolean spouseProvider) { this.spouseProvider = spouseProvider; }
 
     public Boolean getVerifiedByCaseOwnerOrSupervisor() { return verifiedByCaseOwnerOrSupervisor; }
     public void setVerifiedByCaseOwnerOrSupervisor(Boolean verifiedByCaseOwnerOrSupervisor) { this.verifiedByCaseOwnerOrSupervisor = verifiedByCaseOwnerOrSupervisor; }

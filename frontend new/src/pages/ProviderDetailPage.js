@@ -42,10 +42,16 @@ export const ProviderDetailPage = () => {
   const [showAddNote, setShowAddNote] = useState(false);
   const [showAssign, setShowAssign] = useState(false);
 
+  // New DSD Section 23 state
+  const [sickLeaveAccrual, setSickLeaveAccrual] = useState(null);
+  const [sickLeaveClaims, setSickLeaveClaims] = useState([]);
+  const [notifPrefs, setNotifPrefs] = useState(null);
+  const [waivers, setWaivers] = useState([]);
+
   // Violation review inline forms
   const [reviewingViolation, setReviewingViolation] = useState(null);
   const [reviewForm, setReviewForm] = useState({ outcome: '', comments: '' });
-  const [reviewType, setReviewType] = useState(''); // 'county' | 'supervisor' | 'dispute' | 'cdss'
+  const [reviewType, setReviewType] = useState(''); // 'county' | 'supervisor' | 'dispute' | 'cdss' | 'state' | 'state_supervisor'
 
   // Exemption inline form
   const [showExemptionForm, setShowExemptionForm] = useState(false);
@@ -126,6 +132,13 @@ export const ProviderDetailPage = () => {
     } else if (activeTab === 'qualification') {
       providersApi.getQualificationSummary(id).then(d => setQualSummary(d)).catch(() => setQualSummary(null));
       providersApi.getProviderTraining(id).then(d => setTrainingRecords(Array.isArray(d) ? d : [])).catch(() => setTrainingRecords([]));
+    } else if (activeTab === 'sickleave') {
+      providersApi.getCurrentSickLeaveAccrual(id).then(d => setSickLeaveAccrual(d)).catch(() => setSickLeaveAccrual(null));
+      providersApi.getSickLeaveClaims(id).then(d => setSickLeaveClaims(Array.isArray(d) ? d : [])).catch(() => setSickLeaveClaims([]));
+    } else if (activeTab === 'notifications') {
+      providersApi.getNotificationPreferences(id).then(d => setNotifPrefs(d)).catch(() => setNotifPrefs(null));
+    } else if (activeTab === 'waivers') {
+      providersApi.getProviderWaivers(id).then(d => setWaivers(Array.isArray(d) ? d : [])).catch(() => setWaivers([]));
     }
   }, [id, activeTab]);
 
@@ -146,6 +159,8 @@ export const ProviderDetailPage = () => {
       else if (reviewType === 'cdss-request') await providersApi.requestCdssReview(reviewingViolation.id);
       else if (reviewType === 'cdss-outcome') await providersApi.recordCdssOutcome(reviewingViolation.id, reviewForm);
       else if (reviewType === 'training') await providersApi.recordTrainingCompletion(reviewingViolation.id);
+      else if (reviewType === 'state') await providersApi.stateReviewViolation(reviewingViolation.id, reviewForm);
+      else if (reviewType === 'state_supervisor') await providersApi.stateSupervisorReviewViolation(reviewingViolation.id, reviewForm);
       setReviewingViolation(null); setReviewForm({ outcome: '', comments: '' });
       setActionSuccess('Violation review updated.');
       providersApi.getProviderViolations(id).then(d => setViolations(Array.isArray(d) ? d : []));
@@ -309,7 +324,7 @@ export const ProviderDetailPage = () => {
 
       {/* Tabs */}
       <div className="wq-tabs" style={{ flexWrap: 'wrap' }}>
-        {['overview','enrollment','qualification','assignments','cori','violations','exemptions','workweek','traveltime','benefits','attachments','backuphours','monthlyhours','notes'].map(tab => (
+        {['overview','enrollment','qualification','assignments','cori','violations','exemptions','workweek','traveltime','benefits','sickleave','waivers','notifications','attachments','backuphours','monthlyhours','notes'].map(tab => (
           <button key={tab} className={`wq-tab ${activeTab === tab ? 'active' : ''}`} onClick={() => setActiveTab(tab)}>
             {{ overview:'Overview', enrollment:'Enrollment', qualification:'Qualification', assignments:'Assignments', cori:'CORI', violations:'Violations', exemptions:'OT Exemptions', workweek:'Workweek Agmt', traveltime:'Travel Time', benefits:'Benefits', attachments:'Attachments', backuphours:'Backup Hours', monthlyhours:'Paid Hours', notes:'Notes' }[tab]}
           </button>
@@ -1257,6 +1272,78 @@ export const ProviderDetailPage = () => {
                 </tbody>
               </table>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Sick Leave Tab (DSD Section 23.9) ── */}
+      {activeTab === 'sickleave' && (
+        <div className="wq-panel">
+          <div className="wq-panel-header"><h4>Sick Leave Balance</h4></div>
+          <div className="wq-panel-body">
+            {sickLeaveAccrual ? (
+              <div className="wq-grid wq-grid-2">
+                <div><strong>Accrual Year:</strong> {sickLeaveAccrual.accrual?.accrualYear || new Date().getFullYear()}</div>
+                <div><strong>Hours Accrued:</strong> {sickLeaveAccrual.accrual ? `${Math.floor(sickLeaveAccrual.accrual.hoursAccrued/60)}:${String(sickLeaveAccrual.accrual.hoursAccrued%60).padStart(2,'0')}` : '—'}</div>
+                <div><strong>Hours Used:</strong> {sickLeaveAccrual.accrual ? `${Math.floor(sickLeaveAccrual.accrual.hoursUsed/60)}:${String(sickLeaveAccrual.accrual.hoursUsed%60).padStart(2,'0')}` : '—'}</div>
+                <div><strong>Hours Available:</strong> <span style={{fontWeight:700, color:'#276749'}}>{sickLeaveAccrual.hoursAvailableFormatted || '—'}</span></div>
+                <div><strong>Last Accrual Date:</strong> {fmt(sickLeaveAccrual.accrual?.lastAccrualDate)}</div>
+                <div><strong>Eligibility Date:</strong> {fmt(sickLeaveAccrual.accrual?.eligibilityDate)}</div>
+              </div>
+            ) : <p className="wq-empty">No sick leave accrual record for current year.</p>}
+          </div>
+          <div className="wq-panel-header" style={{marginTop:'1rem'}}><h4>Sick Leave Claims ({sickLeaveClaims.length})</h4></div>
+          <div className="wq-panel-body" style={{padding:0}}>
+            {sickLeaveClaims.length === 0 ? <p className="wq-empty">No sick leave claims.</p> : (
+              <table className="wq-table"><thead><tr><th>Claim #</th><th>Pay Period</th><th>Hours</th><th>Status</th><th>Entered</th></tr></thead>
+                <tbody>{sickLeaveClaims.map((c,i) => (
+                  <tr key={c.id||i}><td>{c.claimNumber}</td><td>{fmt(c.payPeriodBeginDate)}</td>
+                    <td>{c.claimedHours ? `${Math.floor(c.claimedHours/60)}:${String(c.claimedHours%60).padStart(2,'0')}` : '—'}</td>
+                    <td><span style={badgeStyle(c.status)}>{c.status}</span></td><td>{fmt(c.claimEnteredDate)}</td></tr>
+                ))}</tbody></table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Waivers Tab (DSD Section 23.3) ── */}
+      {activeTab === 'waivers' && (
+        <div className="wq-panel">
+          <div className="wq-panel-header"><h4>Recipient Waivers ({waivers.length})</h4></div>
+          <div className="wq-panel-body" style={{padding:0}}>
+            {waivers.length === 0 ? <p className="wq-empty">No recipient waivers for this provider.</p> : (
+              <table className="wq-table"><thead><tr><th>Recipient</th><th>Case #</th><th>Conviction</th><th>Status</th><th>Effective</th><th>County Decision</th></tr></thead>
+                <tbody>{waivers.map((w,i) => (
+                  <tr key={w.id||i}><td>{w.recipientName || '—'}</td><td>{w.caseNumber || '—'}</td>
+                    <td>{w.convictionType || '—'}</td><td><span style={badgeStyle(w.status)}>{w.status}</span></td>
+                    <td>{fmt(w.effectiveDate)}</td><td>{w.countyDecision || '—'}</td></tr>
+                ))}</tbody></table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Notification Preferences Tab (DSD Section 23.10) ── */}
+      {activeTab === 'notifications' && (
+        <div className="wq-panel">
+          <div className="wq-panel-header"><h4>Notification Preferences</h4></div>
+          <div className="wq-panel-body">
+            {notifPrefs && !notifPrefs.message ? (
+              <div className="wq-grid wq-grid-2">
+                <div><strong>Preferred Contact:</strong> {notifPrefs.preferredContactMethod || '—'}</div>
+                <div><strong>Timesheet Method:</strong> {notifPrefs.timesheetMethod || '—'}</div>
+                <div><strong>E-Timesheet:</strong> <span style={badgeStyle(notifPrefs.eTimesheetIndicator ? 'yes' : 'no')}>{notifPrefs.eTimesheetIndicator ? 'YES' : 'NO'}</span></div>
+                <div><strong>Cell Verified:</strong> <span style={badgeStyle(notifPrefs.cellPhoneVerified ? 'yes' : 'no')}>{notifPrefs.cellPhoneVerified ? 'YES' : 'NO'}</span></div>
+                <div><strong>Email Notifications:</strong> {notifPrefs.emailNotificationsEnabled ? 'Enabled' : 'Disabled'}</div>
+                <div><strong>SMS Notifications:</strong> {notifPrefs.smsNotificationsEnabled ? 'Enabled' : 'Disabled'}</div>
+                <div><strong>Timesheet Reminders:</strong> {notifPrefs.timesheetReminders ? 'Yes' : 'No'}</div>
+                <div><strong>Payment Confirmations:</strong> {notifPrefs.paymentConfirmations ? 'Yes' : 'No'}</div>
+              </div>
+            ) : <p className="wq-empty">No notification preferences configured. Use the provider portal to set preferences.</p>}
+            <div style={{marginTop:'1rem', display:'flex', gap:'0.5rem'}}>
+              <button className="wq-btn wq-btn-secondary" onClick={() => providersApi.verifyCellPhone(id).then(() => { setActionSuccess('Cell phone verified'); setActiveTab('notifications'); })}>Verify Cell Phone</button>
+              <button className="wq-btn wq-btn-secondary" onClick={() => providersApi.stopETimesheet(id).then(() => { setActionSuccess('E-Timesheet stopped; switched to paper'); setActiveTab('notifications'); })}>Stop E-Timesheet</button>
+            </div>
           </div>
         </div>
       )}

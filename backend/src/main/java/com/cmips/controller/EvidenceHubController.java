@@ -100,28 +100,26 @@ public class EvidenceHubController {
     }
 
     private void applyHouseholdFields(HouseholdEvidenceEntity e, Map<String, Object> req) {
-        if (req.containsKey("numberOfMembers") && req.get("numberOfMembers") != null)
-            e.setNumberOfMembers(((Number) req.get("numberOfMembers")).intValue());
-        if (req.containsKey("livingArrangement") && req.get("livingArrangement") != null)
-            e.setLivingArrangement(HouseholdEvidenceEntity.LivingArrangement.valueOf((String) req.get("livingArrangement")));
-        if (req.containsKey("housingType") && req.get("housingType") != null)
-            e.setHousingType(HouseholdEvidenceEntity.HousingType.valueOf((String) req.get("housingType")));
-        if (req.containsKey("hasCompanionCase"))
-            e.setHasCompanionCase(Boolean.TRUE.equals(req.get("hasCompanionCase")));
-        if (req.containsKey("companionCaseId") && req.get("companionCaseId") != null)
-            e.setCompanionCaseId(((Number) req.get("companionCaseId")).longValue());
-        if (req.containsKey("sharedAddress"))
-            e.setSharedAddress((String) req.get("sharedAddress"));
-        if (req.containsKey("hasLiveInProvider"))
-            e.setHasLiveInProvider(Boolean.TRUE.equals(req.get("hasLiveInProvider")));
-        if (req.containsKey("livesAlone"))
-            e.setLivesAlone(Boolean.TRUE.equals(req.get("livesAlone")));
-        if (req.containsKey("notes"))
-            e.setNotes((String) req.get("notes"));
-        if (req.containsKey("status"))
-            e.setStatus((String) req.get("status"));
-        if (req.containsKey("effectiveDate") && req.get("effectiveDate") != null)
-            e.setEffectiveDate(LocalDate.parse((String) req.get("effectiveDate")));
+        if (req.containsKey("stoveInd"))
+            e.setStoveInd(Boolean.TRUE.equals(req.get("stoveInd")));
+        if (req.containsKey("refrigeratorInd"))
+            e.setRefrigeratorInd(Boolean.TRUE.equals(req.get("refrigeratorInd")));
+        if (req.containsKey("washerInd"))
+            e.setWasherInd(Boolean.TRUE.equals(req.get("washerInd")));
+        if (req.containsKey("dryerInd"))
+            e.setDryerInd(Boolean.TRUE.equals(req.get("dryerInd")));
+        if (req.containsKey("yardInd"))
+            e.setYardInd(Boolean.TRUE.equals(req.get("yardInd")));
+        if (req.containsKey("livingArrangeCode"))
+            e.setLivingArrangeCode((String) req.get("livingArrangeCode"));
+        if (req.containsKey("residenceTypeCode"))
+            e.setResidenceTypeCode((String) req.get("residenceTypeCode"));
+        if (req.containsKey("roomsPrivate") && req.get("roomsPrivate") != null)
+            e.setRoomsPrivate(((Number) req.get("roomsPrivate")).intValue());
+        if (req.containsKey("roomsShared") && req.get("roomsShared") != null)
+            e.setRoomsShared(((Number) req.get("roomsShared")).intValue());
+        if (req.containsKey("roomsUnused") && req.get("roomsUnused") != null)
+            e.setRoomsUnused(((Number) req.get("roomsUnused")).intValue());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -263,80 +261,8 @@ public class EvidenceHubController {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // 4. COUNTY PAY RATES
+    // 4. COUNTY PAY RATES — moved to dedicated CountyPayRateController
     // ─────────────────────────────────────────────────────────────────────────
-
-    @GetMapping("/api/county-pay-rates")
-    @RequirePermission(resource = "Case Resource", scope = "view")
-    public ResponseEntity<List<CountyPayRateEntity>> getAllRates() {
-        return ResponseEntity.ok(countyPayRateRepo.findAllByOrderByCountyCodeAscEffectiveDateDesc());
-    }
-
-    @GetMapping("/api/county-pay-rates/{countyCode}")
-    @RequirePermission(resource = "Case Resource", scope = "view")
-    public ResponseEntity<List<CountyPayRateEntity>> getRatesByCounty(@PathVariable String countyCode) {
-        return ResponseEntity.ok(countyPayRateRepo.findByCountyCodeOrderByEffectiveDateDesc(countyCode));
-    }
-
-    @GetMapping("/api/county-pay-rates/{countyCode}/current")
-    @RequirePermission(resource = "Case Resource", scope = "view")
-    public ResponseEntity<?> getCurrentRate(
-            @PathVariable String countyCode,
-            @RequestParam(required = false) String asOf,
-            @RequestParam(required = false, defaultValue = "STANDARD_IP") String rateType) {
-        LocalDate date = asOf != null ? LocalDate.parse(asOf) : LocalDate.now();
-        return countyPayRateRepo.findCurrentRate(countyCode, RateType.valueOf(rateType), date)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
-    }
-
-    @PostMapping("/api/county-pay-rates")
-    @RequirePermission(resource = "Case Resource", scope = "create")
-    public ResponseEntity<?> createRate(
-            @RequestBody Map<String, Object> req,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
-        try {
-            CountyPayRateEntity e = new CountyPayRateEntity();
-            e.setCreatedBy(userId);
-            e.setUpdatedBy(userId);
-            applyCountyRateFields(e, req);
-            if (e.getCountyCode() == null || e.getHourlyRate() == null || e.getEffectiveDate() == null)
-                return ResponseEntity.badRequest().body(Map.of("error", "countyCode, hourlyRate, effectiveDate are required."));
-            return ResponseEntity.ok(countyPayRateRepo.save(e));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
-        }
-    }
-
-    @PutMapping("/api/county-pay-rates/{id}")
-    @RequirePermission(resource = "Case Resource", scope = "edit")
-    public ResponseEntity<?> updateRate(
-            @PathVariable Long id,
-            @RequestBody Map<String, Object> req,
-            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
-        CountyPayRateEntity e = countyPayRateRepo.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Rate not found: " + id));
-        e.setUpdatedBy(userId);
-        applyCountyRateFields(e, req);
-        return ResponseEntity.ok(countyPayRateRepo.save(e));
-    }
-
-    private void applyCountyRateFields(CountyPayRateEntity e, Map<String, Object> req) {
-        if (req.containsKey("countyCode")) e.setCountyCode((String) req.get("countyCode"));
-        if (req.containsKey("countyName")) e.setCountyName((String) req.get("countyName"));
-        if (req.containsKey("rateType") && req.get("rateType") != null)
-            e.setRateType(RateType.valueOf((String) req.get("rateType")));
-        if (req.containsKey("hourlyRate") && req.get("hourlyRate") != null)
-            e.setHourlyRate(((Number) req.get("hourlyRate")).doubleValue());
-        if (req.containsKey("overtimeRate") && req.get("overtimeRate") != null)
-            e.setOvertimeRate(((Number) req.get("overtimeRate")).doubleValue());
-        if (req.containsKey("effectiveDate") && req.get("effectiveDate") != null)
-            e.setEffectiveDate(LocalDate.parse((String) req.get("effectiveDate")));
-        if (req.containsKey("endDate") && req.get("endDate") != null)
-            e.setEndDate(LocalDate.parse((String) req.get("endDate")));
-        if (req.containsKey("status")) e.setStatus((String) req.get("status"));
-        if (req.containsKey("notes")) e.setNotes((String) req.get("notes"));
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // 5. AUTHORIZATION SEGMENTS

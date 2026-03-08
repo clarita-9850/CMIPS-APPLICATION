@@ -15,6 +15,10 @@ import com.cmips.repository.TravelTimeRepository;
 import com.cmips.repository.ProviderBenefitRepository;
 import com.cmips.repository.ProviderAttachmentRepository;
 import com.cmips.repository.BackupProviderHoursRepository;
+import com.cmips.repository.ProviderSickLeaveAccrualRepository;
+import com.cmips.repository.ProviderNotificationPreferenceRepository;
+import com.cmips.repository.RecipientWaiverRepository;
+import com.cmips.repository.SickLeaveClaimRepository;
 import com.cmips.service.LiveInSelfCertificationService;
 import com.cmips.service.ProviderManagementService;
 import com.cmips.service.FieldLevelAuthorizationService;
@@ -51,6 +55,10 @@ public class ProviderManagementController {
     private final BackupProviderHoursRepository backupHoursRepository;
     private final FieldLevelAuthorizationService fieldAuthService;
     private final LiveInSelfCertificationService liveInCertService;
+    private final ProviderSickLeaveAccrualRepository sickLeaveAccrualRepository;
+    private final ProviderNotificationPreferenceRepository notificationPrefRepository;
+    private final RecipientWaiverRepository recipientWaiverRepository;
+    private final SickLeaveClaimRepository sickLeaveClaimRepository;
 
     public ProviderManagementController(ProviderManagementService providerService,
                                         ProviderRepository providerRepository,
@@ -63,7 +71,11 @@ public class ProviderManagementController {
                                         ProviderAttachmentRepository attachmentRepository,
                                         BackupProviderHoursRepository backupHoursRepository,
                                         FieldLevelAuthorizationService fieldAuthService,
-                                        LiveInSelfCertificationService liveInCertService) {
+                                        LiveInSelfCertificationService liveInCertService,
+                                        ProviderSickLeaveAccrualRepository sickLeaveAccrualRepository,
+                                        ProviderNotificationPreferenceRepository notificationPrefRepository,
+                                        RecipientWaiverRepository recipientWaiverRepository,
+                                        SickLeaveClaimRepository sickLeaveClaimRepository) {
         this.providerService = providerService;
         this.providerRepository = providerRepository;
         this.assignmentRepository = assignmentRepository;
@@ -76,6 +88,10 @@ public class ProviderManagementController {
         this.backupHoursRepository = backupHoursRepository;
         this.fieldAuthService = fieldAuthService;
         this.liveInCertService = liveInCertService;
+        this.sickLeaveAccrualRepository = sickLeaveAccrualRepository;
+        this.notificationPrefRepository = notificationPrefRepository;
+        this.recipientWaiverRepository = recipientWaiverRepository;
+        this.sickLeaveClaimRepository = sickLeaveClaimRepository;
     }
 
     // ==================== PROVIDER CRUD ====================
@@ -1046,6 +1062,282 @@ public class ProviderManagementController {
     public ResponseEntity<?> getQualificationSummary(@PathVariable Long id) {
         try {
             return ResponseEntity.ok(providerService.getQualificationSummary(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== SICK LEAVE ACCRUAL (DSD Section 23.9) ====================
+
+    /** GET sick leave accrual records for a provider */
+    @GetMapping("/{id}/sick-leave-accruals")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getSickLeaveAccruals(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(sickLeaveAccrualRepository.findByProviderIdOrderByAccrualYearDesc(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** GET sick leave accrual for current year */
+    @GetMapping("/{id}/sick-leave-accruals/current")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getCurrentSickLeaveAccrual(@PathVariable Long id) {
+        try {
+            int currentYear = LocalDate.now().getYear();
+            var accrual = sickLeaveAccrualRepository.findByProviderIdAndAccrualYear(id, currentYear);
+            if (accrual.isPresent()) {
+                var a = accrual.get();
+                int available = (a.getHoursAccrued() + a.getHoursCarriedOver()) - a.getHoursUsed();
+                return ResponseEntity.ok(Map.of(
+                    "accrual", a,
+                    "hoursAvailableMinutes", available,
+                    "hoursAvailableFormatted", String.format("%d:%02d", available / 60, available % 60)
+                ));
+            }
+            return ResponseEntity.ok(Map.of("message", "No sick leave accrual record for current year"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** POST create or update sick leave accrual for a year */
+    @PostMapping("/{id}/sick-leave-accruals")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> createOrUpdateSickLeaveAccrual(@PathVariable Long id,
+            @RequestBody ProviderSickLeaveAccrualEntity accrual,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            accrual.setProviderId(id);
+            accrual.setCreatedBy(userId);
+            accrual.setUpdatedBy(userId);
+            var existing = sickLeaveAccrualRepository.findByProviderIdAndAccrualYear(id, accrual.getAccrualYear());
+            if (existing.isPresent()) {
+                var e = existing.get();
+                e.setHoursAccrued(accrual.getHoursAccrued());
+                e.setHoursUsed(accrual.getHoursUsed());
+                e.setYtdHoursUsed(accrual.getYtdHoursUsed());
+                e.setTotalHoursWorked(accrual.getTotalHoursWorked());
+                e.setLastAccrualDate(accrual.getLastAccrualDate());
+                e.setUpdatedBy(userId);
+                return ResponseEntity.ok(sickLeaveAccrualRepository.save(e));
+            }
+            return ResponseEntity.status(HttpStatus.CREATED).body(sickLeaveAccrualRepository.save(accrual));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** GET sick leave claims for a provider */
+    @GetMapping("/{id}/sick-leave-claims")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getSickLeaveClaims(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(sickLeaveClaimRepository.findByProviderIdOrderByPayPeriodBeginDateDesc(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== NOTIFICATION PREFERENCES (DSD Section 23.10) ====================
+
+    /** GET notification preferences for a provider */
+    @GetMapping("/{id}/notification-preferences")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getNotificationPreferences(@PathVariable Long id) {
+        try {
+            var prefs = notificationPrefRepository.findByProviderId(id);
+            if (prefs.isPresent()) {
+                return ResponseEntity.ok(prefs.get());
+            }
+            return ResponseEntity.ok(Map.of("message", "No notification preferences configured"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** POST/PUT notification preferences */
+    @PutMapping("/{id}/notification-preferences")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> updateNotificationPreferences(@PathVariable Long id,
+            @RequestBody ProviderNotificationPreferenceEntity prefs,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var existing = notificationPrefRepository.findByProviderId(id);
+            if (existing.isPresent()) {
+                var e = existing.get();
+                e.setPreferredContactMethod(prefs.getPreferredContactMethod());
+                e.setEmailNotificationsEnabled(prefs.getEmailNotificationsEnabled());
+                e.setSmsNotificationsEnabled(prefs.getSmsNotificationsEnabled());
+                e.setPhoneNotificationsEnabled(prefs.getPhoneNotificationsEnabled());
+                e.setMailNotificationsEnabled(prefs.getMailNotificationsEnabled());
+                e.setTimesheetReminders(prefs.getTimesheetReminders());
+                e.setPaymentConfirmations(prefs.getPaymentConfirmations());
+                e.setCaseAssignmentChanges(prefs.getCaseAssignmentChanges());
+                e.setPolicyUpdates(prefs.getPolicyUpdates());
+                e.setTrainingOpportunities(prefs.getTrainingOpportunities());
+                e.setTimesheetMethod(prefs.getTimesheetMethod());
+                e.setETimesheetIndicator(prefs.getETimesheetIndicator());
+                e.setUpdatedBy(userId);
+                return ResponseEntity.ok(notificationPrefRepository.save(e));
+            }
+            prefs.setProviderId(id);
+            prefs.setCreatedBy(userId);
+            return ResponseEntity.status(HttpStatus.CREATED).body(notificationPrefRepository.save(prefs));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT verify cell phone */
+    @PutMapping("/{id}/verify-cell-phone")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> verifyCellPhone(@PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var prefs = notificationPrefRepository.findByProviderId(id);
+            if (prefs.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No notification preferences found"));
+            }
+            var p = prefs.get();
+            p.setCellPhoneVerified(true);
+            p.setCellPhoneVerifiedDate(java.time.LocalDateTime.now());
+            p.setUpdatedBy(userId);
+            return ResponseEntity.ok(notificationPrefRepository.save(p));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT stop e-timesheet — set indicator to NO for provider */
+    @PutMapping("/{id}/stop-e-timesheet")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> stopETimesheet(@PathVariable Long id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var prefs = notificationPrefRepository.findByProviderId(id);
+            if (prefs.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "No notification preferences found"));
+            }
+            var p = prefs.get();
+            p.setETimesheetIndicator(false);
+            p.setTimesheetMethod("PAPER");
+            p.setUpdatedBy(userId);
+            return ResponseEntity.ok(notificationPrefRepository.save(p));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== RECIPIENT WAIVER CRUD (DSD Section 23.3) ====================
+
+    /** GET all waivers for a provider */
+    @GetMapping("/{id}/waivers")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getProviderWaivers(@PathVariable Long id) {
+        try {
+            return ResponseEntity.ok(recipientWaiverRepository.findByProviderIdOrderByCreatedAtDesc(id));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** GET single waiver */
+    @GetMapping("/waivers/{waiverId}")
+    @RequirePermission(resource = "Provider Resource", scope = "view")
+    public ResponseEntity<?> getWaiver(@PathVariable String waiverId) {
+        try {
+            return recipientWaiverRepository.findById(waiverId)
+                .map(w -> ResponseEntity.ok((Object) w))
+                .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT modify waiver — update notes, justification */
+    @PutMapping("/waivers/{waiverId}")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> modifyWaiver(@PathVariable String waiverId,
+            @RequestBody Map<String, Object> updates,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var waiver = recipientWaiverRepository.findById(waiverId);
+            if (waiver.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            var w = waiver.get();
+            if (updates.containsKey("notes")) w.setNotes((String) updates.get("notes"));
+            if (updates.containsKey("recipientJustification")) w.setRecipientJustification((String) updates.get("recipientJustification"));
+            w.setUpdatedBy(userId);
+            return ResponseEntity.ok(recipientWaiverRepository.save(w));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT inactivate waiver — revoke */
+    @PutMapping("/waivers/{waiverId}/inactivate")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> inactivateWaiver(@PathVariable String waiverId,
+            @RequestBody InactivateRequest request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var waiver = recipientWaiverRepository.findById(waiverId);
+            if (waiver.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            var w = waiver.get();
+            w.setRevoked(true);
+            w.setRevocationDate(LocalDate.now());
+            w.setRevocationReason(request.reason);
+            w.setRevokedBy(userId);
+            w.setStatus(RecipientWaiverEntity.WaiverStatus.REVOKED);
+            w.setUpdatedBy(userId);
+            return ResponseEntity.ok(recipientWaiverRepository.save(w));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== VIOLATION STATE REVIEW (DSD Section 23.6) ====================
+
+    /** PUT state review — state office reviews county's determination */
+    @PutMapping("/violations/{violationId}/state-review")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> stateReview(@PathVariable Long violationId,
+            @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var violation = violationRepository.findById(violationId);
+            if (violation.isEmpty()) return ResponseEntity.notFound().build();
+            var v = violation.get();
+            v.setStateReviewOutcome(body.get("outcome"));
+            v.setStateReviewComments(body.get("comments"));
+            v.setStateReviewedBy(userId);
+            v.setStateReviewDate(LocalDate.now());
+            return ResponseEntity.ok(violationRepository.save(v));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /** PUT state supervisor review */
+    @PutMapping("/violations/{violationId}/state-supervisor-review")
+    @RequirePermission(resource = "Provider Resource", scope = "edit")
+    public ResponseEntity<?> stateSupervisorReview(@PathVariable Long violationId,
+            @RequestBody Map<String, String> body,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
+        try {
+            var violation = violationRepository.findById(violationId);
+            if (violation.isEmpty()) return ResponseEntity.notFound().build();
+            var v = violation.get();
+            v.setStateSupervisorOutcome(body.get("outcome"));
+            v.setStateSupervisorComments(body.get("comments"));
+            v.setStateSupervisorId(userId);
+            v.setStateSupervisorReviewDate(LocalDate.now());
+            return ResponseEntity.ok(violationRepository.save(v));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
