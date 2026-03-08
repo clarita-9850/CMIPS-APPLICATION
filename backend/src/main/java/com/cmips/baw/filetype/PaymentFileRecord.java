@@ -3,6 +3,7 @@ package com.cmips.baw.filetype;
 import com.cmips.integration.framework.baw.annotation.FileColumn;
 import com.cmips.integration.framework.baw.annotation.FileId;
 import com.cmips.integration.framework.baw.annotation.FileType;
+import com.cmips.integration.framework.baw.annotation.Validate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -45,6 +46,7 @@ import java.time.LocalDate;
 public class PaymentFileRecord {
 
     @FileId
+    @Validate(notBlank = true, message = "Payment request ID is required")
     @FileColumn(
         order = 1,
         name = "PAYMENT_REQUEST_ID",
@@ -53,6 +55,7 @@ public class PaymentFileRecord {
     )
     private String paymentRequestId;
 
+    @Validate(notBlank = true, message = "Provider ID is required")
     @FileColumn(
         order = 2,
         name = "PROVIDER_ID",
@@ -136,6 +139,7 @@ public class PaymentFileRecord {
     )
     private BigDecimal totalHours;
 
+    @Validate(notNull = true, min = 0, message = "Payment amount must be non-negative")
     @FileColumn(
         order = 11,
         name = "PAYMENT_AMOUNT",

@@ -159,6 +159,26 @@ public class BawIntegrationProperties {
         private String scoPaymentFilePattern = "PRDR120A_%s.DAT";
 
         /**
+         * File name pattern for TPF batch files (inbound from Timesheet Processing Facility).
+         */
+        private String tpfBatchFilePattern = "PRNR998_*.DAT";
+
+        /**
+         * File name pattern for EDD response files (inbound acknowledgments).
+         */
+        private String eddResponseFilePattern = "EDD_RESP_*.DAT";
+
+        /**
+         * File name pattern for DOJ background check response files (inbound).
+         */
+        private String dojBgcFilePattern = "DOJ_BGC_*.DAT";
+
+        /**
+         * File name pattern for EVV daily visit verification files (inbound from EVV vendor).
+         */
+        private String evvDailyFilePattern = "EVV_DAILY_*.DAT";
+
+        /**
          * Maximum retry attempts for SFTP operations.
          */
         private int maxRetries = 3;

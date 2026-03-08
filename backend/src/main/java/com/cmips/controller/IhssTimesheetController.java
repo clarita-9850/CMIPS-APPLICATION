@@ -1,8 +1,10 @@
 package com.cmips.controller;
 
 import com.cmips.annotation.RequirePermission;
+import com.cmips.baw.filetype.Prds108ARecord;
 import com.cmips.entity.*;
 import com.cmips.repository.*;
+import com.cmips.service.TimesheetInterfaceService;
 import com.cmips.service.TimesheetValidationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.DayOfWeek;
@@ -34,6 +37,7 @@ public class IhssTimesheetController {
     @Autowired private TravelClaimRepository travelRepo;
     @Autowired private TravelClaimTimeEntryRepository travelEntryRepo;
     @Autowired private TimesheetValidationService validationService;
+    @Autowired private TimesheetInterfaceService interfaceService;
 
     // ═══════════════════════════════════════════
     // TIMESHEET SEARCH & LIST
@@ -458,13 +462,27 @@ public class IhssTimesheetController {
             tc.setDateSentToPayroll(LocalDateTime.now());
             travelRepo.save(tc);
 
-            // Generate PRDS108A-compatible travel payroll record
-            String payrollRecord = String.format("TC|%s|%s|%s|%s|%s|%s|%.2f|%.2f|%s",
-                    tc.getTravelClaimNumber(), tc.getProviderId(), tc.getRecipientId(),
-                    tc.getCaseId(), tc.getPayPeriodStart(), tc.getPayPeriodEnd(),
-                    tc.getTotalTravelHoursApproved() != null ? tc.getTotalTravelHoursApproved() : 0.0,
-                    tc.getTravelHoursCutback() != null ? tc.getTravelHoursCutback() : 0.0,
-                    tc.getProgramType());
+            // Build PRDS108A record for travel claim (DSD Section 24 — PRNS942B / PRDS108A-TC)
+            double travelHrs = tc.getTotalTravelHoursApproved() != null ? tc.getTotalTravelHoursApproved() : 0.0;
+            double cutbackHrs = tc.getTravelHoursCutback() != null ? tc.getTravelHoursCutback() : 0.0;
+            Prds108ARecord scoRecord = Prds108ARecord.builder()
+                    .timesheetNumber(tc.getTravelClaimNumber())
+                    .providerId(tc.getProviderId())
+                    .recipientId(tc.getRecipientId() != null ? tc.getRecipientId() : 0L)
+                    .caseId(tc.getCaseId())
+                    .payPeriodStart(tc.getPayPeriodStart())
+                    .payPeriodEnd(tc.getPayPeriodEnd())
+                    .totalHoursApproved(BigDecimal.valueOf(travelHrs))
+                    .regularHours(BigDecimal.valueOf(travelHrs - cutbackHrs))
+                    .overtimeHours(BigDecimal.ZERO)
+                    .socDeduction(BigDecimal.ZERO)
+                    .programType(tc.getProgramType() != null ? tc.getProgramType().name() : "IHSS")
+                    .countyCode("")
+                    .dateProcessed(LocalDate.now())
+                    .build();
+
+            // Send to SCO via SFTP using Integration Hub SendBuilder
+            Map<String, Object> sftpResult = interfaceService.sendSingleRecordToSco(scoRecord, "PRDS108A-TC");
 
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("travelClaimId", id);
@@ -472,7 +490,7 @@ public class IhssTimesheetController {
             r.put("status", tc.getStatus());
             r.put("dateSentToPayroll", tc.getDateSentToPayroll());
             r.put("interfaceType", "PRDS108A-TC");
-            r.put("payrollRecord", payrollRecord);
+            r.put("sftpSend", sftpResult);
             return ResponseEntity.ok(r);
         }).orElse(ResponseEntity.notFound().build());
     }

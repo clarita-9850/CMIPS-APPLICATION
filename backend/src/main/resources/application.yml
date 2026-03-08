@@ -111,6 +111,14 @@ baw:
     circuit-breaker:
       enabled: true
   sftp:
+    sto:
+      host: ${BAW_SFTP_STO_HOST:localhost}
+      port: ${BAW_SFTP_STO_PORT:22}
+      username: ${BAW_SFTP_STO_USER:cmips_sto}
+      password: ${BAW_SFTP_STO_PASS:}
+      inbound-path: ${BAW_SFTP_STO_INBOUND:/sto/outbound}
+      archive-path: ${BAW_SFTP_STO_ARCHIVE:/sto/archive}
+      error-path: ${BAW_SFTP_STO_ERROR:/sto/error}
     tpf:
       host: ${BAW_SFTP_TPF_HOST:localhost}
       port: ${BAW_SFTP_TPF_PORT:22}
@@ -120,8 +128,43 @@ baw:
       inbound-path: ${BAW_SFTP_TPF_INBOUND:/tpf/outbound}
       archive-path: ${BAW_SFTP_TPF_ARCHIVE:/tpf/archive}
       error-path: ${BAW_SFTP_TPF_ERROR:/tpf/error}
+    sco:
+      host: ${BAW_SFTP_SCO_HOST:localhost}
+      port: ${BAW_SFTP_SCO_PORT:22}
+      username: ${BAW_SFTP_SCO_USER:cmips_sco}
+      password: ${BAW_SFTP_SCO_PASS:}
+      outbound-path: ${BAW_SFTP_SCO_OUTBOUND:/sco/payments}
+      archive-path: ${BAW_SFTP_SCO_ARCHIVE:/sco/archive}
+    edd:
+      host: ${BAW_SFTP_EDD_HOST:localhost}
+      port: ${BAW_SFTP_EDD_PORT:22}
+      username: ${BAW_SFTP_EDD_USER:cmips_edd}
+      password: ${BAW_SFTP_EDD_PASS:}
+      inbound-path: ${BAW_SFTP_EDD_INBOUND:/edd/inbound}
+      outbound-path: ${BAW_SFTP_EDD_OUTBOUND:/edd/outbound}
+      archive-path: ${BAW_SFTP_EDD_ARCHIVE:/edd/archive}
+    doj:
+      host: ${BAW_SFTP_DOJ_HOST:localhost}
+      port: ${BAW_SFTP_DOJ_PORT:22}
+      username: ${BAW_SFTP_DOJ_USER:cmips_doj}
+      password: ${BAW_SFTP_DOJ_PASS:}
+      inbound-path: ${BAW_SFTP_DOJ_INBOUND:/doj/inbound}
+      outbound-path: ${BAW_SFTP_DOJ_OUTBOUND:/doj/outbound}
+      archive-path: ${BAW_SFTP_DOJ_ARCHIVE:/doj/archive}
+    evv:
+      host: ${BAW_SFTP_EVV_HOST:localhost}
+      port: ${BAW_SFTP_EVV_PORT:22}
+      username: ${BAW_SFTP_EVV_USER:cmips_evv}
+      password: ${BAW_SFTP_EVV_PASS:}
+      inbound-path: ${BAW_SFTP_EVV_INBOUND:/evv/inbound}
+      archive-path: ${BAW_SFTP_EVV_ARCHIVE:/evv/archive}
   processing:
     tpf-batch-file-pattern: ${BAW_TPF_FILE_PATTERN:PRNR998_*.DAT}
+    sco-payment-file-pattern: PRDR120A_%s.DAT
+    sto-warrant-file-pattern: PRDR110A_*.DAT
+    edd-response-file-pattern: EDD_RESP_*.DAT
+    doj-bgc-file-pattern: DOJ_BGC_*.DAT
+    evv-daily-file-pattern: EVV_DAILY_*.DAT
 
 # MEDS POS API Configuration (Medi-Cal Eligibility Data System - Point of Service)
 meds:

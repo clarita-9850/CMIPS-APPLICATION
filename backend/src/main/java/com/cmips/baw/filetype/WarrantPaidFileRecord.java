@@ -3,6 +3,7 @@ package com.cmips.baw.filetype;
 import com.cmips.integration.framework.baw.annotation.FileColumn;
 import com.cmips.integration.framework.baw.annotation.FileId;
 import com.cmips.integration.framework.baw.annotation.FileType;
+import com.cmips.integration.framework.baw.annotation.Validate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,6 +39,7 @@ import java.time.LocalDate;
 public class WarrantPaidFileRecord {
 
     @FileId
+    @Validate(notBlank = true, message = "Warrant number is required")
     @FileColumn(
         order = 1,
         name = "WARRANT_NUMBER",
@@ -48,6 +50,7 @@ public class WarrantPaidFileRecord {
     )
     private String warrantNumber;
 
+    @Validate(notNull = true, message = "Issue date is required")
     @FileColumn(
         order = 2,
         name = "ISSUE_DATE",
@@ -66,6 +69,7 @@ public class WarrantPaidFileRecord {
     )
     private LocalDate paidDate;
 
+    @Validate(notNull = true, min = 0, message = "Amount must be non-negative")
     @FileColumn(
         order = 4,
         name = "AMOUNT",
@@ -101,6 +105,7 @@ public class WarrantPaidFileRecord {
     )
     private String caseNumber;
 
+    @Validate(notBlank = true, allowedValues = {"P", "V", "S"}, message = "Status must be P, V, or S")
     @FileColumn(
         order = 8,
         name = "STATUS",

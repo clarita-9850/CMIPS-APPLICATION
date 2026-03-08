@@ -10,8 +10,7 @@ import com.cmips.baw.config.BawIntegrationProperties;
 import com.cmips.baw.config.BawIntegrationProperties.SftpSystemConfig;
 import com.cmips.baw.dto.PaymentRecord;
 import com.cmips.baw.dto.WarrantPaidRecord;
-import com.cmips.baw.filetype.PaymentFileRecord;
-import com.cmips.baw.filetype.WarrantPaidFileRecord;
+import com.cmips.baw.filetype.*;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
@@ -45,25 +44,46 @@ public class IntegrationHubBawFileService implements BawFileService {
     private final BawIntegrationProperties properties;
     private final FileRepository<WarrantPaidFileRecord> warrantFileRepository;
     private final FileRepository<PaymentFileRecord> paymentFileRepository;
+    private final FileRepository<Prds108ARecord> prds108aRepository;
+    private final FileRepository<Prds943BRecord> prds943bRepository;
+    private final FileRepository<Cmnr932ARecord> cmnr932aRepository;
+    private final FileRepository<EddResponseRecord> eddResponseRepository;
+    private final FileRepository<DojBackgroundCheckRecord> dojBgcRepository;
 
     // Track processed files for acknowledgment
     private final Map<String, FileTrackingInfo> trackedFiles = new ConcurrentHashMap<>();
 
     // Supported system/file type combinations
+    private static final String TPF = "TPF";
     private static final String STO = "STO";
     private static final String SCO = "SCO";
+    private static final String EDD = "EDD";
+    private static final String DOJ = "DOJ";
+    private static final String TIMESHEET_BATCH = "TIMESHEET_BATCH";
     private static final String WARRANT_PAID = "WARRANT_PAID";
     private static final String PAYMENT_REQUEST = "PAYMENT_REQUEST";
+    private static final String TIMESHEET_SUMMARY = "TIMESHEET_SUMMARY";
+    private static final String PAYROLL_DETAIL = "PAYROLL_DETAIL";
+    private static final String COMMON_NUMBER = "COMMON_NUMBER";
+    private static final String EDD_RESPONSE = "EDD_RESPONSE";
+    private static final String DOJ_BGC = "DOJ_BGC";
+    private static final String EVV = "EVV";
+    private static final String EVV_DAILY = "EVV_DAILY";
 
     public IntegrationHubBawFileService(BawIntegrationProperties properties) {
         this.properties = properties;
         this.warrantFileRepository = FileRepository.forType(WarrantPaidFileRecord.class);
         this.paymentFileRepository = FileRepository.forType(PaymentFileRecord.class);
+        this.prds108aRepository = FileRepository.forType(Prds108ARecord.class);
+        this.prds943bRepository = FileRepository.forType(Prds943BRecord.class);
+        this.cmnr932aRepository = FileRepository.forType(Cmnr932ARecord.class);
+        this.eddResponseRepository = FileRepository.forType(EddResponseRecord.class);
+        this.dojBgcRepository = FileRepository.forType(DojBackgroundCheckRecord.class);
 
         // Ensure local directories exist
         createLocalDirectories();
 
-        log.info("IntegrationHubBawFileService initialized with Integration Hub Framework");
+        log.info("IntegrationHubBawFileService initialized with Integration Hub Framework (7 file types)");
     }
 
     @Override
@@ -111,16 +131,30 @@ public class IntegrationHubBawFileService implements BawFileService {
                     localFile, LocalDateTime.now()
             ));
 
-            // Parse the file based on type
+            // Parse the file based on type using appropriate FileRepository
             if (STO.equals(sourceSystem) && WARRANT_PAID.equals(fileType)) {
                 List<WarrantPaidFileRecord> fileRecords = warrantFileRepository.read(
                         localFile, FileFormat.fixedWidth().build()
                 );
                 log.info("Parsed {} warrant records from file", fileRecords.size());
-
-                // Convert to DTOs
                 List<WarrantPaidRecord> dtos = convertToWarrantDtos(fileRecords);
                 return (List<T>) dtos;
+            }
+
+            if (EDD.equals(sourceSystem) && EDD_RESPONSE.equals(fileType)) {
+                List<EddResponseRecord> fileRecords = eddResponseRepository.read(
+                        localFile, FileFormat.fixedWidth().build()
+                );
+                log.info("Parsed {} EDD response records from file", fileRecords.size());
+                return (List<T>) fileRecords;
+            }
+
+            if (DOJ.equals(sourceSystem) && DOJ_BGC.equals(fileType)) {
+                List<DojBackgroundCheckRecord> fileRecords = dojBgcRepository.read(
+                        localFile, FileFormat.fixedWidth().build()
+                );
+                log.info("Parsed {} DOJ background check records from file", fileRecords.size());
+                return (List<T>) fileRecords;
             }
 
             throw new UnsupportedOperationException(
@@ -133,6 +167,7 @@ public class IntegrationHubBawFileService implements BawFileService {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> String sendOutboundFile(String destinationSystem, String fileType, List<T> records) {
         log.info("=== INTEGRATION HUB: Sending outbound file ===");
         log.info("Destination: {}, File Type: {}, Record Count: {}",
@@ -148,26 +183,16 @@ public class IntegrationHubBawFileService implements BawFileService {
         SftpSystemConfig config = getSystemConfig(destinationSystem);
         String fileReference = generateFileReference(destinationSystem, fileType);
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-        String fileName = String.format("PRDR120A_%s.DAT", timestamp);
+        String fileName = resolveFileName(destinationSystem, fileType, timestamp);
 
         try {
-            // Convert DTOs to file records
-            List<PaymentFileRecord> fileRecords;
-            if (records.get(0) instanceof PaymentRecord) {
-                @SuppressWarnings("unchecked")
-                List<PaymentRecord> paymentRecords = (List<PaymentRecord>) records;
-                fileRecords = convertToPaymentFileRecords(paymentRecords);
-            } else {
-                throw new IllegalArgumentException("Unsupported record type: " + records.get(0).getClass());
-            }
-
-            // Write to local file first
+            // Write to local file using appropriate FileRepository
             Path localDir = Paths.get(properties.getLocal().getOutboundDir());
             Files.createDirectories(localDir);
             Path localFile = localDir.resolve(fileName);
 
-            paymentFileRepository.write(fileRecords, localFile, FileFormat.fixedWidth().build());
-            log.info("Written {} records to local file: {}", fileRecords.size(), localFile);
+            writeRecordsToFile(destinationSystem, fileType, records, localFile);
+            log.info("Written {} records to local file: {}", records.size(), localFile);
 
             // Upload via SFTP
             try (SftpClient sftpClient = createSftpClient(config)) {
@@ -393,10 +418,14 @@ public class IntegrationHubBawFileService implements BawFileService {
     }
 
     private String getFilePattern(String sourceSystem, String fileType) {
-        if (STO.equals(sourceSystem) && WARRANT_PAID.equals(fileType)) {
-            return properties.getProcessing().getStoWarrantFilePattern();
-        }
-        return "*";
+        return switch (sourceSystem) {
+            case STO -> properties.getProcessing().getStoWarrantFilePattern();
+            case TPF -> properties.getProcessing().getTpfBatchFilePattern();
+            case EDD -> properties.getProcessing().getEddResponseFilePattern();
+            case DOJ -> properties.getProcessing().getDojBgcFilePattern();
+            case EVV -> properties.getProcessing().getEvvDailyFilePattern();
+            default -> "*";
+        };
     }
 
     private String generateFileReference(String system, String fileType) {
@@ -410,22 +439,78 @@ public class IntegrationHubBawFileService implements BawFileService {
 
     private void validateInboundRequest(String sourceSystem, String fileType, Class<?> recordType) {
         if (STO.equals(sourceSystem) && WARRANT_PAID.equals(fileType)) {
-            if (!WarrantPaidRecord.class.equals(recordType)) {
-                throw new IllegalArgumentException(
-                        "Expected WarrantPaidRecord for STO/WARRANT_PAID, got: " + recordType);
-            }
-            return;
+            return; // WarrantPaidRecord or WarrantPaidFileRecord both valid
+        }
+        if (TPF.equals(sourceSystem) && TIMESHEET_BATCH.equals(fileType)) {
+            return; // Handled by Prnr998ParserService externally
+        }
+        if (EDD.equals(sourceSystem) && EDD_RESPONSE.equals(fileType)) {
+            return; // EddResponseRecord
+        }
+        if (DOJ.equals(sourceSystem) && DOJ_BGC.equals(fileType)) {
+            return; // DojBackgroundCheckRecord
         }
         throw new UnsupportedOperationException(
                 "Unsupported inbound combination: " + sourceSystem + "/" + fileType);
     }
 
     private void validateOutboundRequest(String destinationSystem, String fileType) {
-        if (SCO.equals(destinationSystem) && PAYMENT_REQUEST.equals(fileType)) {
+        if (SCO.equals(destinationSystem) && (PAYMENT_REQUEST.equals(fileType) || TIMESHEET_SUMMARY.equals(fileType))) {
+            return;
+        }
+        if (EDD.equals(destinationSystem) && PAYROLL_DETAIL.equals(fileType)) {
+            return;
+        }
+        if (DOJ.equals(destinationSystem) && COMMON_NUMBER.equals(fileType)) {
             return;
         }
         throw new UnsupportedOperationException(
                 "Unsupported outbound combination: " + destinationSystem + "/" + fileType);
+    }
+
+    /**
+     * Resolve the output file name based on destination and file type.
+     */
+    private String resolveFileName(String destinationSystem, String fileType, String timestamp) {
+        return switch (destinationSystem + "/" + fileType) {
+            case "SCO/PAYMENT_REQUEST" -> String.format("PRDR120A_%s.DAT", timestamp);
+            case "SCO/TIMESHEET_SUMMARY" -> String.format("PRDS108A_%s.DAT", timestamp);
+            case "EDD/PAYROLL_DETAIL" -> String.format("PRDS943B_%s.DAT", timestamp);
+            case "DOJ/COMMON_NUMBER" -> String.format("CMNR932A_%s.DAT", timestamp);
+            default -> String.format("%s_%s_%s.DAT", destinationSystem, fileType, timestamp);
+        };
+    }
+
+    /**
+     * Write records to local file using the correct FileRepository for the file type.
+     */
+    @SuppressWarnings("unchecked")
+    private <T> void writeRecordsToFile(String destSystem, String fileType, List<T> records, Path localFile) {
+        String key = destSystem + "/" + fileType;
+        switch (key) {
+            case "SCO/PAYMENT_REQUEST" -> {
+                List<PaymentFileRecord> fileRecords;
+                if (records.get(0) instanceof PaymentRecord) {
+                    fileRecords = convertToPaymentFileRecords((List<PaymentRecord>) records);
+                } else {
+                    throw new IllegalArgumentException("Expected PaymentRecord for SCO/PAYMENT_REQUEST");
+                }
+                paymentFileRepository.write(fileRecords, localFile, FileFormat.fixedWidth().build());
+            }
+            case "SCO/TIMESHEET_SUMMARY" -> {
+                List<Prds108ARecord> typedRecords = (List<Prds108ARecord>) records;
+                prds108aRepository.write(typedRecords, localFile, FileFormat.fixedWidth().build());
+            }
+            case "EDD/PAYROLL_DETAIL" -> {
+                List<Prds943BRecord> typedRecords = (List<Prds943BRecord>) records;
+                prds943bRepository.write(typedRecords, localFile, FileFormat.fixedWidth().build());
+            }
+            case "DOJ/COMMON_NUMBER" -> {
+                List<Cmnr932ARecord> typedRecords = (List<Cmnr932ARecord>) records;
+                cmnr932aRepository.write(typedRecords, localFile, FileFormat.fixedWidth().build());
+            }
+            default -> throw new UnsupportedOperationException("Unsupported: " + key);
+        }
     }
 
     /**

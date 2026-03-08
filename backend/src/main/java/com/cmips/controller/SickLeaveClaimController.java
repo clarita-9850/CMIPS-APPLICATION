@@ -5,12 +5,16 @@ import com.cmips.dto.SickLeaveLookupRequest;
 import com.cmips.dto.SickLeaveLookupResponse;
 import com.cmips.dto.SickLeaveSaveRequest;
 import com.cmips.entity.SickLeaveClaimEntity;
+import com.cmips.baw.filetype.Prds108ARecord;
 import com.cmips.service.SickLeaveClaimService;
+import com.cmips.service.TimesheetInterfaceService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,9 +30,12 @@ public class SickLeaveClaimController {
     private static final Logger log = LoggerFactory.getLogger(SickLeaveClaimController.class);
 
     private final SickLeaveClaimService sickLeaveService;
+    private final TimesheetInterfaceService interfaceService;
 
-    public SickLeaveClaimController(SickLeaveClaimService sickLeaveService) {
+    public SickLeaveClaimController(SickLeaveClaimService sickLeaveService,
+                                     TimesheetInterfaceService interfaceService) {
         this.sickLeaveService = sickLeaveService;
+        this.interfaceService = interfaceService;
     }
 
     /**
@@ -172,13 +179,35 @@ public class SickLeaveClaimController {
             claim = sickLeaveService.cutbackIfNeeded(claim);
             // Deduct from accrual (DSD Rule 24)
             sickLeaveService.deductFromAccrual(claim);
-            // Generate payroll record
+            // Build PRDS108A record for sick leave (DSD Section 24 — PRDS108A-SLC)
+            Prds108ARecord scoRecord = Prds108ARecord.builder()
+                    .timesheetNumber(claim.getClaimNumber())
+                    .providerId(claim.getProviderId())
+                    .recipientId(0L) // Sick leave is provider-level
+                    .caseId(claim.getCaseId())
+                    .payPeriodStart(claim.getPayPeriodBeginDate())
+                    .payPeriodEnd(claim.getPayPeriodBeginDate() != null ? claim.getPayPeriodBeginDate().plusDays(13) : null)
+                    .totalHoursApproved(BigDecimal.valueOf(claim.getClaimedHours() != null ? claim.getClaimedHours() / 60.0 : 0.0))
+                    .regularHours(BigDecimal.valueOf(claim.getClaimedHours() != null ? claim.getClaimedHours() / 60.0 : 0.0))
+                    .overtimeHours(BigDecimal.ZERO)
+                    .socDeduction(BigDecimal.ZERO)
+                    .programType(claim.getProviderType() != null ? claim.getProviderType() : "IHSS")
+                    .countyCode("")
+                    .dateProcessed(LocalDate.now())
+                    .build();
+
+            // Send to SCO via SFTP using Integration Hub SendBuilder
+            Map<String, Object> sftpResult = interfaceService.sendSingleRecordToSco(scoRecord, "PRDS108A-SLC");
+
+            // Also generate legacy payroll record for backward compatibility
             String payrollRecord = sickLeaveService.generatePayrollRecord(claim);
+
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("claimNumber", claim.getClaimNumber());
             result.put("status", "SENT_TO_PAYROLL");
             result.put("payrollRecord", payrollRecord);
             result.put("claimedHoursAfterCutback", claim.getClaimedHours());
+            result.put("sftpSend", sftpResult);
             return ResponseEntity.ok(result);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
